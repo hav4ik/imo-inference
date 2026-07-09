@@ -5,24 +5,9 @@ plus a trained per-head attention-sink logit in every layer, gpt-oss style,
 with hybrid sliding-window attention and YaRN rope). Weights:
 `ycchen/proof-pilot-deploy-bundle/opd-32b-deploy` on Hugging Face (bf16, 61 GB).
 
-Two ways to run it, both verified on 2× H200:
+Verified on 2× H200.
 
-## 1. Plain transformers (simple, no custom engine)
-
-`infer_opd32b.py` / `infer_opd32b_multi.py` patch transformers' stock Olmo3:
-register an `eager_sink` attention function that appends the sink logit as an
-extra softmax column, and add the `sinks` parameter to `Olmo3Attention` so the
-checkpoint loads cleanly. No sglang/vLLM needed.
-
-```bash
-pip install torch transformers accelerate safetensors
-python infer_opd32b.py                     # single GPU, streams output
-python infer_opd32b_multi.py --gpus 0,1    # one bf16 replica per GPU, batched
-```
-
-~16 tok/s single-stream, ~89 tok/s combined with 2 GPUs × batch-3.
-
-## 2. Patched sglang server (fast, continuous batching)
+## Patched sglang server (continuous batching)
 
 Stock sglang/vLLM don't know the `Olmo3Sink` architecture. `proof-pilot/` is
 the (curated) upstream deploy code: sglang patch files (sink-aware `olmo2.py`
@@ -70,6 +55,6 @@ reasoning parser (`reasoning_content` separated from `content` in the API).
 requests per replica. First boot JIT-compiles triton kernels for sm90
 (~2 min); later boots reuse the cache.
 
-`sample_results.json` / `sample_results_sglang.json` hold the outputs of the
-6-problem sample runs (5/6 proved cleanly; the harmonic-sum problem thinks
-past the token cap — known long-thinking tendency of this OPD checkpoint).
+`sample_results_sglang.json` holds the outputs of the 6-problem sample run
+(5/6 proved cleanly; the harmonic-sum problem thinks past the token cap —
+known long-thinking tendency of this OPD checkpoint).
