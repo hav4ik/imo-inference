@@ -16,12 +16,18 @@ HOST="${HOST:-127.0.0.1}"
 TP="${TP:-1}"                  # tensor parallelism; TP=2 spans both H200s (NVLink)
 DFLASH="${DFLASH:-0}"          # 1 = DFlash speculative decoding (requires TP=1)
 DRAFT="${DRAFT:-/workspace/models/dflash-32b-draft-v2test-phaseL}"
+DRAFT_QUANT="${DRAFT_QUANT:-}" # e.g. compressed-tensors for the fix4 int4-MLP draft
 SWA_RATIO="${SWA_RATIO:-0.1}"  # full-attention KV pool ratio (notebook used 0.2)
 CTX="${CTX:-200000}"           # context length
 MEMFRAC="${MEMFRAC:-0.88}"     # weights (61GB) + fp8 KV pool on a 143GB H200
 MAXREQ="${MAXREQ:-48}"         # max concurrent requests (= decode cuda-graph max bs)
 CHUNKED="${CHUNKED:-2048}"     # prefill chunk size (prefill graph buckets derive from it)
 KV_SPLITS="${KV_SPLITS:-32}"   # triton decode kv-splits (long-ctx single-stream occupancy)
+KVDTYPE="${KVDTYPE:-fp8_e4m3}"
+STREAM_INTERVAL="${STREAM_INTERVAL:-16}"
+DISABLE_RADIX="${DISABLE_RADIX:-0}"
+PREFILL_CG="${PREFILL_CG:-tc_piecewise}"
+RANDOM_SEED="${RANDOM_SEED:-0}"
 
 if [ "$TP" = 2 ]; then
   export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
@@ -63,6 +69,7 @@ if [ "$DFLASH" = 1 ]; then
   export SGLANG_DFLASH_DRAFT_RING="${SGLANG_DFLASH_DRAFT_RING:-1}"
   export SGLANG_DFLASH_DRAFT_RING_QUOTA="${SGLANG_DFLASH_DRAFT_RING_QUOTA:-4}"
   export SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER="${SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER:-0.125}"
+  export SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW="${SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW:-1}"
   WINDOW="$("$VENV/bin/python" -c "import json;c=json.load(open('$DRAFT/config.json'));print(c.get('sliding_window') or (c.get('dflash_config') or {}).get('sliding_window') or 512)" 2>/dev/null || echo 512)"
   SPEC_ARGS=(--speculative-algorithm DFLASH
              --speculative-draft-model-path "$DRAFT"
@@ -70,12 +77,24 @@ if [ "$DFLASH" = 1 ]; then
              --speculative-num-draft-tokens "${NUM_DRAFT:-8}"
              --speculative-draft-window-size "$WINDOW"
              --speculative-draft-attention-backend triton)
+  [ -n "$DRAFT_QUANT" ] && SPEC_ARGS+=(--speculative-draft-model-quantization "$DRAFT_QUANT")
+fi
+
+RADIX_ARGS=()
+[ "$DISABLE_RADIX" = 1 ] && RADIX_ARGS+=(--disable-radix-cache)
+
+PREFILL_ARGS=()
+if [ "$PREFILL_CG" = disabled ]; then
+  PREFILL_ARGS+=(--cuda-graph-backend-prefill disabled)
+else
+  PREFILL_ARGS+=(--cuda-graph-backend-prefill "$PREFILL_CG" --cuda-graph-bs-prefill 256 1024 "$CHUNKED")
 fi
 
 # capture every decode bs 1..16 (no padding for small batches) + sparse tail to MAXREQ
 CG_BS_DECODE="$(for b in $(seq 1 16) 20 24 28 32 40 48 64 96 128; do if [ "$b" -le "$MAXREQ" ]; then printf '%s ' "$b"; fi; done)"
 
-echo "[serve_opd32b] model=$MODEL gpu=$CUDA_VISIBLE_DEVICES tp=$TP dflash=$DFLASH port=$PORT ctx=$CTX memfrac=$MEMFRAC maxreq=$MAXREQ swa=$SWA_RATIO"
+echo "[serve_opd32b] model=$MODEL gpu=$CUDA_VISIBLE_DEVICES tp=$TP dflash=$DFLASH port=$PORT ctx=$CTX memfrac=$MEMFRAC maxreq=$MAXREQ swa=$SWA_RATIO kv=$KVDTYPE radix_disabled=$DISABLE_RADIX"
+[ "$DFLASH" = 1 ] && echo "[serve_opd32b] draft=$DRAFT quant=${DRAFT_QUANT:-bf16} block=${BLOCK:-8} window=$WINDOW"
 
 exec "$VENV/bin/python" -m sglang.launch_server \
   --model-path "$MODEL" \
@@ -85,11 +104,14 @@ exec "$VENV/bin/python" -m sglang.launch_server \
   --mem-fraction-static "$MEMFRAC" \
   --chunked-prefill-size "$CHUNKED" \
   --context-length "$CTX" \
-  --kv-cache-dtype fp8_e4m3 \
-  --stream-interval 16 \
+  --kv-cache-dtype "$KVDTYPE" \
+  --stream-interval "$STREAM_INTERVAL" \
   --swa-full-tokens-ratio "$SWA_RATIO" \
   --max-running-requests "$MAXREQ" --cuda-graph-max-bs-decode "$MAXREQ" \
   --cuda-graph-bs-decode $CG_BS_DECODE \
-  --cuda-graph-backend-prefill tc_piecewise --cuda-graph-bs-prefill 256 1024 "$CHUNKED" \
+  "${PREFILL_ARGS[@]}" \
+  "${RADIX_ARGS[@]}" \
   --triton-attention-num-kv-splits "$KV_SPLITS" \
+  --random-seed "$RANDOM_SEED" \
+  --enable-cache-report --enable-metrics \
   --reasoning-parser deepseek-r1 ${EXTRA_ARGS:-}
