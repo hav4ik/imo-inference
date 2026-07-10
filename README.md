@@ -50,6 +50,29 @@ reasoning parser (`reasoning_content` separated from `content` in the API).
 First boot JIT-compiles triton kernels for sm90 (~2 min); later boots reuse
 the cache.
 
+## KV-cache reuse experiment
+
+`kv_cache_experiment.py` compares normal SGLang generation, which reuses the
+request's KV state while decoding, with an emulated no-reuse path that submits
+one-token requests over the entire growing sequence. Radix prefix caching is
+disabled for both paths, so every one-token request performs a full prefill.
+
+Run the default equation-solving experiment on GPU 1 with the patched
+environment:
+
+```bash
+cd /workspace
+/workspace/pp/venv/bin/python kv_cache_experiment.py \
+  --gpu 1 \
+  --json-out eval/results/kv_cache_reuse_h200.json
+```
+
+The default `--kv-cache-dtype auto` uses BF16 KV for the correctness comparison.
+Pass `--kv-cache-dtype fp8_e4m3` to match production serving. The full-reprefill
+timing includes one SGLang scheduler/IPC round trip and per-request allocation
+overhead per output token, so it is an end-to-end comparison rather than a pure
+attention-kernel benchmark.
+
 ## Measured throughput (2× H200, 512-token generations)
 
 | Concurrency per GPU | Total tok/s | Per stream |
