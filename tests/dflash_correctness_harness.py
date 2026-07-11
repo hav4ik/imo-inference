@@ -405,11 +405,16 @@ def validate_server_pair(target, dflash, profile, phase):
     spec_keys = {key for key in SERVER_KEYS if key.startswith("speculative_")}
     for key in SERVER_KEYS:
         if key not in spec_keys | {"version"} and key in ti and key in di and ti[key] != di[key]: errors.append(f"server setting differs for {key}")
-    expected = {"disable_radix_cache": not phase.get("radix_cache"), "disable_overlap_schedule": not phase.get("overlap_schedule"),
-                "disable_cuda_graph": not phase.get("cuda_graph")}
+    expected = {"disable_radix_cache": not phase.get("radix_cache"), "disable_overlap_schedule": not phase.get("overlap_schedule")}
     for label, info in (("target", ti), ("dflash", di)):
         for key, value in expected.items():
             if key in info and bool(info[key]) != bool(value): errors.append(f"{label} {key} does not match phase")
+        for key in ("cuda_graph_backend_decode", "cuda_graph_backend_prefill"):
+            actual = info.get(key)
+            if phase.get("cuda_graph") and actual == "disabled":
+                errors.append(f"{label} {key} unexpectedly disabled")
+            if not phase.get("cuda_graph") and actual != "disabled":
+                errors.append(f"{label} {key} is not disabled")
     return errors
 
 

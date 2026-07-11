@@ -220,7 +220,9 @@ class ConfigAndCheckpointTests(unittest.TestCase):
     def test_server_pair_preflight_allows_only_speculative_difference(self):
         common = {"model_path": "/models/target", "kv_cache_dtype": "fp8_e4m3",
                   "disable_radix_cache": False, "disable_overlap_schedule": False,
-                  "disable_cuda_graph": False}
+                  "disable_cuda_graph": False,
+                  "cuda_graph_backend_decode": "piecewise",
+                  "cuda_graph_backend_prefill": "tc_piecewise"}
         target = sanitized_server_snapshot({"model_path": "/models/target"},
                                            {**common, "speculative_algorithm": None})
         dflash = sanitized_server_snapshot(
@@ -232,6 +234,22 @@ class ConfigAndCheckpointTests(unittest.TestCase):
         self.assertEqual(validate_server_pair(target, dflash, profile, phase), [])
         dflash["server_info"]["kv_cache_dtype"] = "bf16"
         self.assertTrue(validate_server_pair(target, dflash, profile, phase))
+        eager_target = json.loads(json.dumps(target))
+        eager_dflash = json.loads(json.dumps(dflash))
+        eager_dflash["server_info"]["kv_cache_dtype"] = "fp8_e4m3"
+        for snapshot in (eager_target, eager_dflash):
+            snapshot["server_info"]["disable_radix_cache"] = True
+            snapshot["server_info"]["disable_overlap_schedule"] = True
+            snapshot["server_info"]["cuda_graph_backend_decode"] = "disabled"
+            snapshot["server_info"]["cuda_graph_backend_prefill"] = "disabled"
+        eager_phase = {
+            "radix_cache": False,
+            "overlap_schedule": False,
+            "cuda_graph": False,
+        }
+        self.assertEqual(
+            validate_server_pair(eager_target, eager_dflash, profile, eager_phase), []
+        )
 
 
 if __name__ == "__main__":
