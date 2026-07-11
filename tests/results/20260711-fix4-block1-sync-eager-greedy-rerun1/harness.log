@@ -1,0 +1,40 @@
+
+=== greedy ===
+[PASS ] greedy-output-0 (0.107s)
+[PASS ] greedy-output-1 (0.080s)
+[FAIL ] greedy-output-2 (0.158s)
+[FAIL ] greedy-output-7 (0.550s)
+[FAIL ] greedy-output-8 (0.638s)
+[FAIL ] greedy-output-9 (0.708s)
+[FAIL ] greedy-output-15 (1.179s)
+[FAIL ] greedy-output-16 (1.263s)
+[FAIL ] greedy-output-17 (1.348s)
+[FAIL ] greedy-output-63 (4.979s)
+[FAIL ] greedy-output-64 (5.039s)
+[FAIL ] greedy-output-65 (5.125s)
+[FAIL ] greedy-output-511 (40.199s)
+[FAIL ] greedy-output-512 (40.176s)
+[FAIL ] greedy-output-513 (40.219s)
+[FAIL ] greedy-input-255 (1.330s)
+[FAIL ] greedy-input-256 (1.326s)
+[FAIL ] greedy-input-257 (1.327s)
+[FAIL ] greedy-input-511 (1.382s)
+[FAIL ] greedy-input-512 (1.375s)
+[FAIL ] greedy-input-513 (1.386s)
+[FAIL ] greedy-input-2047 (1.712s)
+[FAIL ] greedy-input-2048 (1.701s)
+[FAIL ] greedy-input-2049 (1.771s)
+[FAIL ] greedy-input-2050 (1.773s)
+[FAIL ] greedy-input-2051 (1.767s)
+[FAIL ] greedy-input-4095 (2.225s)
+[FAIL ] greedy-input-4096 (2.231s)
+[FAIL ] greedy-input-4097 (2.295s)
+[FAIL ] greedy-natural-eos-or-length (20.059s)
+{
+  "total": 31,
+  "passed": 3,
+  "failed": 28,
+  "errors": 0,
+  "skipped": 0,
+  "ok": false
+}
