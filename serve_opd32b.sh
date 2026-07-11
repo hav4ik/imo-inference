@@ -16,10 +16,12 @@ HOST="${HOST:-127.0.0.1}"
 DRAFT="${DRAFT:-/workspace/models/dflash-32b-draft-v2test-phaseL}"
 SWA_RATIO="${SWA_RATIO:-0.2}"
 CTX="${CTX:-200000}"           # context length
-MEMFRAC="${MEMFRAC:-0.82}"
-MAXREQ="${MAXREQ:-2}"
+MEMFRAC="${MEMFRAC:-0.88}"
+MAXREQ="${MAXREQ:-48}"
 CHUNKED="${CHUNKED:-2048}"     # prefill chunk size (prefill graph buckets derive from it)
 KV_SPLITS="${KV_SPLITS:-32}"   # triton decode kv-splits (long-ctx single-stream occupancy)
+STREAM_INTERVAL="${STREAM_INTERVAL:-16}"
+PREFILL_CG="${PREFILL_CG:-tc_piecewise}"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST:-9.0a}"   # H200 = sm90
@@ -53,6 +55,7 @@ export SGLANG_ENABLE_OVERLAP_PLAN_STREAM=1
 export SGLANG_DFLASH_DRAFT_RING=1
 export SGLANG_DFLASH_DRAFT_RING_QUOTA=4
 export SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER=0.125
+export SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW=1
 
 SPEC_ARGS=(--speculative-algorithm DFLASH
            --speculative-draft-model-path "$DRAFT"
@@ -75,13 +78,12 @@ exec "$VENV/bin/python" -m sglang.launch_server \
   --chunked-prefill-size "$CHUNKED" \
   --context-length "$CTX" \
   --kv-cache-dtype auto \
-  --stream-interval 16 \
+  --stream-interval "$STREAM_INTERVAL" \
   --swa-full-tokens-ratio "$SWA_RATIO" \
   --max-running-requests "$MAXREQ" --cuda-graph-max-bs-decode "$MAXREQ" \
   --cuda-graph-bs-decode $CG_BS_DECODE \
-  --cuda-graph-backend-prefill tc_piecewise --cuda-graph-bs-prefill 256 1024 "$CHUNKED" \
+  --cuda-graph-backend-prefill "$PREFILL_CG" --cuda-graph-bs-prefill 256 1024 "$CHUNKED" \
   --triton-attention-num-kv-splits "$KV_SPLITS" \
-  --served-model-name opd-32b-dflash-bf16 \
   --enable-fp32-lm-head \
   --enable-cache-report --enable-metrics \
   --random-seed 0 --enable-deterministic-inference \

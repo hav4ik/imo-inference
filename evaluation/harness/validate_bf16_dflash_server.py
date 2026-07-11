@@ -35,8 +35,19 @@ def main() -> None:
     assert server["speculative_draft_model_path"] == str(args.draft)
     assert server["kv_cache_dtype"] == "auto"
     assert server["context_length"] == 200000
-    assert server["max_running_requests"] == 2
-    assert models["data"][0]["id"] == "opd-32b-dflash-bf16"
+    assert server["max_running_requests"] == 48
+    assert server["cuda_graph_max_bs_decode"] == 48
+    assert server["mem_fraction_static"] == 0.88
+    assert server["chunked_prefill_size"] == 2048
+    assert server["stream_interval"] == 16
+    assert server["swa_full_tokens_ratio"] == 0.2
+    assert server["speculative_dflash_block_size"] == 8
+    assert server["speculative_num_draft_tokens"] == 8
+    assert server["speculative_draft_window_size"] == 512
+    assert server["disable_radix_cache"] is False
+    assert server["disable_overlap_schedule"] is False
+    assert server["disable_cuda_graph"] is False
+    assert models["data"][0]["id"] == str(args.target)
 
     result = {
         "schema_version": 1,

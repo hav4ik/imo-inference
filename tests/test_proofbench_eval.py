@@ -18,6 +18,7 @@ from grader import parse_score  # noqa: E402
 from make_batches import build_batches  # noqa: E402
 from pipeline import Engine, solve_problem  # noqa: E402
 from run_full_evaluation import generation_command, load_problem_ids  # noqa: E402
+from run_notebook_v2_eval import strict_trace  # noqa: E402
 
 
 class InvalidClient:
@@ -43,6 +44,10 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertNotIn("fp8_e4m3", launcher)
         self.assertNotIn("EXTRA_ARGS", launcher)
         self.assertIn('SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE="$CHUNKED"', launcher)
+        self.assertIn('MAXREQ="${MAXREQ:-48}"', launcher)
+        self.assertIn('MEMFRAC="${MEMFRAC:-0.88}"', launcher)
+        self.assertIn('SGLANG_GQA_PACKED_EXTEND="${SGLANG_GQA_PACKED_EXTEND:-1}"', launcher)
+        self.assertNotIn("--served-model-name", launcher)
 
     def test_five_problem_batches_cover_proofbench(self):
         with (REPO / "evaluation/data/proofbench_v2.csv").open() as data_file:
@@ -61,7 +66,16 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertEqual(config["model"]["lm_head_compute_dtype"], "float32")
         self.assertEqual(config["model"]["kv_cache_dtype"], "auto")
         self.assertEqual(config["model"]["speculative_algorithm"], "DFLASH")
-        self.assertEqual(config["schema_version"], 2)
+        self.assertEqual(config["schema_version"], 3)
+        self.assertEqual(config["server"]["max_running_requests"], 48)
+        self.assertEqual(config["server"]["mem_fraction_static"], 0.88)
+        loop = config["agentic"]
+        self.assertEqual(loop["pipeline"], "notebook_v2_streaming_strict")
+        self.assertEqual(loop["call_cap"], 60000)
+        self.assertEqual(loop["concurrency"], 12)
+        self.assertEqual(loop["generation_concurrency"], 6)
+        self.assertEqual(loop["verify_k"], 3)
+        self.assertEqual(loop["selectors"], 5)
         grader = config["grader"]
         self.assertEqual(grader["served_model"], "deepseek-v4-flash")
         self.assertEqual(grader["reasoning"], "high")
@@ -83,11 +97,10 @@ class ProofBenchEvaluationTests(unittest.TestCase):
             config, "basic", Path("/tmp/basic-01.json"), Path("/tmp/generation")
         )
         rendered = " ".join(command)
-        self.assertIn("--base http://127.0.0.1:30000/v1", rendered)
-        self.assertIn("--num-provers 6", rendered)
-        self.assertIn("--verify-k 2", rendered)
-        self.assertIn("--num-refiners 3", rendered)
-        self.assertIn("--num-selectors 4", rendered)
+        self.assertIn("run_notebook_v2_eval.py", rendered)
+        self.assertIn("--base-url http://127.0.0.1:30000", rendered)
+        self.assertIn("--config", rendered)
+        self.assertNotIn("run_agentic_eval.py", rendered)
 
     def test_correctness_profile_uses_bf16_kv(self):
         config = json.loads(
@@ -128,6 +141,20 @@ class ProofBenchEvaluationTests(unittest.TestCase):
                 )
 
         asyncio.run(run())
+
+    def test_notebook_wrapper_rejects_fallback_and_call_errors(self):
+        valid = {
+            "final_source": "select:R0(3/5)",
+            "selected_id": "R0",
+            "final_proof": "proof",
+            "counts": {"n_candidates": 1, "n_verified": 1},
+        }
+        strict_trace({"result": valid, "calls": [{"error": None}]}, valid)
+        fallback = {**valid, "final_source": "fallback_top_scored", "selected_id": None}
+        with self.assertRaises(AssertionError):
+            strict_trace({"result": fallback, "calls": [{"error": None}]}, fallback)
+        with self.assertRaises(AssertionError):
+            strict_trace({"result": valid, "calls": [{"error": "boom"}]}, valid)
 
     def test_grader_requires_one_valid_points_block(self):
         self.assertEqual(

@@ -92,37 +92,21 @@ def generation_command(
     agentic = config["agentic"]
     return [
         sys.executable,
-        str(HARNESS / "run_agentic_eval.py"),
+        str(HARNESS / "run_notebook_v2_eval.py"),
         "--run-dir",
         subset,
         "--runs-root",
         str(generation_root),
-        "--base",
-        config["shards"][subset],
+        "--base-url",
+        config["shards"][subset].removesuffix("/v1"),
         "--subset",
         subset,
         "--ids-file",
         str(batch),
         "--batch-id",
         batch.stem,
-        "--max-tokens",
-        str(agentic["max_tokens"]),
-        "--num-provers",
-        str(agentic["num_provers"]),
-        "--verify-k",
-        str(agentic["verify_k"]),
-        "--num-refiners",
-        str(agentic["num_refiners"]),
-        "--num-selectors",
-        str(agentic["num_selectors"]),
-        "--temperature",
-        str(agentic["temperature"]),
-        "--top-p",
-        str(agentic["top_p"]),
-        "--concurrency",
-        str(agentic["concurrency"]),
-        "--problem-concurrency",
-        str(agentic["problem_concurrency"]),
+        "--config",
+        str(config.get("_config_path", DEFAULT_CONFIG)),
     ]
 
 
@@ -158,7 +142,8 @@ def main() -> None:
 
     assert RUN_ID_PATTERN.fullmatch(args.run_id), "run-id must be one safe path component"
     config = json.loads(args.config.read_text())
-    assert config["schema_version"] == 2
+    assert config["schema_version"] == 3
+    config["_config_path"] = args.config.resolve()
     grader = config["grader"]
     assert grader["served_model"] == "deepseek-v4-flash"
     assert grader["reasoning"] == "high"

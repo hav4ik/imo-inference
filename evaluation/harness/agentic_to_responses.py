@@ -78,19 +78,29 @@ def main() -> None:
         f_sel.write(json.dumps({**common, "candidates": [{"text": final}],
                                 "final_source": r["final_source"]}, ensure_ascii=False) + "\n")
 
-        prover_cands = []
-        for p in r["stages"]["prove"]:
-            if p["valid"]:
-                prover_cands.append({"text": deterministic_clean(p["content"]),
-                                     "candidate_id": p["candidate_id"]})
+        if "stages" in r:
+            prover_cands = [
+                {"text": deterministic_clean(p["content"]), "candidate_id": p["candidate_id"]}
+                for p in r["stages"]["prove"] if p["valid"]
+            ]
+        else:
+            prover_cands = [
+                {"text": deterministic_clean(candidate["proof"]), "candidate_id": candidate["cid"]}
+                for candidate in r["candidates"] if candidate["source"] == "prove"
+            ]
         n_prv += len(prover_cands)
         f_prv.write(json.dumps({**common, "candidates": prover_cands}, ensure_ascii=False) + "\n")
 
-        refined_cands = []
-        for rf in r["stages"]["refine"]:
-            if rf["valid"]:
-                refined_cands.append({"text": deterministic_clean(rf["content"]),
-                                      "candidate_id": rf["refiner_id"]})
+        if "stages" in r:
+            refined_cands = [
+                {"text": deterministic_clean(rf["content"]), "candidate_id": rf["refiner_id"]}
+                for rf in r["stages"]["refine"] if rf["valid"]
+            ]
+        else:
+            refined_cands = [
+                {"text": deterministic_clean(candidate["proof"]), "candidate_id": candidate["cid"]}
+                for candidate in r["candidates"] if candidate["source"] == "refine"
+            ]
         n_ref += len(refined_cands)
         f_ref.write(json.dumps({**common, "candidates": refined_cands}, ensure_ascii=False) + "\n")
 

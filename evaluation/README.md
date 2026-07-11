@@ -1,7 +1,7 @@
 # ProofBench evaluation
 
 This directory contains one evaluation path for OPD-32B: strict-BF16 DFlash
-serving followed by the agentic `prove → verify → refine → select` pipeline.
+serving followed by the `submission-32b-fix4.ipynb` v2 streaming proof pool.
 The unused single-round prompt sweep, Python-tool evaluator, calibration harness,
 local adapter, and auxiliary benchmark copies from the upstream repository are
 intentionally not carried here.
@@ -25,7 +25,8 @@ intentionally not carried here.
 | `harness/validate_bf16_dflash_server.py` | checks the live SGLang server configuration |
 | `harness/run_full_evaluation.py` | orchestrates all 60 generations and strict DeepSeek grading |
 | `harness/make_batches.py` | creates deterministic five-problem shards |
-| `harness/run_agentic_eval.py` | runs prove/verify/refine/select and saves full traces |
+| `harness/run_notebook_v2_eval.py` | runs the hash-pinned notebook scheduler and saves full traces |
+| `harness/run_agentic_eval.py` | archived fixed-stage evaluator used by the stopped diagnostic run |
 | `harness/merge_agentic_shards.py` | validates and merges Basic and Advanced shards |
 | `harness/agentic_to_responses.py` | converts traces to grader input records |
 | `harness/grade_proofs.py` | performs strict two-pass DeepSeek grading |
@@ -50,7 +51,10 @@ set +a
   --run-id opd32b-dflash-bf16-full-20260711
 ```
 
-The orchestrator validates both live servers, confirms that the authenticated
+The servers use the notebook ceiling of 48 running requests while each streaming
+client admits 12 total calls, caps prove/refine at 6, and prioritizes verifiers.
+The target, draft, and KV cache remain BF16 instead of using notebook
+quantization. The orchestrator validates both live servers, confirms that the authenticated
 DeepSeek model list contains `deepseek-v4-flash`, creates twelve deterministic
 five-problem shards, runs Basic and Advanced concurrently, requires exactly 60
 complete stage traces, converts the selected final proof for each problem, and
@@ -59,8 +63,8 @@ grader reasoning, grader responses, usage, manifests, and summaries are stored
 below `evaluation/runs/<run-id>/`.
 
 Generation and grading append durable checkpoints. Re-running the identical
-command skips completed generation problems and completed grader calls; it does
-not retry requests within an invocation or substitute a fallback result.
+command skips completed generation problems and completed grader calls. A
+notebook fallback final source or any recorded call error terminates the run.
 
 ## Historical six-problem archive
 
