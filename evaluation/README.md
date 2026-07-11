@@ -14,7 +14,9 @@ intentionally not carried here.
 - `MODEL_MODE=bf16` selects BF16 target, draft, KV cache, and LM head for
   controlled numerical comparisons.
 - Humming W4A8 is not used on H200; the quantized target uses the checkpoint's
-  native W4A16/Marlin path.
+native W4A16/Marlin path.
+- Quantized H200 mode uses ycchen's safe `mem_fraction_static=0.85`; `0.88`
+  starves the mandatory DFlash draft CUDA graph after over-allocating target KV.
 - Every generation stage must produce valid output. There is no alternate proof,
   request retry, stub grader, or synthetic score.
 - Full stage traces and grader responses are written to disk.

@@ -14,7 +14,7 @@
   },
   "server": {
     "context_length": 200000,
-    "mem_fraction_static": 0.88,
+    "mem_fraction_static": 0.85,
     "max_running_requests": 48,
     "swa_full_tokens_ratio": 0.2,
     "dflash_block_size": 8,

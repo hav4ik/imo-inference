@@ -7,6 +7,8 @@ H200-compatible quantized model path: GPTQ-W4A16/Marlin target, int4-MLP
 phase-L draft, unit-scale FP8 E4M3 KV, and BF16 LM head. The server ceiling is
 48, client concurrency is 12, and prove/refine concurrency is 6. A server
 startup or runtime failure is terminal; settings are not reduced automatically.
+The H200 quantized memory fraction is 0.85, matching ycchen's safe launcher
+default; 0.88 was measured to starve the mandatory DFlash draft CUDA graph.
 
 ## 1. Objective
 

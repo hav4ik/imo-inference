@@ -17,7 +17,6 @@ HOST="${HOST:-127.0.0.1}"
 MODEL_MODE="${MODEL_MODE:-quantized}"
 SWA_RATIO="${SWA_RATIO:-0.2}"
 CTX="${CTX:-200000}"           # context length
-MEMFRAC="${MEMFRAC:-0.88}"
 MAXREQ="${MAXREQ:-48}"
 CHUNKED="${CHUNKED:-2048}"     # prefill chunk size (prefill graph buckets derive from it)
 KV_SPLITS="${KV_SPLITS:-32}"   # triton decode kv-splits (long-ctx single-stream occupancy)
@@ -29,12 +28,14 @@ case "$MODEL_MODE" in
     MODEL="/workspace/original/models/opd-32b-v33-s200-gptq-w4a16"
     DRAFT="/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp"
     KVDTYPE="fp8_e4m3"
+    MEMFRAC="${MEMFRAC:-0.85}"
     DRAFT_QUANT_ARGS=(--speculative-draft-model-quantization compressed-tensors)
     ;;
   bf16)
     MODEL="/workspace/models/opd-32b-deploy"
     DRAFT="/workspace/models/dflash-32b-draft-v2test-phaseL"
     KVDTYPE="auto"
+    MEMFRAC="${MEMFRAC:-0.88}"
     DRAFT_QUANT_ARGS=()
     ;;
   *)
