@@ -1,0 +1,13 @@
+{
+  "architectures": [
+    "Olmo3SinkForCausalLM"
+  ],
+  "has_audio_understanding": false,
+  "has_image_understanding": false,
+  "is_generation": true,
+  "model_path": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+  "model_type": "olmo3",
+  "preferred_sampling_params": null,
+  "tokenizer_path": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+  "weight_version": "default"
+}
