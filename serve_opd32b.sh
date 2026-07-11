@@ -46,6 +46,7 @@ esac
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST:-9.0a}"   # H200 = sm90
 export FLASHINFER_USE_CUDA_NORM=1
+export SGLANG_USE_HUMMING_W4A8=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 # env-gated perf patches from sglang_patches/ (no-ops if not applied)
 export SGLANG_DECODE_NUM_STAGES="${SGLANG_DECODE_NUM_STAGES:-3}"

@@ -11,14 +11,17 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 M3R = REPO / "distill_gen" / "math_3r"
 HARNESS = REPO / "evaluation" / "harness"
+PATCHES = REPO / "sglang_patches"
 sys.path.insert(0, str(M3R))
 sys.path.insert(0, str(HARNESS))
+sys.path.insert(0, str(PATCHES))
 
 from grader import parse_score  # noqa: E402
 from make_batches import build_batches  # noqa: E402
 from pipeline import Engine, solve_problem  # noqa: E402
 from run_full_evaluation import generation_command, load_problem_ids  # noqa: E402
 from run_notebook_v2_eval import strict_trace  # noqa: E402
+from patch_w4a8_mode_guard import patch_source  # noqa: E402
 
 
 class InvalidClient:
@@ -52,6 +55,7 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertIn('SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE="$CHUNKED"', launcher)
         self.assertIn('MAXREQ="${MAXREQ:-48}"', launcher)
         self.assertIn('MEMFRAC="${MEMFRAC:-0.88}"', launcher)
+        self.assertIn("export SGLANG_USE_HUMMING_W4A8=0", launcher)
         self.assertIn('SGLANG_GQA_PACKED_EXTEND="${SGLANG_GQA_PACKED_EXTEND:-1}"', launcher)
         self.assertNotIn("--served-model-name", launcher)
 
@@ -117,6 +121,17 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertIn("--base-url http://127.0.0.1:30000", rendered)
         self.assertIn("--config", rendered)
         self.assertNotIn("run_agentic_eval.py", rendered)
+
+    def test_humming_import_is_gated_for_h200_marlin(self):
+        unguarded = "before\n        if _humming_mod().humming_dispatch(layer, x):\nafter\n"
+        guarded = patch_source(unguarded)
+        self.assertIn(
+            "if _humming_enabled() and _humming_mod().humming_dispatch(layer, x):",
+            guarded,
+        )
+        self.assertEqual(patch_source(guarded), guarded)
+        with self.assertRaises(RuntimeError):
+            patch_source("no humming dispatch here")
 
     def test_correctness_profile_uses_bf16_kv(self):
         config = json.loads(

@@ -21,6 +21,8 @@
 #       transforms and keep sampling uniforms off zero-probability boundaries
 #   patch_deterministic_chunk_alignment.py (script) reject deterministic
 #       alignment/chunk combinations that would spin the prefill scheduler
+#   patch_w4a8_mode_guard.py (script) keep the optional Blackwell Humming
+#       import behind SGLANG_USE_HUMMING_W4A8=1 so H200 uses Marlin
 #
 # Usage: bash apply_patches.sh <venv_path>
 set -euo pipefail
@@ -53,4 +55,5 @@ find "$SROOT/models" "$SROOT/speculative" -name '*.pyc' -delete 2>/dev/null || t
 "$VENV/bin/python" "$SRC/patch_decode_tune.py" "$VENV"
 "$VENV/bin/python" "$SRC/patch_gqa_packed_extend.py" "$VENV"
 "$VENV/bin/python" "$SRC/patch_deterministic_chunk_alignment.py" "$VENV"
+"$VENV/bin/python" "$SRC/patch_w4a8_mode_guard.py" "$VENV"
 echo "[patch] done"
