@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "failed_before_server_launch",
+  "recorded_at": "2026-07-11T01:46:14Z",
+  "profile": "fix4_w4a16_int4",
+  "phase": "radix_sync_eager",
+  "tier": "quick",
+  "suites": [
+    "greedy"
+  ],
+  "error": {
+    "type": "RunnerError",
+    "message": "refusing to disturb an existing listener on 127.0.0.1:31000: [Errno 98] Address already in use"
+  },
+  "post_failure_observation": {
+    "listeners_on_test_ports": [],
+    "gpu_compute_processes": []
+  },
+  "generation_requests_sent": 0
+}
