@@ -60,18 +60,34 @@ subdirectories under that root.
 
 ## What “correct” means
 
-For greedy decoding, a case passes only when the target-only and DFlash servers
-return all of the following identically:
+For greedy decoding, each target-only versus DFlash comparison receives one of
+three explicit equivalence verdicts:
 
-- every output token ID, in order;
-- the number and position of generated tokens;
-- the normalized finish reason (length, EOS, stop token, or stop string);
-- the final result reconstructed from streaming chunks.
+- `exact`: every output token ID and decoded text value are identical;
+- `numerical`: the first differing token passes the target-oracle logprob test;
+- `failed`: neither equivalence predicate passes.
 
-The comparison is intentionally stricter than checking decoded text or the
-mathematical answer. A near-tied logit, a whitespace-only difference, or two
-equivalent answers is still a failed exact-token test. Logit margins may explain
-a failure, but never turn it into a pass.
+The numerical predicate is evaluated only after these structural invariants
+remain exact:
+
+- raw finish reason (length, EOS, stop token, or stop string);
+- prompt-token and completion-token counts;
+- submitted and returned prompt IDs;
+- DFlash activity whenever speculation is eligible;
+- stop/cache/suite-specific behavior;
+- stream versus non-stream repeatability within each engine.
+
+At the first output mismatch, the harness appends the shared target prefix to the
+original input and asks the target-only server for one greedy token with requested
+logprobs for both competing tokens. The verdict is `numerical` only when the
+oracle selects the original target token and both tokens are within `0.13`
+logprob of the oracle maximum. The threshold and top-logprob count are mandatory
+test configuration; they do not modify either server's sampler.
+
+Exact identity is still recorded separately. A numerical pass means a bounded
+first-divergence alternative under this declared contract; it must never be
+reported as bitwise or exact-token equivalence. Missing or malformed oracle
+logprob evidence is an error, not a pass.
 
 For non-greedy decoding, matching the same seed across the two engines is not a
 valid correctness requirement: ordinary and speculative decoding can consume
@@ -122,10 +138,10 @@ The test suite separates algorithmic invariants from end-to-end GPU behavior.
 |---|---|
 | Verification rule | zero acceptance, first/middle/last rejection, all accepted, block sizes and batches, bonus-token placement |
 | Commit/rollback | only the accepted prefix plus one target token is published; rejected speculative tail never leaks |
-| Greedy differential | exact output IDs for short, normal, and long prompts and generations |
+| Greedy differential | exact output IDs or bounded first-mismatch target-oracle logprob delta for short, normal, and long prompts and generations |
 | Boundaries | around block 8, draft window 512, prefill chunk 2048, and target SWA window 4096 |
 | Termination | max length, EOS/stop token, stop string, and speculative-step overshoot trimming |
-| Streaming | monotonic chunks, final-stream/non-stream equivalence, exact cross-mode result |
+| Streaming | monotonic chunks, exact within-engine stream/non-stream repeatability, and exact-or-numerical cross-engine result |
 | Prefix caching | cold requests, repeated radix hits, shared-prefix forks, cache flush, and cache-state reuse |
 | Scheduling | single requests, native batches, concurrent mixed lengths, and repeated requests after rejection-heavy work |
 | Sampling | production temperature/top-p, fixed-seed repeatability, and cross-mode distribution tests |
@@ -146,4 +162,6 @@ streaming layer implement those rules for the production configuration.
 
 The final report must not claim success if a case was skipped, a server used a
 different model/configuration, speculative telemetry proves DFlash was inactive,
-or any exact greedy mismatch remains unresolved.
+or any greedy mismatch is neither exact nor supported by a complete target-oracle
+probe within the configured delta. Exact and numerical pass counts must always be
+reported separately.

@@ -1,15 +1,19 @@
 # DFlash generation-correctness evidence report
 
-This report is a snapshot of the persisted evidence on branch
-`test/dflash-generation-correctness` on 2026-07-11. Counts below come from the
-JSON/JSONL results and logs linked in each table.
-The quick matrix and its exact-token oracle are defined by
+This report is a snapshot of persisted evidence produced on branch
+`test/dflash-generation-correctness` on 2026-07-11 under the then-active
+exact-token-only predicate. Counts below come from the JSON/JSONL results and
+logs linked in each table.
+
+Schema version 2 later introduced a bounded first-mismatch target-oracle logprob
+predicate. These historical files do not contain those probes and are therefore
+not retroactively reclassified. The current contract is defined by
 [`tests/README.md`](../README.md) and
 [`tests/configs/dflash_generation_h200.json`](../configs/dflash_generation_h200.json).
 
 ## Verdict
 
-**DFlash is not 100% correct under the repository's strict generation contract.**
+**DFlash was not 100% correct under the historical strict-exact generation contract.**
 
 The definitive notebook-equivalent production full run completed all 123
 declared cases with no errors or skips, but only 82 passed and 41 failed. The
@@ -29,9 +33,9 @@ Several important subsystems do pass:
 - the deterministic prefill-alignment liveness correction, including the former
   4095/4096-token timeout boundary.
 
-Passing those subsystems does not override an exact token mismatch. The result
-therefore cannot be described as 100% correct, bitwise equivalent, or an exact
-drop-in replacement for ordinary target decoding.
+Under that historical predicate, passing those subsystems did not override an
+exact token mismatch. The result therefore cannot be described as 100% exact,
+bitwise equivalent, or an exact drop-in replacement for ordinary target decoding.
 
 Both configured tiers now have persisted end-to-end production runs. The full
 tier reaches 65,537 input tokens, 20,481 generated tokens, batches through 48,
@@ -411,7 +415,8 @@ The evidence supports a narrow, defensible conclusion:
   block size, eliminating draft proposals, switching to BF16 weights, and
   controlling for the physical GPU.
 
-Consequently, this branch must report **DFlash generation correctness: failed
-under the strict exact-token contract**. Any production acceptance criterion
-that permits numerically induced alternative tokens would be a different,
-weaker contract and would need to be stated and tested explicitly.
+Consequently, these artifacts report **DFlash generation correctness: failed
+under the historical strict exact-token contract**. The newer numerical contract
+is stated and tested explicitly in schema version 2, but it requires fresh
+target-oracle evidence. Until such a run is recorded, this report makes no
+numerical-equivalence verdict for the historical mismatches.

@@ -19,8 +19,10 @@ The oracle is not a fallback or a ground-truth mathematics checker. Both arms
 still use the target's normal paged KV cache. Radix prefix reuse is toggled by
 the selected phase; request-local target KV caching remains active in both.
 
-Greedy output is judged by exact identity. Sampling is judged by repeatability
-within each engine and statistical agreement across engines.
+Greedy cross-engine output is judged first by exact identity and then, only at
+the first shared-prefix mismatch, by the mandatory target-oracle logprob bound.
+Sampling is judged by repeatability within each engine and statistical agreement
+across engines.
 
 ```mermaid
 flowchart TD
@@ -178,16 +180,34 @@ finished record per batch row, and no post-finish emission.
 Preserve raw IDs, raw structured finish reason, text, counts, prompt IDs,
 cache/speculative telemetry, and a compact chunk audit.
 
-### 12. Apply the exact deterministic predicate
+### 12. Apply exact structure plus bounded numerical equivalence
 
-Require exact equality of:
+First compute and persist exact equality for output IDs, decoded text, raw finish
+reason, prompt-token count, completion-token count, and returned/submitted prompt
+IDs. If the entire response is identical, assign `equivalence_verdict=exact`.
 
-1. every output token ID;
-2. raw finish reason;
-3. prompt-token count;
-4. completion-token count;
-5. decoded text;
-6. returned and submitted prompt IDs.
+If output IDs differ, numerical evaluation is permitted only when finish reason,
+prompt count, completion count, and prompt IDs remain exact and both engines
+produced a token at the first mismatch. Build:
+
+```text
+shared_prefix = input_ids + target_output_ids[:first_mismatch_index]
+```
+
+Ask the target-only server for one greedy token from that prefix with
+`return_logprob=true`, `top_logprobs_num=5`, and requested-token logprobs for the
+target and DFlash alternatives. The full probe response is persisted. Assign
+`equivalence_verdict=numerical` only when:
+
+```text
+oracle_output_id == target_token_id
+oracle_top_logprob - target_token_logprob <= 0.13
+oracle_top_logprob - dflash_token_logprob <= 0.13
+```
+
+Otherwise assign `equivalence_verdict=failed`. Missing or malformed logprob
+evidence is an error. The tolerance is part of the test verdict only; the target
+and DFlash sampling parameters are unchanged.
 
 When DFlash emits more than one token, also require:
 
@@ -196,24 +216,26 @@ spec_verify_ct > 0
 spec_num_proposed_drafts > 0
 ```
 
-This proves verification and proposals, not accepted-draft count.
+This proves verification and proposals, not accepted-draft count. Stream and
+non-stream results must remain exactly repeatable within each engine. Stop,
+prompt, cache, activity, and suite-specific invariants also remain exact.
 
 ```text
 case_pass =
-    exact_output_ids
+    (exact_output_ids or bounded_first_mismatch)
     and exact_finish_reason
     and exact_prompt_count
     and exact_completion_count
-    and exact_text
     and exact_prompt_ids
     and (not speculation_eligible or dflash_activity)
+    and exact_within_engine_repeatability
     and suite_specific_checks
 ```
 
-Record the first mismatch and surrounding token context. Mathematical
-equivalence, whitespace-only differences, and near-tied alternative tokens are
-still failures. Generic equality does not require every metadata value, cache
-count, chunk boundary, latency, or logit to match.
+`exact`, `numerical`, and `failed` counts are reported separately. A numerical
+pass is not bitwise equivalence and must never be described as exact-token
+identity. Generic equality still does not require cache counts, chunk boundaries,
+latencies, or unrelated metadata values to match.
 
 ### 13. Execute suites in order
 
@@ -382,7 +404,7 @@ Diagnostics explain a failure; they never convert it into a pass.
   --results-dir tests/results/<unique-isolation-run>
 ```
 
-## Actual full-matrix result
+## Historical strict-exact full-matrix result
 
 | Suite | Pass | Fail |
 |---|---:|---:|
@@ -397,10 +419,13 @@ Diagnostics explain a failure; they never convert it into a pass.
 | Stress | 0 | 2 |
 | **Total** | **82** | **41** |
 
-There were zero errors and zero skips. Therefore:
+There were zero errors and zero skips. Under the former exact-token-only
+predicate:
 
-> **DFlash is not 100% generation-correct under the exact-token contract.**
+> **DFlash was not 100% generation-correct under the exact-token contract.**
 
-Stop semantics, guards, stochastic distribution, cache telemetry, activation,
-and liveness passed, but cannot override exact token failures. See
-[`results/REPORT.md`](results/REPORT.md) for the complete evidence and limits.
+This historical artifact is not retroactively reclassified. The numerical
+contract requires new target-oracle probes at each first mismatch, which the old
+result does not contain. Exact and numerical outcomes from a new run must be
+reported separately. See [`results/REPORT.md`](results/REPORT.md) for the
+complete historical evidence and limits.
