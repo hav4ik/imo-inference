@@ -11,8 +11,7 @@ intentionally not carried here.
 - DFlash is mandatory.
 - Target weights, draft weights, and both KV caches use BF16.
 - The LM-head matrix multiplication uses FP32 operands to make greedy near-ties
-  stable; stored weights remain BF16. Greedy selection quantizes computed logits
-  to a BF16 decision grid before lowest-index argmax.
+  stable; stored weights remain BF16.
 - Every generation stage must produce valid output. There is no alternate proof,
   request retry, stub grader, or synthetic score.
 - Full stage traces and grader responses are written to disk.
