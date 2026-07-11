@@ -5,6 +5,17 @@ oracle is the same target checkpoint served **without speculative decoding**.
 DFlash is the system under test; the target-only server is not a production
 fallback.
 
+Everything in this directory is test-only:
+
+- `configs/` contains correctness profiles and finite coverage matrices;
+- `results/` contains committed, immutable evidence from completed runs;
+- `dflash_correctness_harness.py` compares already-running servers;
+- `run_dflash_correctness.py` owns an isolated server pair for one test phase;
+- `test_*.py` contains unit, kernel, and harness regression tests.
+
+Production launchers must not source these configs, and this suite must not
+write test artifacts into production/evaluation result directories.
+
 ## What “correct” means
 
 For greedy decoding, a case passes only when the target-only and DFlash servers

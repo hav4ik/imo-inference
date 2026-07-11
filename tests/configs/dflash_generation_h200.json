@@ -88,6 +88,7 @@
       ],
       "triton_attention_num_kv_splits": 32,
       "random_seed": 0,
+      "enable_deterministic_inference": true,
       "enable_cache_report": true,
       "enable_metrics": true,
       "reasoning_parser": "deepseek-r1"
