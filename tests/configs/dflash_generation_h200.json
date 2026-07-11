@@ -41,6 +41,24 @@
         "speculative_num_draft_tokens": 1
       }
     },
+    "bf16_strict_fp32_reduce": {
+      "description": "Strict BF16 diagnostic with FP32 Triton attention reduction.",
+      "python": "/workspace/pp/venv/bin/python",
+      "target_model": "/workspace/models/opd-32b-deploy",
+      "tokenizer": "/workspace/models/opd-32b-deploy",
+      "draft_model": "/workspace/models/dflash-32b-draft-v2test-phaseL",
+      "draft_quantization": null,
+      "expected_checkpoint_block_size": 11,
+      "effective_dflash_block_size": 8,
+      "common_argument_overrides": {
+        "mem_fraction_static": 0.82,
+        "kv_cache_dtype": "auto",
+        "max_running_requests": 2,
+        "cuda_graph_max_bs_decode": 2,
+        "cuda_graph_bs_decode": [1, 2],
+        "triton_attention_reduce_in_fp32": true
+      }
+    },
     "bf16_strict": {
       "description": "Production ProofBench profile: BF16 target, BF16 DFlash draft, and BF16 KV caches.",
       "python": "/workspace/pp/venv/bin/python",

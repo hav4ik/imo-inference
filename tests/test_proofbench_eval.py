@@ -63,6 +63,8 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         overrides = config["profiles"]["bf16_strict"]["common_argument_overrides"]
         self.assertEqual(overrides["kv_cache_dtype"], "auto")
         self.assertEqual(overrides["max_running_requests"], 2)
+        fp32 = config["profiles"]["bf16_strict_fp32_reduce"]["common_argument_overrides"]
+        self.assertIs(fp32["triton_attention_reduce_in_fp32"], True)
 
     def test_invalid_prover_output_raises(self):
         async def run():
