@@ -63,19 +63,28 @@ UNIFORM_INSERTION = '''    need_top_k = bool(getattr(sampling_info, "need_top_k_
 UNIFORM_GUARD = '''    # DFLASH_SAMPLING_OPEN_INTERVAL: zero mass must never be accepted.
     # The CUDA verifier uses <= at its CDF boundary.  torch.rand can return
     # exactly zero, so move both injected and generated coins into (0, 1].
-    smallest_positive = torch.nextafter(
-        torch.zeros((), dtype=torch.float32, device=device),
-        torch.ones((), dtype=torch.float32, device=device),
-    )
+    # Use epsilon rather than the smallest subnormal: GPU kernels may flush
+    # subnormals to zero, recreating the zero-probability acceptance bug.
+    smallest_positive = torch.finfo(torch.float32).eps
     uniform_samples.clamp_min_(smallest_positive)
     uniform_samples_for_final_sampling.clamp_min_(smallest_positive)
 
     need_top_k = bool(getattr(sampling_info, "need_top_k_sampling", True))
 '''
 
+LEGACY_SUBNORMAL_GUARD = '''    smallest_positive = torch.nextafter(
+        torch.zeros((), dtype=torch.float32, device=device),
+        torch.ones((), dtype=torch.float32, device=device),
+    )
+'''
+EPSILON_GUARD = '''    # Use epsilon rather than the smallest subnormal: GPU kernels may flush
+    # subnormals to zero, recreating the zero-probability acceptance bug.
+    smallest_positive = torch.finfo(torch.float32).eps
+'''
+
 
 def patch_dflash_utils_text(text: str) -> str:
-    patched = text
+    patched = text.replace(LEGACY_SUBNORMAL_GUARD, EPSILON_GUARD, 1)
     if VALIDATION_MARKER not in patched:
         function_start = patched.find("def validate_dflash_request(")
         if function_start < 0:
