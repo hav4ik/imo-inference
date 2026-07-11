@@ -56,6 +56,14 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertEqual(config["model"]["kv_cache_dtype"], "auto")
         self.assertEqual(config["model"]["speculative_algorithm"], "DFLASH")
 
+    def test_correctness_profile_uses_bf16_kv(self):
+        config = json.loads(
+            (REPO / "tests/configs/dflash_generation_h200.json").read_text()
+        )
+        overrides = config["profiles"]["bf16_strict"]["common_argument_overrides"]
+        self.assertEqual(overrides["kv_cache_dtype"], "auto")
+        self.assertEqual(overrides["max_running_requests"], 2)
+
     def test_invalid_prover_output_raises(self):
         async def run():
             engine = Engine(

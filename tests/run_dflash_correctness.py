@@ -218,6 +218,14 @@ def _positive_int(value: Any, field: str) -> int:
     return value
 
 
+def _effective_common_arguments(
+    profile: dict[str, Any], pair: dict[str, Any]
+) -> dict[str, Any]:
+    arguments = dict(pair["common_arguments"])
+    arguments.update(profile.get("common_argument_overrides", {}))
+    return arguments
+
+
 def _effective_dflash_arguments(
     profile: dict[str, Any], pair: dict[str, Any]
 ) -> dict[str, Any]:
@@ -500,7 +508,7 @@ def _build_command(
         "--port",
         str(port),
     ]
-    for key, value in pair["common_arguments"].items():
+    for key, value in _effective_common_arguments(profile, pair).items():
         if not phase["cuda_graph"] and key in _GRAPH_ARGUMENTS:
             continue
         _append_cli_argument(command, key, value)
@@ -705,7 +713,7 @@ def _validate_server_info(
             "port",
             pair["dflash_port"] if name == "dflash" else pair["target_port"],
         )
-        for key, expected in pair["common_arguments"].items():
+        for key, expected in _effective_common_arguments(profile, pair).items():
             if not phase["cuda_graph"] and key in _GRAPH_ARGUMENTS:
                 continue
             expect(name, info, _SERVER_INFO_FIELD.get(key, key), expected)
