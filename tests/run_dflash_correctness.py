@@ -388,6 +388,9 @@ def _audit_harness_cli(profile: dict[str, Any]) -> dict[str, Any]:
 
 def _port_bind_error(host: str, port: int) -> OSError | None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        # Match uvicorn/SGLang bind semantics: permit rebind through stale
+        # health-check TIME_WAIT sockets, but still reject an active listener.
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.bind((host, port))
         except OSError as exc:

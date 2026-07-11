@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from tests.run_dflash_correctness import (
     _checkpoint_block_size_report,
     _effective_dflash_arguments,
     _harness_suites,
+    _port_bind_error,
     _validate_dflash_activation,
     _wait_for_ports_released,
 )
@@ -114,6 +116,14 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertTrue(report["ports_released"])
         self.assertEqual(report["ports"], [31000])
         self.assertEqual(report["attempts"], 2)
+
+    def test_port_probe_still_rejects_an_active_listener(self) -> None:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen()
+            port = listener.getsockname()[1]
+            self.assertIsInstance(_port_bind_error("127.0.0.1", port), OSError)
 
     def test_cleanup_port_timeout_is_fail_closed(self) -> None:
         busy = OSError(98, "Address already in use")
