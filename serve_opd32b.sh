@@ -29,6 +29,7 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export SGLANG_DECODE_NUM_STAGES="${SGLANG_DECODE_NUM_STAGES:-3}"
 export SGLANG_DECODE_BLOCK_N="${SGLANG_DECODE_BLOCK_N:-32}"
 export SGLANG_GQA_PACKED_EXTEND="${SGLANG_GQA_PACKED_EXTEND:-1}"
+export SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE="$CHUNKED"
 
 # JIT robustness (no-op on a full-CUDA box): flashinfer's JIT link needs
 # libcuda.so on LIBRARY_PATH, and NVRTC needs CCCL headers under the venv's

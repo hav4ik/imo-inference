@@ -42,6 +42,7 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertNotIn("DFLASH=", launcher)
         self.assertNotIn("fp8_e4m3", launcher)
         self.assertNotIn("EXTRA_ARGS", launcher)
+        self.assertIn('SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE="$CHUNKED"', launcher)
 
     def test_five_problem_batches_cover_proofbench(self):
         with (REPO / "evaluation/data/proofbench_v2.csv").open() as data_file:
