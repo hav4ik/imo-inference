@@ -235,6 +235,11 @@ the server-pair preflight unless stated otherwise.
 | [`native block-11 greedy`](./20260711-fix4-block11-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | sync eager; checkpoint-native block 11 | 20 | 11 | 0 | Matching the checkpoint block size does not remove exact mismatch. |
 | [`block-1 diagnostic`](./20260711-fix4-block1-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | sync eager; block 1 | 3 | 28 | 0 | Eleven of 30 greedy comparisons differ even with zero draft proposals; 17 more are exact but fail the mandatory-activity rule. |
 | [`BF16/BF16 greedy`](./20260711-bf16-bf16-sync-eager-greedy/dflash_generation_correctness.json) | BF16 target + BF16 draft, sync eager; block 8 | 25 | 6 | 0 | Removing target/draft weight quantization reduces but does not eliminate divergence. |
+| [`strict BF16 all-suite quick`](./20260711-proofbench-bf16-sync-eager-quick/dflash_generation_correctness.json) | BF16 target, draft, and KV; all quick suites | 69 | 12 | 1 | Mandatory ProofBench precision substantially reduces greedy divergence but does not pass the all-suite quick gate. |
+| [`FP32 LM-head greedy`](./20260711-proofbench-bf16-fp32-lm-head-greedy/dflash_generation_correctness.json) | strict BF16 state; FP32 LM-head operands | 30 | 1 | 0 | Removes all synthetic boundary mismatches; the natural 256-token case still differs at output index 38. |
+| [`narrow canonical greedy`](./20260711-proofbench-bf16-canonical-sync-eager-quick/dflash_generation_correctness.json) | FP32 LM head; 1e-5 lowest-ID near-tie rule | 30 | 1 | 0 | Same single natural-case failure; this is the current best measured strict configuration. |
+| [`one-quantum tolerance`](./20260711-proofbench-bf16-canonical-quantum-sync-eager-quick/dflash_generation_correctness.json) | global 0.126 near-tie tolerance | 27 | 4 | 0 | Rejected: fixes the natural case but creates four boundary regressions. |
+| [`BF16-grid argmax`](./20260711-proofbench-bf16-grid-sync-eager-quick/dflash_generation_correctness.json) | quantize computed logits to BF16 before argmax | 27 | 4 | 0 | Rejected: creates three boundary regressions and leaves the natural mismatch. |
 | [`target GPU A/A`](./20260711-fix4-sync-eager-target-gpu-aa/target_gpu_control.json) | identical non-speculative target on GPU 0 and GPU 1 | 10 | 0 | 0 | The two physical H200s match exactly on ten implicated cases. |
 
 The block-1 aggregate needs careful reading. With block size 1 there are no
@@ -252,6 +257,15 @@ Taken together, the persisted controls rule out the following as sole causes:
 - accepted draft tokens or the compact draft KV ring;
 - W4A16/int4 quantization alone;
 - a systematic difference between GPU 0 and GPU 1.
+
+The strict ProofBench sequence narrows the numerical result further. Moving all
+weights and KV state to BF16, then computing the LM head with FP32 operands,
+improves the greedy matrix to 30/31. A narrow shared tie rule does not clear the
+last natural case. Two broader global decision rules were tested and rejected:
+both finish at 27/31 and introduce boundary failures that the narrow rule does
+not have. Their implementations were reverted without deleting either commit or
+evidence. The current branch therefore retains the 1e-5 rule and reports the
+remaining failure instead of weakening the exact-token contract.
 
 The strongest evidence-based localization is therefore the target computation
 used for DFlash verification versus the target computation used for ordinary
@@ -310,6 +324,11 @@ batch, five stream, and one 513-token stress exact divergence.
 | [`block1-rerun1`](./20260711-fix4-block1-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | 3 / 28 / 0 | No-proposal target-verification diagnostic. |
 | [`block11-rerun1`](./20260711-fix4-block11-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | 20 / 11 / 0 | Native checkpoint block-size diagnostic. |
 | [`BF16/BF16`](./20260711-bf16-bf16-sync-eager-greedy/dflash_generation_correctness.json) | 25 / 6 / 0 | Quantization-isolation diagnostic. |
+| [`strict BF16 quick`](./20260711-proofbench-bf16-sync-eager-quick/dflash_generation_correctness.json) | 69 / 12 / 1 | All-suite mandatory-precision gate. |
+| [`FP32 LM-head greedy`](./20260711-proofbench-bf16-fp32-lm-head-greedy/dflash_generation_correctness.json) | 30 / 1 / 0 | Best arithmetic diagnostic before canonical tie handling. |
+| [`narrow canonical greedy`](./20260711-proofbench-bf16-canonical-sync-eager-quick/dflash_generation_correctness.json) | 30 / 1 / 0 | Current best strict sync/eager result. |
+| [`one-quantum tolerance`](./20260711-proofbench-bf16-canonical-quantum-sync-eager-quick/dflash_generation_correctness.json) | 27 / 4 / 0 | Rejected global tolerance experiment. |
+| [`BF16-grid argmax`](./20260711-proofbench-bf16-grid-sync-eager-quick/dflash_generation_correctness.json) | 27 / 4 / 0 | Rejected decision-grid experiment. |
 | [`target GPU A/A`](./20260711-fix4-sync-eager-target-gpu-aa/target_gpu_control.json) | 10 / 0 / 0 | Identical target-only control across both H200s. |
 
 Historical matrices were extended during investigation, so older greedy-only
