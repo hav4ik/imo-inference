@@ -10,7 +10,8 @@ Example:
     --data ../data/proofbench_v2.csv --passes 2 \
     --base-url https://api.deepseek.com/v1 --served-model deepseek-v4-flash \
     --api-key-env DEEPSEEK_API_KEY --reasoning high --max-tokens 65536 \
-    --concurrency 200 --out-name grades_2pass.jsonl
+    --concurrency 60 --out-name grades_2pass.jsonl \
+    --summary-run-id opd32b-dflash-bf16-full/grading
 """
 from __future__ import annotations
 
@@ -198,7 +199,7 @@ def aggregate(run_ids, out_paths, args) -> None:
     out = {"grader": f"{args.served_model} {args.reasoning}_notool",
            "passes": args.passes, "runs": per_run}
 
-    out_dir = EVAL_ROOT / "runs" / f"_grade_{args.reasoning}_agentic"
+    out_dir = EVAL_ROOT / "runs" / args.summary_run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
 
@@ -223,6 +224,8 @@ def main() -> None:
     ap.add_argument("--base-url", required=True)
     ap.add_argument("--served-model", default="deepseek-v4-flash")
     ap.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
+    ap.add_argument("--summary-run-id", required=True,
+                    help="directory below evaluation/runs for the aggregate summary")
     ap.add_argument("--reasoning", default="high", choices=["default", "no_think", "high", "max"])
     ap.add_argument("--max-tokens", type=int, default=65536)
     ap.add_argument("--concurrency", type=int, default=200)

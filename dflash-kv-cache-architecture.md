@@ -1,7 +1,8 @@
 # DFlash Inference and KV-Cache Architecture
 
-This describes the exact pipeline configured by `submission-32b-fix4.ipynb`,
-including both the Proof Pilot orchestration and one request inside SGLang.
+This describes the pipeline configured by `submission-32b-fix4.ipynb`, including
+both the Proof Pilot orchestration and one request inside SGLang. The flow is the
+same on H200; the deployment-specific KV storage dtype is compared in section 8.
 
 ## Direct answer
 
@@ -59,7 +60,7 @@ The rest of this document zooms into one completion request.
 ```mermaid
 flowchart TB
     REQ["Tokenized chat request"] --> RADIX{"Exact-token radix-prefix lookup"}
-    RADIX -->|"hit: reuse target-KV pages"| TKV[("Target paged KV cache<br/>64 layers; FP8 e4m3")]
+    RADIX -->|"hit: reuse target-KV pages"| TKV[("Target paged KV cache<br/>64 layers; deployment KV dtype")]
     RADIX -->|"unmatched suffix"| PREFILL["Target prefill of unmatched tokens"]
     TKV -->|"cached prefix context"| PREFILL
 
@@ -189,14 +190,15 @@ After cycle
 
 | State | What it contains | Scope/lifetime | Notebook behavior |
 |---|---|---|---|
-| Target KV | K/V from all target attention layers | Active request; eligible pages may persist through radix | Paged FP8 e4m3, 64 layers |
-| Draft KV ring | Draft-layer K/V derived from fused target features, plus in-flight state | Private to one active request | FP8 e4m3, 8 layers, logical window 512, physical ring 528 |
+| Target KV | K/V from all target attention layers | Active request; eligible pages may persist through radix | Paged BF16, 64 layers |
+| Draft KV ring | Draft-layer K/V derived from fused target features, plus in-flight state | Private to one active request | BF16, 8 layers, logical window 512, physical ring 528 |
 | Radix cache | Exact-token prefix index and ownership of reusable target-KV pages | Shared across compatible requests until eviction | Enabled by `DISABLE_RADIX=0`; does not restore draft KV |
 | Selected target hidden states | Inputs used to construct draft K/V | Transient during target prefill/verify | Fused/projected, then cleared |
 | Model weights | Parameters used to compute K/V and logits | Server lifetime | Target W4A8; draft INT4 MLP with BF16 attention weights |
 | CUDA graphs | Captured execution plans/static buffers | Server lifetime | Performance machinery, not K/V |
 
-Both target and draft KV pools inherit `--kv-cache-dtype fp8_e4m3`. The draft's
+Both target and draft KV pools inherit `--kv-cache-dtype auto`, which resolves
+to BF16 for these BF16 model configurations. The draft's
 attention weights and projection computation remain BF16 while only its MLP
 weights are INT4. Compute/weight dtype does not determine the stored KV dtype.
 
@@ -246,7 +248,7 @@ draft context can hurt acceptance, never target-verified correctness.
 | Target attention | Triton, 40 query heads, 8 KV heads, hybrid SWA/full |
 | Draft | 8 layers; INT4 compressed-tensors MLP, BF16 attention weights |
 | Shared model parts | Draft uses target input embedding and target LM head |
-| Target and draft KV | FP8 e4m3 |
+| Target and draft KV | BF16 (`auto`) on the H200 deployment; the notebook used FP8 e4m3 |
 | Target context/window | 200,000 context; SWA window 4096 |
 | Draft window/ring | 512 logical; 528 physical slots per request region |
 | DFlash block | Effective 8, overriding checkpoint-native 11 |
@@ -263,7 +265,7 @@ These are independent quantization axes:
 ```text
 W4A8 target       = target matrix-multiplication weights/activations
 INT4 draft MLP    = draft MLP weight representation
-FP8 KV            = stored attention memory for both models
+BF16 KV           = stored attention memory for both models on H200
 ```
 
 ## 8. Notebook versus the H200 KV experiment
@@ -272,8 +274,8 @@ FP8 KV            = stored attention memory for both models
 |---|---|---|
 | Target weights | GPTQ/Humming W4A8 | Local BF16 target |
 | Draft weights | INT4 MLP | Local BF16 draft |
-| Target KV | FP8 e4m3 | FP8 e4m3 |
-| Draft KV | FP8 ring, window 512 | FP8 ring, window 512 |
+| Target KV | FP8 e4m3 | BF16 |
+| Draft KV | FP8 ring, window 512 | BF16 ring, window 512 |
 | Radix cache | Enabled | Disabled |
 | DFlash block | 8 | 8 |
 | Target pool ratio | 0.2 | 0.1 |

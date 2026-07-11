@@ -1,0 +1,85 @@
+{
+  "schema_version": 3,
+  "model": {
+    "mode": "humming_w4a8",
+    "served_model": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+    "target": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+    "draft": "/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp",
+    "target_weight_quantization": "gptq_w4a16_compressed_tensors",
+    "target_execution_quantization": "humming_w4a8",
+    "target_activation_dtype": "fp8_e4m3",
+    "draft_weight_quantization": "int4_mlp_w4a16_compressed_tensors",
+    "lm_head_compute_dtype": "bfloat16",
+    "kv_cache_dtype": "fp8_e4m3",
+    "kv_scale": "unit",
+    "speculative_algorithm": "DFLASH"
+  },
+  "server": {
+    "context_length": 200000,
+    "mem_fraction_static": 0.85,
+    "max_running_requests": 48,
+    "swa_full_tokens_ratio": 0.2,
+    "dflash_block_size": 8,
+    "dflash_window_size": 512,
+    "chunked_prefill_size": 2048,
+    "stream_interval": 16,
+    "triton_attention_num_kv_splits": 32,
+    "prefill_cuda_graph_backend": "tc_piecewise",
+    "swa_eviction_interval_multiplier": 0.125,
+    "release_swa_leaf_lock_after_window": true,
+    "gqa_packed_extend": true,
+    "humming_required": true
+  },
+  "agentic": {
+    "pipeline": "notebook_v2_streaming_strict",
+    "call_cap": 60000,
+    "budget_s": 4200,
+    "select_reserve_s": 900,
+    "finalize_reserve_s": 180,
+    "init_provers": 6,
+    "verify_k": 3,
+    "refine_inputs": 4,
+    "refine_min_seeds": 1,
+    "select_bundle_n": 4,
+    "selectors": 5,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "verify_temperature": 1.0,
+    "select_temperature": 1.0,
+    "concurrency": 12,
+    "generation_concurrency": 6
+  },
+  "notebook_runtime": {
+    "root": "/workspace/original/proof-pilot-code/kaggle_deploy/final",
+    "source_commit": "bed6b947298684896e011931a8be9e31c87b6f53",
+    "source_files": {
+      "proof_agent/bundle.py": "7dc69cc191c7c16c0e07d4b4556f7e788ffaf508899018a4df62b7f55460624c",
+      "proof_agent/clean.py": "03a37ecac72e9a1a3083252c8719a283d2fca91d53127788ec007a2a8a112caa",
+      "proof_agent/parser.py": "1d7328d2623fd81453bb58107db2c6dd8ad2a2e89660ceb6e0bdfe04a81e2776",
+      "proof_agent/prompts.py": "a4b6d8c4a2018046163234aea04eab440be1bfed7afa3e93cabed1826f1b5886",
+      "proof_agent/rank.py": "3a1e3b315c1aa97b31561a562c8868db8540c9ddbc07b44e87174a79aa770ea7",
+      "proof_agent/v2/agent.py": "951a6793e73331ef2a877d4db6f9b1f0565334713877b77a5a767dead1f002a1",
+      "proof_agent/v2/loopguard.py": "1cb9f16da01f39b3d17a0a0b23f2bae9d4659a880e1144a5da4778bab3008f8e",
+      "proof_agent/v2/pool_loop.py": "8fc5097178c60258c2dffdc8316a4ecefb61ccf675b08caee227179d0db09df1",
+      "proof_agent/v2/stream_engine.py": "12b8900e13e0ed5ddc8c7010bc0228ddd1c326638eef22ca46d009f299e03535",
+      "proof_agent/v2/zlib_runaway_detector.py": "330abc54326d63489c4572f3cdbff6780d0b043c1963b1c7b6c7297976c53049"
+    }
+  },
+  "shards": {
+    "basic": "http://127.0.0.1:30000/v1",
+    "advanced": "http://127.0.0.1:30001/v1"
+  },
+  "grader": {
+    "base_url": "https://api.deepseek.com/v1",
+    "served_model": "deepseek-v4-flash",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "reasoning": "high",
+    "max_tokens": 65536,
+    "concurrency": 60,
+    "passes": 2,
+    "prompt_sha256": "c7451f1e4f6d3749ef543443146362dc6521dc34973a09c8bad87390b6d54618",
+    "reference_repository": "https://github.com/ycchen-tw/proof-pilot-codes.git",
+    "reference_commit": "bc03a2c71a076990deaad3d712c6889682e12c69"
+  },
+  "batch_size": 5
+}

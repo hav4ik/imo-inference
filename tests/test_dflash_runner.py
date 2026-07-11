@@ -44,7 +44,7 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertIn("DFLASH", dflash)
         self.assertIn("--speculative-draft-model-path", dflash)
         mem_index = dflash.index("--mem-fraction-static")
-        self.assertEqual(dflash[mem_index + 1], "0.85")
+        self.assertEqual(dflash[mem_index + 1], "0.82")
 
         alignment = self.pair["common_environment"][
             "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE"
@@ -64,42 +64,20 @@ class RunnerConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(RunnerError, "tests/results"):
             _new_results_dir(args)
 
-    def test_explicit_block_profiles_set_both_runtime_flags(self) -> None:
-        expected = {
-            "fix4_w4a16_int4": 8,
-            "fix4_w4a16_int4_block11": 11,
-            "fix4_w4a16_int4_block1": 1,
-        }
+    def test_only_two_profiles_share_the_single_block_size(self) -> None:
+        self.assertEqual(set(self.config["profiles"]), {"humming_w4a8", "bf16"})
         phase = self.config["phases"]["sync_eager"]
-        for name, size in expected.items():
+        for name, profile in self.config["profiles"].items():
             with self.subTest(name=name):
-                profile = self.config["profiles"][name]
                 arguments = _effective_dflash_arguments(profile, self.pair)
-                self.assertEqual(arguments["speculative_dflash_block_size"], size)
-                self.assertEqual(arguments["speculative_num_draft_tokens"], size)
-                command = _build_command(
-                    profile, self.pair, phase, dflash=True
-                )
+                self.assertEqual(arguments["speculative_dflash_block_size"], 8)
+                self.assertEqual(arguments["speculative_num_draft_tokens"], 8)
+                command = _build_command(profile, self.pair, phase, dflash=True)
                 for flag in (
                     "--speculative-dflash-block-size",
                     "--speculative-num-draft-tokens",
                 ):
-                    self.assertEqual(command[command.index(flag) + 1], str(size))
-
-    def test_partial_or_inconsistent_block_override_is_rejected(self) -> None:
-        profile = dict(self.profile)
-        profile["dflash_argument_overrides"] = {
-            "speculative_num_draft_tokens": 11
-        }
-        with self.assertRaisesRegex(RunnerError, "must set both"):
-            _effective_dflash_arguments(profile, self.pair)
-        profile["dflash_argument_overrides"] = {
-            "speculative_dflash_block_size": 11,
-            "speculative_num_draft_tokens": 11,
-        }
-        profile["effective_dflash_block_size"] = 8
-        with self.assertRaisesRegex(RunnerError, "does not match"):
-            _effective_dflash_arguments(profile, self.pair)
+                    self.assertEqual(command[command.index(flag) + 1], "8")
 
     def test_checkpoint_declares_native_block_size_consistently(self) -> None:
         report = _checkpoint_block_size_report(self.profile)
@@ -154,12 +132,14 @@ class RunnerConfigurationTests(unittest.TestCase):
     def test_test_environment_requires_dflash_ring_only_for_sut(self) -> None:
         phase = self.config["phases"]["production"]
         target, _ = _build_environment(
+            self.profile,
             self.pair,
             phase,
             dflash=False,
             library_path_prefix="/tmp/test-libcuda",
         )
         dflash, _ = _build_environment(
+            self.profile,
             self.pair,
             phase,
             dflash=True,
@@ -168,6 +148,13 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertNotIn("SGLANG_DFLASH_DRAFT_RING", target)
         self.assertEqual(dflash["SGLANG_DFLASH_DRAFT_RING"], "1")
         self.assertEqual(dflash["SGLANG_DFLASH_DRAFT_RING_QUOTA"], "4")
+        self.assertEqual(target["SGLANG_USE_HUMMING_W4A8"], "1")
+        self.assertEqual(dflash["SGLANG_USE_HUMMING_W4A8"], "1")
+        self.assertEqual(target["HUMMING_PATH"], "/workspace/pp")
+        self.assertEqual(
+            target["LD_LIBRARY_PATH"],
+            "/workspace/pp/venv/lib/python3.12/site-packages/nvidia/cu13/lib",
+        )
 
     def test_radix_suite_runs_only_in_radix_phase(self) -> None:
         production = _harness_suites(self.config["phases"]["production"])
@@ -225,47 +212,20 @@ class ActivationLogTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "dflash.log"
-            for name, size in (
-                ("fix4_w4a16_int4", 8),
-                ("fix4_w4a16_int4_block1", 1),
-            ):
+            for name, profile in profiles.items():
                 with self.subTest(name=name):
                     warning = (
                         "DFLASH block size mismatch: using "
-                        f"speculative_num_draft_tokens={size} but draft config "
+                        "speculative_num_draft_tokens=8 but draft config "
                         "block_size=11."
                     )
-                    path.write_text(log(size, warning))
-                    report = _validate_dflash_activation(
-                        path, profiles[name], pair
-                    )
+                    path.write_text(log(8, warning))
+                    report = _validate_dflash_activation(path, profile, pair)
                     self.assertTrue(report["passed"], report)
-                    path.write_text(log(size, None))
+                    path.write_text(log(8, None))
                     self.assertFalse(
-                        _validate_dflash_activation(
-                            path, profiles[name], pair
-                        )["passed"]
+                        _validate_dflash_activation(path, profile, pair)["passed"]
                     )
-
-            native = profiles["fix4_w4a16_int4_block11"]
-            path.write_text(log(11, None))
-            self.assertTrue(
-                _validate_dflash_activation(path, native, pair)["passed"]
-            )
-            path.write_text(
-                log(
-                    11,
-                    "DFLASH block size mismatch: using "
-                    "speculative_num_draft_tokens=11 but draft config block_size=11.",
-                )
-            )
-            self.assertFalse(
-                _validate_dflash_activation(path, native, pair)["passed"]
-            )
-            path.write_text(log(8, None))
-            self.assertFalse(
-                _validate_dflash_activation(path, native, pair)["passed"]
-            )
 
 
 if __name__ == "__main__":

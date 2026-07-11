@@ -438,7 +438,7 @@ class ConfigurationTests(unittest.TestCase):
         args = parser.parse_args([])
 
         self.assertEqual(args.draft_model, experiment.DEFAULT_DRAFT_MODEL)
-        self.assertEqual(args.kv_cache_dtype, "fp8_e4m3")
+        self.assertEqual(args.kv_cache_dtype, "auto")
         self.assertNotIn("dflash", {action.dest for action in parser._actions})
 
     def test_module_import_does_not_import_sglang(self) -> None:

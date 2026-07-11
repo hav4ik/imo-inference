@@ -1,0 +1,57 @@
+{
+  "grader": "deepseek-v4-flash high_notool",
+  "passes": 2,
+  "runs": {
+    "opd32b-dflash-humming-w4a8-basic-pilot-20260711/candidates_select": {
+      "n_problems": 2,
+      "n_candidates_scored": 2,
+      "best_of_k": {
+        "n": 2,
+        "mean": 7,
+        "almost+": 1.0,
+        "correct": 1.0
+      },
+      "mean_of_k": {
+        "n": 2,
+        "mean": 7,
+        "almost+": 1.0,
+        "correct": 1.0
+      },
+      "pass_exact_agreement": 1.0,
+      "by_subset": {
+        "basic": {
+          "n": 2,
+          "mean": 7,
+          "almost+": 1.0,
+          "correct": 1.0
+        }
+      },
+      "by_level": {
+        "IMO-easy": {
+          "n": 1,
+          "mean": 7,
+          "almost+": 1.0,
+          "correct": 1.0
+        },
+        "pre-IMO": {
+          "n": 1,
+          "mean": 7,
+          "almost+": 1.0,
+          "correct": 1.0
+        }
+      },
+      "by_category": {
+        "Algebra": {
+          "n": 2,
+          "mean": 7,
+          "almost+": 1.0,
+          "correct": 1.0
+        }
+      },
+      "best_per_problem": {
+        "PB-Basic-001": 7,
+        "PB-Basic-002": 7
+      }
+    }
+  }
+}

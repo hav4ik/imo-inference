@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "batch_id": "gpu1-basic-002-004",
+  "problem_ids": [
+    "PB-Basic-002",
+    "PB-Basic-004"
+  ],
+  "subset": "basic",
+  "base_url": "http://127.0.0.1:30001",
+  "git_commit": "e573f23079a22ea7a4c9b07a7a710e3144407d3b",
+  "params": {
+    "pipeline": "notebook_v2_streaming_strict",
+    "call_cap": 60000,
+    "budget_s": 4200,
+    "select_reserve_s": 900,
+    "finalize_reserve_s": 180,
+    "init_provers": 6,
+    "verify_k": 3,
+    "refine_inputs": 4,
+    "refine_min_seeds": 1,
+    "select_bundle_n": 4,
+    "selectors": 5,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "verify_temperature": 1.0,
+    "select_temperature": 1.0,
+    "concurrency": 12,
+    "generation_concurrency": 6
+  }
+}

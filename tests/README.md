@@ -23,8 +23,8 @@ write test artifacts into production/evaluation result directories.
 Run the production-equivalent quick matrix with:
 
 ```bash
-/workspace/original/runtime/venv/bin/python tests/run_dflash_correctness.py \
-  --profile fix4_w4a16_int4 \
+/workspace/pp/venv/bin/python tests/run_dflash_correctness.py \
+  --profile humming_w4a8 \
   --phase production \
   --tier quick \
   --results-dir tests/results/<run-name>
@@ -104,18 +104,19 @@ DFlash preserves the target distribution. The suite therefore checks:
 
 ## Production configuration under test
 
-The primary GPU run mirrors `submission-32b-fix4.ipynb` on this H200 host:
+The primary GPU run uses the notebook model pair and DFlash flow on this H200
+host, with the H200-validated BF16 KV correction:
 
 | Component | Setting |
 |---|---|
 | Target | exact GPTQ W4A16 `opd-32b-v33-s200-gptq-w4a16` |
 | Draft | exact compressed-tensors int4-MLP DFlash draft |
-| Target KV cache | FP8 E4M3 |
+| Target and draft KV cache | BF16 (`auto`) |
 | Attention | Triton, stock GQA extend on H200 |
 | Target attention | hybrid: 48 SWA-4096 layers and 16 full-attention layers |
 | Draft attention | 8 SWA-512 layers with the compact KV ring enabled |
 | Speculative block | 8 positions: current anchor plus up to 7 proposals |
-| Static GPU fraction | 0.85; the notebook marks this as H200-safe and it leaves room for deterministic target and draft CUDA graphs |
+| Static GPU fraction | 0.82; BF16 KV at 0.85 leaves only 0.40 GiB after graphs and OOMs on a six-request DFlash prefill |
 | Deterministic prefill alignment | 2048, explicitly equal to the 2048-token chunk budget so radix hits cannot create a zero-progress scheduling loop |
 | Radix cache | enabled in the production phase; explicitly exercised by repeats |
 | Scheduler | overlap/spec-v2, continuous batching, CUDA graphs |
@@ -127,9 +128,7 @@ semantic difference is that one server has DFlash enabled.
 The primary profile intentionally keeps the notebook's runtime block size 8
 even though the draft checkpoint declares its native training block size 11.
 The runner validates that override explicitly in the command, effective server
-state, and startup warning. Separate block-1 and native block-11 profiles are
-diagnostics for verifier shape sensitivity; they never replace the block-8
-production-equivalence profile.
+state, and startup warning. No alternate block-size profile is supported.
 
 ## Coverage matrix
 

@@ -1,7 +1,7 @@
 # ProofBench evaluation
 
-This directory contains one evaluation path for OPD-32B: strict-BF16 DFlash
-serving followed by the agentic `prove → verify → refine → select` pipeline.
+This directory contains one evaluation path for OPD-32B: mandatory DFlash
+serving followed by the `submission-32b-fix4.ipynb` v2 streaming proof pool.
 The unused single-round prompt sweep, Python-tool evaluator, calibration harness,
 local adapter, and auxiliary benchmark copies from the upstream repository are
 intentionally not carried here.
@@ -9,9 +9,23 @@ intentionally not carried here.
 ## Invariants
 
 - DFlash is mandatory.
-- Target weights, draft weights, and both KV caches use BF16.
-- The LM-head matrix multiplication uses FP32 operands to make greedy near-ties
-  stable; stored weights remain BF16.
+- `MODEL_MODE=humming_w4a8` is the active mode: GPTQ INT4 target, int4-MLP
+  phase-L draft, BF16 KV, and BF16 LM head. Eligible target MLP
+  projections execute through mandatory Humming W4A8 with SM90 heuristics.
+- `MODEL_MODE=bf16` selects BF16 target, draft, KV cache, and LM head for
+  controlled numerical comparisons.
+- Humming W4A8 is mandatory in `humming_w4a8` mode. H200 is SM90; upstream Humming
+  supports FP8 E4M3 activations on SM89 and newer. The helper uses one
+  numerically verified `Sm90Heuristics` configuration selected at `shape_m=256`
+  for every actual token-row count. Startup aborts unless the package, ycchen
+  integration helper, fixed-configuration marker, NVRTC library, SM90 preflight,
+  and constructed-layer runtime marker all pass.
+- Humming is target-only. The 64-layer target must construct exactly 128 W4A8
+  MLP projections; the eight-layer INT4 draft must construct exactly 16 W4A16
+  MLP projections and retain BF16 activations.
+- Quantized H200 mode uses `mem_fraction_static=0.82`. The notebook's FP8-KV
+  value of 0.85 leaves only 0.40 GiB after graphs with BF16 KV and OOMs during a
+  six-request DFlash prefill; 0.82 reserves the required execution headroom.
 - Every generation stage must produce valid output. There is no alternate proof,
   request retry, stub grader, or synthetic score.
 - Full stage traces and grader responses are written to disk.
@@ -20,42 +34,55 @@ intentionally not carried here.
 
 | Path | Purpose |
 |---|---|
-| `configs/opd32b_dflash_bf16.json` | required serving and agentic parameters |
+| `configs/opd32b_dflash_humming_w4a8.json` | active Humming W4A8 serving and agentic parameters |
+| `configs/opd32b_dflash_bf16.json` | BF16 comparison serving and agentic parameters |
 | `data/proofbench_v2.csv` | 60-problem ProofBench v2 benchmark |
-| `harness/validate_bf16_dflash_server.py` | checks the live SGLang server configuration |
+| `HUMMING_MLP_NUMERICAL_DIAGNOSIS.md` | first-principles explanation of `M`, the MLP activation failure, and its DFlash impact |
+| `harness/validate_humming_sm90_gemm.py` | real-weight numerical gate for the fixed H200 SM90 configuration |
+| `harness/validate_dflash_server.py` | checks the live SGLang server against the selected config |
+| `harness/run_full_evaluation.py` | orchestrates all 60 generations and strict DeepSeek grading |
 | `harness/make_batches.py` | creates deterministic five-problem shards |
-| `harness/run_agentic_eval.py` | runs prove/verify/refine/select and saves full traces |
+| `harness/run_notebook_v2_eval.py` | runs the hash-pinned notebook scheduler and saves full traces |
+| `harness/run_agentic_eval.py` | archived fixed-stage evaluator used by the stopped diagnostic run |
 | `harness/merge_agentic_shards.py` | validates and merges Basic and Advanced shards |
 | `harness/agentic_to_responses.py` | converts traces to grader input records |
 | `harness/grade_proofs.py` | performs strict two-pass DeepSeek grading |
 | `prompts/grader.md` | official paper B.5 grader prompt |
 
-## Execution order
+## Full execution
+
+Start two mandatory Humming W4A8 DFlash replicas, one per H200:
 
 ```bash
-python evaluation/harness/validate_bf16_dflash_server.py \
-  --base-url http://127.0.0.1:30000/v1
-
-python evaluation/harness/make_batches.py \
-  --data evaluation/data/proofbench_v2.csv \
-  --subset basic --batch-size 5 --output-dir evaluation/batches
-
-python evaluation/harness/run_agentic_eval.py \
-  --run-dir basic-01 --runs-root evaluation/agentic-runs \
-  --ids-file evaluation/batches/basic-01.json --batch-id basic-01
+MODEL_MODE=humming_w4a8 CUDA_VISIBLE_DEVICES=0 PORT=30000 bash serve_opd32b.sh
+MODEL_MODE=humming_w4a8 CUDA_VISIBLE_DEVICES=1 PORT=30001 bash serve_opd32b.sh
 ```
 
-Run all six Basic and six Advanced shards, merge them, then prepare grading input:
+Load the DeepSeek credential and run the complete pipeline:
 
 ```bash
-python evaluation/harness/merge_agentic_shards.py \
-  --basic evaluation/agentic-runs/basic \
-  --advanced evaluation/agentic-runs/advanced \
-  --output evaluation/agentic-runs/opd32b-agentic
+set -a
+source /workspace/.env
+set +a
+/workspace/pp/venv/bin/python evaluation/harness/run_full_evaluation.py \
+  --config evaluation/configs/opd32b_dflash_humming_w4a8.json \
+  --run-id opd32b-dflash-humming-w4a8-full-20260711
+```
 
-python evaluation/harness/agentic_to_responses.py \
-  --stages-dir evaluation/agentic-runs/opd32b-agentic/stages \
-  --data evaluation/data/proofbench_v2.csv --out-prefix opd32b_agentic
+The servers use the notebook ceiling of 48 running requests while each streaming
+client admits 12 total calls, caps prove/refine at 6, and prioritizes verifiers.
+The orchestrator validates both live servers against the immutable Humming W4A8
+config, confirms that the authenticated
+DeepSeek model list contains `deepseek-v4-flash`, creates twelve deterministic
+five-problem shards, runs Basic and Advanced concurrently, requires exactly 60
+complete stage traces, converts the selected final proof for each problem, and
+performs two `high_notool` grader passes per proof. All raw generation traces,
+grader reasoning, grader responses, usage, manifests, and summaries are stored
+below `evaluation/runs/<run-id>/`.
+
+Generation and grading append durable checkpoints. Re-running the identical
+command skips completed generation problems and completed grader calls. A
+notebook fallback final source or any recorded call error terminates the run.
 
 ## Historical six-problem archive
 

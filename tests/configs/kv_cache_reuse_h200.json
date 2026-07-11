@@ -7,7 +7,7 @@
     "draft_model": "/workspace/models/dflash-32b-draft-v2test-phaseL",
     "gpu": "1",
     "max_new_tokens": 256,
-    "kv_cache_dtype": "fp8_e4m3"
+    "kv_cache_dtype": "auto"
   },
   "environment": {
     "defaults": {

@@ -167,6 +167,11 @@ class DFlashMLP(nn.Module):
             intermediate_size, hidden_size, bias=False,
             quant_config=quant_config, prefix=f"{prefix}.down_proj" if prefix else "down_proj",
         )
+        # The draft checkpoint is W4A16: its MLP weights are INT4 but its
+        # activations remain BF16. The target-only Humming helper uses this
+        # explicit role marker to leave both draft projections on W4A16.
+        self.gate_up_proj._dflash_draft_mlp = True
+        self.down_proj._dflash_draft_mlp = True
         self.act_fn = SiluAndMul()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

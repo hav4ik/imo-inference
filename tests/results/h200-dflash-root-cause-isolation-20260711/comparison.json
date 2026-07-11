@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-11",
+  "device": "NVIDIA H200",
+  "git_commits": {
+    "humming_sm90_large_m_fix": "118f9dc",
+    "target_only_humming_scope": "90701a8",
+    "bf16_kv_contract": "8cc0205",
+    "bf16_kv_memory_budget": "bfa3d3d"
+  },
+  "controlled_equation_request": {
+    "prompt_tokens": 79,
+    "max_tokens": 1024,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "seed": 20260711
+  },
+  "equation_isolation_matrix": [
+    {
+      "target": "bf16",
+      "draft": "bf16",
+      "kv": "bf16",
+      "completion_tokens": 689,
+      "wall_time_s": 5.059444,
+      "completion_tokens_per_s": 136.180972,
+      "accept_length_range": [3.3, 4.7],
+      "answer_correct": true,
+      "artifact": "evaluation/runs/bf16-single-equation-validation-20260711"
+    },
+    {
+      "target": "bf16",
+      "draft": "int4_w4a16",
+      "kv": "fp8_e4m3_unit_scale",
+      "completion_tokens": 568,
+      "wall_time_s": 11.582501,
+      "completion_tokens_per_s": 49.03,
+      "accept_length_range": [1.0, 1.7],
+      "answer_correct": true,
+      "artifact": "tests/results/bf16-target-int4-draft-isolation-20260711"
+    },
+    {
+      "target": "bf16",
+      "draft": "bf16",
+      "kv": "fp8_e4m3_unit_scale",
+      "completion_tokens": 568,
+      "wall_time_s": 12.022751,
+      "completion_tokens_per_s": 47.24,
+      "accept_length_range": [1.0, 1.73],
+      "answer_correct": true,
+      "artifact": "tests/results/bf16-pair-fp8-kv-isolation-20260711"
+    },
+    {
+      "target": "humming_w4a8",
+      "draft": "bf16",
+      "kv": "fp8_e4m3_unit_scale",
+      "completion_tokens": 1024,
+      "wall_time_s": 18.555454,
+      "completion_tokens_per_s": 55.18,
+      "accept_length_range": [1.0, 2.0],
+      "answer_correct_in_reasoning": true,
+      "artifact": "tests/results/humming-target-bf16-draft-isolation-20260711-rerun1"
+    },
+    {
+      "target": "humming_w4a8",
+      "draft": "int4_w4a16",
+      "kv": "bf16",
+      "completion_tokens": 592,
+      "wall_time_s": 3.922028,
+      "completion_tokens_per_s": 150.94,
+      "accept_length_range": [3.85, 4.53],
+      "answer_correct": true,
+      "artifact": "tests/results/humming-int4-pair-bf16-kv-isolation-20260711"
+    }
+  ],
+  "fp8_checkpoint_scale_test": {
+    "target_layers_with_loaded_scales": 64,
+    "outcome": "target_logits_nan_during_warmup",
+    "artifact": "tests/results/humming-int4-pair-fp8-calibrated-kv-isolation-20260711/server.log"
+  },
+  "production_validation": {
+    "model_mode": "humming_w4a8",
+    "kv_cache_dtype": "auto_bf16",
+    "mem_fraction_static": 0.82,
+    "max_running_requests": 48,
+    "max_total_num_tokens": 984797,
+    "available_gpu_memory_after_graphs_gib": 4.58,
+    "humming_target_layer_count": 128,
+    "draft_w4a16_layer_count": 16,
+    "batch_test": {
+      "requests": 12,
+      "max_client_concurrency": 6,
+      "input_tokens_per_request": 512,
+      "output_tokens_per_request": 512,
+      "successful_requests": 12,
+      "duration_s": 12.677141312044114,
+      "output_tokens": 6144,
+      "output_tokens_per_s": 484.6518508208785,
+      "accept_length": 3.802431610942249
+    },
+    "post_stress_equation": {
+      "completion_tokens": 1024,
+      "wall_time_s": 6.830088,
+      "completion_tokens_per_s": 149.924862,
+      "answer_correct_in_reasoning": true,
+      "finish_reason": "length"
+    },
+    "artifact": "evaluation/runs/humming-bf16-kv-production-validation-20260711-rerun1"
+  },
+  "rejected_memory_configuration": {
+    "mem_fraction_static": 0.85,
+    "available_gpu_memory_after_graphs_gib": 0.4,
+    "failed_allocation_mib": 160,
+    "free_memory_at_failure_mib": 76.25,
+    "failure_site": "dflash_worker_v2.py target_hidden selection",
+    "artifact": "evaluation/runs/humming-bf16-kv-production-validation-20260711/server.log.old"
+  }
+}

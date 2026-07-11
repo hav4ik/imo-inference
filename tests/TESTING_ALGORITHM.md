@@ -54,8 +54,8 @@ Choose:
 - `quick` or `full` **tier**;
 - every compatible suite, or an explicit isolation subset.
 
-The main production profile is `fix4_w4a16_int4` with effective DFlash block 8.
-Block-1, native block-11, and BF16/BF16 profiles are diagnostic controls.
+The active profiles are exactly `humming_w4a8` and `bf16`. Both use the single
+supported DFlash block size of 8.
 
 `full` extends `quick`:
 
@@ -377,8 +377,6 @@ Cleanup failure is recorded and fails closed.
 | Graphs/overlap, no radix | Is radix required? |
 | Radix, no graphs/overlap | Is asynchronous scheduling required? |
 | Fully synchronous eager | Does divergence remain without all three? |
-| Native block 11 | Is the block-8 override responsible? |
-| Block 1 | Can target verification diverge with zero draft proposals? |
 | BF16 target/draft | Is quantization solely responsible? |
 | Target-only GPU 0/GPU 1 | Is physical GPU assignment responsible? |
 
@@ -388,18 +386,18 @@ Diagnostics explain a failure; they never convert it into a pass.
 
 ```bash
 # Quick production matrix
-/workspace/original/runtime/venv/bin/python tests/run_dflash_correctness.py \
-  --profile fix4_w4a16_int4 --phase production --tier quick \
+/workspace/pp/venv/bin/python tests/run_dflash_correctness.py \
+  --profile humming_w4a8 --phase production --tier quick \
   --results-dir tests/results/<unique-quick-run>
 
 # Full production matrix
-/workspace/original/runtime/venv/bin/python tests/run_dflash_correctness.py \
-  --profile fix4_w4a16_int4 --phase production --tier full \
+/workspace/pp/venv/bin/python tests/run_dflash_correctness.py \
+  --profile humming_w4a8 --phase production --tier full \
   --results-dir tests/results/<unique-full-run>
 
 # Declared isolation subset
-/workspace/original/runtime/venv/bin/python tests/run_dflash_correctness.py \
-  --profile fix4_w4a16_int4 --phase sync_eager --tier quick \
+/workspace/pp/venv/bin/python tests/run_dflash_correctness.py \
+  --profile humming_w4a8 --phase sync_eager --tier quick \
   --suites greedy,stream \
   --results-dir tests/results/<unique-isolation-run>
 ```

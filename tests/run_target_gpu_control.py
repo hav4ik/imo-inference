@@ -219,6 +219,7 @@ def build_launch_specifications(
             dict(profile), local_pair, dict(phase), dflash=False
         )
         environment, controlled = pair_runner._build_environment(
+            dict(profile),
             local_pair,
             dict(phase),
             dflash=False,

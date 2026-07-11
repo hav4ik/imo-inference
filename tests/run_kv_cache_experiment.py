@@ -219,7 +219,7 @@ def build_parser(
         "--kv-cache-dtype",
         default=defaults["kv_cache_dtype"],
         choices=("auto", "bf16", "fp8_e4m3"),
-        help="Defaults to production's fp8_e4m3 target KV cache.",
+        help="Defaults to production's BF16 target KV cache (auto).",
     )
     parser.add_argument(
         "--json-out",
@@ -731,7 +731,8 @@ def run_experiment(args: argparse.Namespace) -> dict[str, Any]:
                 "radix_prefix_cache": "disabled for both paths",
                 "speculative_decoding": (
                     f"DFLASH is mandatory; block size {block_size} with a local "
-                    f"BF16 draft model and a {draft_window}-token FP8 draft KV ring"
+                    f"BF16 draft model and a {draft_window}-token "
+                    f"{args.kv_cache_dtype} draft KV ring"
                 ),
                 "caveat": (
                     "The full-reprefill timing includes scheduler, IPC, and per-request "
