@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -25,7 +26,7 @@ PROJECTIONS = {
     ),
     "down_proj": ("model.layers.0.mlp.down_proj",),
 }
-ROWS = (1, 6, 8, 48, 64)
+ROWS = (1, 6, 8, 48, 64, 256, 512, 1024, 2048)
 MAX_RELATIVE_L2 = 0.10
 
 
@@ -143,11 +144,22 @@ def main() -> None:
                 ("custom_op", custom_op),
                 ("cuda_graph", graphed),
             ):
-                relative_l2 = float(
+                relative_l2_value = float(
                     torch.linalg.vector_norm(actual.float() - reference)
                     / torch.linalg.vector_norm(reference)
                 )
                 finite = bool(torch.isfinite(actual).all())
+                relative_l2 = (
+                    relative_l2_value
+                    if math.isfinite(relative_l2_value)
+                    else None
+                )
+                actual_abs_max_value = float(actual.abs().max())
+                actual_abs_max = (
+                    actual_abs_max_value
+                    if math.isfinite(actual_abs_max_value)
+                    else None
+                )
                 measurements.append(
                     {
                         "projection": projection,
@@ -155,21 +167,25 @@ def main() -> None:
                         "rows": rows,
                         "finite": finite,
                         "relative_l2": relative_l2,
-                        "actual_abs_max": float(actual.abs().max()),
+                        "actual_abs_max": actual_abs_max,
                         "reference_abs_max": float(reference.abs().max()),
                     }
                 )
-                assert finite, measurements[-1]
-                assert relative_l2 <= MAX_RELATIVE_L2, measurements[-1]
 
             del graph, direct, custom_op, graphed
 
         del layer, source_layers, reference_weight, humming_tensors
         torch.cuda.empty_cache()
 
+    valid = all(
+        measurement["finite"]
+        and measurement["relative_l2"] is not None
+        and measurement["relative_l2"] <= MAX_RELATIVE_L2
+        for measurement in measurements
+    )
     result = {
         "schema_version": 1,
-        "status": "valid",
+        "status": "valid" if valid else "invalid",
         "device": torch.cuda.get_device_name(0),
         "compute_capability": list(torch.cuda.get_device_capability(0)),
         "heuristics": get_heuristics_class().__name__,
@@ -181,7 +197,9 @@ def main() -> None:
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-    print("HUMMING_SM90_GEMM_VALID " + json.dumps(result, sort_keys=True))
+    marker = "HUMMING_SM90_GEMM_VALID" if valid else "HUMMING_SM90_GEMM_INVALID"
+    print(marker + " " + json.dumps(result, sort_keys=True))
+    assert valid, args.output
 
 
 if __name__ == "__main__":

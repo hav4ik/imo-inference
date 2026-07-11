@@ -5,7 +5,8 @@ The harness deliberately exposes one production evaluation route.
 1. `validate_humming_sm90_gemm.py` runs the real packed target MLP weights
    through Humming directly, through the production custom op, and through a
    CUDA graph. Fused gate/up and down projections must remain finite and within
-   10% relative L2 of their dequantized references at rows 1, 6, 8, 48, and 64.
+   10% relative L2 of their dequantized references at decode and prefill row
+   counts 1, 6, 8, 48, 64, 256, 512, 1024, and 2048.
 2. `validate_dflash_server.py` rejects a live server unless DFlash and the
    exact selected Humming W4A8 or BF16 numerical configuration are active. In
    Humming W4A8 mode it additionally requires the SM90 preflight and a
