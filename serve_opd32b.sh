@@ -30,7 +30,7 @@ case "$MODEL_MODE" in
     MODEL="/workspace/original/models/opd-32b-v33-s200-gptq-w4a16"
     DRAFT="/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp"
     KVDTYPE="auto"
-    MEMFRAC="${MEMFRAC:-0.85}"
+    MEMFRAC="${MEMFRAC:-0.82}"
     MAXREQ="${MAXREQ:-48}"
     DRAFT_QUANT_ARGS=(--speculative-draft-model-quantization compressed-tensors)
     TARGET_EXECUTION="humming_w4a8"

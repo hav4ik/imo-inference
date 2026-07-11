@@ -7,8 +7,10 @@ H200 Humming W4A8 model path: GPTQ INT4 target, int4-MLP
 phase-L draft, BF16 KV, and BF16 LM head. The server ceiling is
 48, client concurrency is 12, and prove/refine concurrency is 6. A server
 startup or runtime failure is terminal; settings are not reduced automatically.
-The Humming W4A8 memory fraction is 0.85, matching ycchen's safe launcher
-default; 0.88 was measured to starve the mandatory DFlash draft CUDA graph.
+The Humming W4A8 memory fraction is 0.82. With BF16 KV, 0.85 left only 0.40 GiB
+after CUDA-graph capture and failed a six-request prefill on a 160 MiB DFlash
+hidden-state allocation. The 0.82 budget preserves execution headroom while
+retaining far more KV capacity than the configured workload requires.
 
 ## 1. Objective
 

@@ -68,8 +68,7 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertIn('SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE="$CHUNKED"', launcher)
         self.assertIn('MAXREQ="${MAXREQ:-48}"', launcher)
         self.assertIn('MAXREQ="${MAXREQ:-2}"', launcher)
-        self.assertIn('MEMFRAC="${MEMFRAC:-0.85}"', launcher)
-        self.assertIn('MEMFRAC="${MEMFRAC:-0.82}"', launcher)
+        self.assertEqual(launcher.count('MEMFRAC="${MEMFRAC:-0.82}"'), 2)
         self.assertIn("export SGLANG_USE_HUMMING_W4A8=1", launcher)
         self.assertIn("W4A8_HELPER_DIR", launcher)
         self.assertIn("HUMMING_PATH", launcher)
@@ -100,7 +99,7 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertEqual(humming["model"]["mode"], "humming_w4a8")
         self.assertEqual(humming["model"]["kv_cache_dtype"], "auto")
         self.assertNotIn("kv_scale", humming["model"])
-        self.assertEqual(humming["server"]["mem_fraction_static"], 0.85)
+        self.assertEqual(humming["server"]["mem_fraction_static"], 0.82)
         self.assertIn("gptq_w4a16", humming["model"]["target_weight_quantization"])
         self.assertIn("int4_mlp", humming["model"]["draft_weight_quantization"])
         self.assertEqual(

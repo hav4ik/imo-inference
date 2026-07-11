@@ -23,8 +23,9 @@ intentionally not carried here.
 - Humming is target-only. The 64-layer target must construct exactly 128 W4A8
   MLP projections; the eight-layer INT4 draft must construct exactly 16 W4A16
   MLP projections and retain BF16 activations.
-- Quantized H200 mode uses ycchen's safe `mem_fraction_static=0.85`; `0.88`
-  starves the mandatory DFlash draft CUDA graph after over-allocating target KV.
+- Quantized H200 mode uses `mem_fraction_static=0.82`. The notebook's FP8-KV
+  value of 0.85 leaves only 0.40 GiB after graphs with BF16 KV and OOMs during a
+  six-request DFlash prefill; 0.82 reserves the required execution headroom.
 - Every generation stage must produce valid output. There is no alternate proof,
   request retry, stub grader, or synthetic score.
 - Full stage traces and grader responses are written to disk.

@@ -44,7 +44,7 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertIn("DFLASH", dflash)
         self.assertIn("--speculative-draft-model-path", dflash)
         mem_index = dflash.index("--mem-fraction-static")
-        self.assertEqual(dflash[mem_index + 1], "0.85")
+        self.assertEqual(dflash[mem_index + 1], "0.82")
 
         alignment = self.pair["common_environment"][
             "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE"
