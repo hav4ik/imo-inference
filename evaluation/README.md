@@ -15,10 +15,11 @@ intentionally not carried here.
 - `MODEL_MODE=bf16` selects BF16 target, draft, KV cache, and LM head for
   controlled numerical comparisons.
 - Humming W4A8 is mandatory in `humming_w4a8` mode. H200 is SM90; upstream Humming
-  supports FP8 E4M3 activations on SM89 and newer and selects
-  `Sm90Heuristics`. Startup aborts unless the package, ycchen integration
-  helper, NVRTC library, SM90 preflight, and constructed-layer runtime marker
-  all pass.
+  supports FP8 E4M3 activations on SM89 and newer. The helper uses one
+  numerically verified `Sm90Heuristics` configuration selected at `shape_m=256`
+  for every actual token-row count. Startup aborts unless the package, ycchen
+  integration helper, fixed-configuration marker, NVRTC library, SM90 preflight,
+  and constructed-layer runtime marker all pass.
 - Quantized H200 mode uses ycchen's safe `mem_fraction_static=0.85`; `0.88`
   starves the mandatory DFlash draft CUDA graph after over-allocating target KV.
 - Every generation stage must produce valid output. There is no alternate proof,
@@ -32,6 +33,8 @@ intentionally not carried here.
 | `configs/opd32b_dflash_humming_w4a8.json` | active Humming W4A8 serving and agentic parameters |
 | `configs/opd32b_dflash_bf16.json` | BF16 comparison serving and agentic parameters |
 | `data/proofbench_v2.csv` | 60-problem ProofBench v2 benchmark |
+| `HUMMING_MLP_NUMERICAL_DIAGNOSIS.md` | first-principles explanation of `M`, the MLP activation failure, and its DFlash impact |
+| `harness/validate_humming_sm90_gemm.py` | real-weight numerical gate for the fixed H200 SM90 configuration |
 | `harness/validate_dflash_server.py` | checks the live SGLang server against the selected config |
 | `harness/run_full_evaluation.py` | orchestrates all 60 generations and strict DeepSeek grading |
 | `harness/make_batches.py` | creates deterministic five-problem shards |

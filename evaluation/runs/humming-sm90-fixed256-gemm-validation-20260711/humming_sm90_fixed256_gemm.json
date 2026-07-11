@@ -1,0 +1,520 @@
+{
+  "compute_capability": [
+    9,
+    0
+  ],
+  "device": "NVIDIA H200",
+  "heuristics": "Sm90Heuristics",
+  "max_relative_l2": 0.1,
+  "measurements": [
+    {
+      "actual_abs_max": 7.6875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 7.64389181137085,
+      "relative_l2": 0.028723260387778282,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 7.6875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 7.64389181137085,
+      "relative_l2": 0.028727218508720398,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 7.6875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 7.64389181137085,
+      "relative_l2": 0.028734061866998672,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 8.1875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 8.054759979248047,
+      "relative_l2": 0.026754682883620262,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 8.1875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 8.054759979248047,
+      "relative_l2": 0.026753276586532593,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 8.1875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 8.054759979248047,
+      "relative_l2": 0.026753325015306473,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 9.5,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.456178665161133,
+      "relative_l2": 0.026302514597773552,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 9.5,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.456178665161133,
+      "relative_l2": 0.026300489902496338,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 9.5,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.456178665161133,
+      "relative_l2": 0.026301633566617966,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 9.875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.908395767211914,
+      "relative_l2": 0.026436882093548775,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 9.875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.908395767211914,
+      "relative_l2": 0.026437586173415184,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 9.875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 9.908395767211914,
+      "relative_l2": 0.026437480002641678,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 11.0,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 10.868013381958008,
+      "relative_l2": 0.026217469945549965,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 11.0,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 10.868013381958008,
+      "relative_l2": 0.026217108592391014,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 11.0,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 10.868013381958008,
+      "relative_l2": 0.02621694654226303,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 13.875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 13.848963737487793,
+      "relative_l2": 0.02662104181945324,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 13.875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 13.848963737487793,
+      "relative_l2": 0.02662104181945324,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 13.875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 13.848963737487793,
+      "relative_l2": 0.02662104181945324,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 11.875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 11.891704559326172,
+      "relative_l2": 0.026529133319854736,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 11.875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 11.891704559326172,
+      "relative_l2": 0.026529133319854736,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 11.875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 11.891704559326172,
+      "relative_l2": 0.026529133319854736,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 11.9375,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 12.166617393493652,
+      "relative_l2": 0.026522357016801834,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 11.9375,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 12.166617393493652,
+      "relative_l2": 0.026522299274802208,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 11.9375,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 12.166617393493652,
+      "relative_l2": 0.02652227319777012,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 14.6875,
+      "execution": "direct",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 14.600336074829102,
+      "relative_l2": 0.02653268352150917,
+      "rows": 2048
+    },
+    {
+      "actual_abs_max": 14.6875,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 14.600336074829102,
+      "relative_l2": 0.026532692834734917,
+      "rows": 2048
+    },
+    {
+      "actual_abs_max": 14.6875,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "gate_up_proj",
+      "reference_abs_max": 14.600336074829102,
+      "relative_l2": 0.026532677933573723,
+      "rows": 2048
+    },
+    {
+      "actual_abs_max": 13.4375,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 13.155718803405762,
+      "relative_l2": 0.027193410322070122,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 13.4375,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 13.155718803405762,
+      "relative_l2": 0.027164632454514503,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 13.4375,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 13.155718803405762,
+      "relative_l2": 0.027230437844991684,
+      "rows": 1
+    },
+    {
+      "actual_abs_max": 19.375,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 19.09861183166504,
+      "relative_l2": 0.02666207030415535,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 19.375,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 19.09861183166504,
+      "relative_l2": 0.026650406420230865,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 19.375,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 19.09861183166504,
+      "relative_l2": 0.026671340689063072,
+      "rows": 6
+    },
+    {
+      "actual_abs_max": 23.125,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 22.837312698364258,
+      "relative_l2": 0.026574131101369858,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 23.125,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 22.837312698364258,
+      "relative_l2": 0.02657727338373661,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 23.125,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 22.837312698364258,
+      "relative_l2": 0.026587454602122307,
+      "rows": 8
+    },
+    {
+      "actual_abs_max": 32.75,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 32.722328186035156,
+      "relative_l2": 0.02652423270046711,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 32.75,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 32.722328186035156,
+      "relative_l2": 0.026523135602474213,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 32.75,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 32.722328186035156,
+      "relative_l2": 0.02652190625667572,
+      "rows": 48
+    },
+    {
+      "actual_abs_max": 33.5,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 33.64296340942383,
+      "relative_l2": 0.026677262037992477,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 33.5,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 33.64296340942383,
+      "relative_l2": 0.026679106056690216,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 33.5,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 33.64296340942383,
+      "relative_l2": 0.026674972847104073,
+      "rows": 64
+    },
+    {
+      "actual_abs_max": 26.375,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 26.221580505371094,
+      "relative_l2": 0.0265624038875103,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 26.375,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 26.221580505371094,
+      "relative_l2": 0.0265624038875103,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 26.375,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 26.221580505371094,
+      "relative_l2": 0.0265624038875103,
+      "rows": 256
+    },
+    {
+      "actual_abs_max": 37.0,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 37.151405334472656,
+      "relative_l2": 0.026523295789957047,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 37.0,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 37.151405334472656,
+      "relative_l2": 0.02652246318757534,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 37.0,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 37.151405334472656,
+      "relative_l2": 0.026521682739257812,
+      "rows": 512
+    },
+    {
+      "actual_abs_max": 34.75,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 35.12772750854492,
+      "relative_l2": 0.026511231437325478,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 34.75,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 35.12772750854492,
+      "relative_l2": 0.026511311531066895,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 34.75,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 35.12772750854492,
+      "relative_l2": 0.02651132270693779,
+      "rows": 1024
+    },
+    {
+      "actual_abs_max": 42.25,
+      "execution": "direct",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 41.914161682128906,
+      "relative_l2": 0.026533830910921097,
+      "rows": 2048
+    },
+    {
+      "actual_abs_max": 42.25,
+      "execution": "custom_op",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 41.914161682128906,
+      "relative_l2": 0.0265339482575655,
+      "rows": 2048
+    },
+    {
+      "actual_abs_max": 42.25,
+      "execution": "cuda_graph",
+      "finite": true,
+      "projection": "down_proj",
+      "reference_abs_max": 41.914161682128906,
+      "relative_l2": 0.026533931493759155,
+      "rows": 2048
+    }
+  ],
+  "model": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+  "projections": {
+    "down_proj": [
+      "model.layers.0.mlp.down_proj"
+    ],
+    "gate_up_proj": [
+      "model.layers.0.mlp.gate_proj",
+      "model.layers.0.mlp.up_proj"
+    ]
+  },
+  "schema_version": 1,
+  "shapes": {
+    "down_proj": {
+      "shape_k": 27648,
+      "shape_n": 5120
+    },
+    "gate_up_proj": {
+      "shape_k": 5120,
+      "shape_n": 55296
+    }
+  },
+  "status": "valid",
+  "tuning_shape_m": 256
+}

@@ -23,6 +23,8 @@
 #       alignment/chunk combinations that would spin the prefill scheduler
 #   patch_w4a8_runtime_marker.py (script) log every successfully constructed
 #       Humming W4A8 layer for strict runtime validation
+#   patch_humming_sm90_config.py (script) pin the H200 Humming helper to the
+#       numerically verified M=256 kernel configuration for every row count
 #
 # Usage: bash apply_patches.sh <venv_path>
 set -euo pipefail
@@ -56,4 +58,6 @@ find "$SROOT/models" "$SROOT/speculative" -name '*.pyc' -delete 2>/dev/null || t
 "$VENV/bin/python" "$SRC/patch_gqa_packed_extend.py" "$VENV"
 "$VENV/bin/python" "$SRC/patch_deterministic_chunk_alignment.py" "$VENV"
 "$VENV/bin/python" "$SRC/patch_w4a8_runtime_marker.py" "$VENV"
+"$VENV/bin/python" "$SRC/patch_humming_sm90_config.py" \
+  /workspace/pp/proof-pilot/deploy/w4a8/humming_w4a8.py
 echo "[patch] done"

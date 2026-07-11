@@ -28,6 +28,7 @@ PROJECTIONS = {
 }
 ROWS = (1, 6, 8, 48, 64, 256, 512, 1024, 2048)
 MAX_RELATIVE_L2 = 0.10
+SM90_TUNING_SHAPE_M = 256
 
 
 def main() -> None:
@@ -109,7 +110,9 @@ def main() -> None:
         layer = layer.cuda()
         layer.transform()
         tuning = get_heuristics_config(
-            meta=layer.humming_metas[""], use_f16_accum=False
+            meta=layer.humming_metas[""],
+            shape_m=SM90_TUNING_SHAPE_M,
+            use_f16_accum=False,
         )
         layer_id = humming_w4a8._w4a8_register(
             layer, tuning, torch.bfloat16
@@ -193,6 +196,7 @@ def main() -> None:
         "projections": PROJECTIONS,
         "shapes": shapes,
         "max_relative_l2": MAX_RELATIVE_L2,
+        "tuning_shape_m": SM90_TUNING_SHAPE_M,
         "measurements": measurements,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

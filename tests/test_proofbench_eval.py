@@ -22,6 +22,11 @@ from pipeline import Engine, solve_problem  # noqa: E402
 from run_full_evaluation import generation_command, load_problem_ids  # noqa: E402
 from run_notebook_v2_eval import strict_trace  # noqa: E402
 from patch_w4a8_runtime_marker import BUILD, patch_source  # noqa: E402
+from patch_humming_sm90_config import (  # noqa: E402
+    MARKER as SM90_MARKER,
+    ORIGINAL as SM90_ORIGINAL,
+    patch_source as patch_humming_sm90_source,
+)
 
 
 class InvalidClient:
@@ -147,6 +152,15 @@ class ProofBenchEvaluationTests(unittest.TestCase):
         self.assertEqual(patch_source(marked), marked)
         with self.assertRaises(RuntimeError):
             patch_source("no humming dispatch here")
+
+    def test_humming_sm90_uses_one_verified_configuration(self):
+        source = "before\n" + SM90_ORIGINAL + "\nafter\n"
+        patched = patch_humming_sm90_source(source)
+        self.assertIn(SM90_MARKER, patched)
+        self.assertIn("shape_m=256", patched)
+        self.assertEqual(patch_humming_sm90_source(patched), patched)
+        with self.assertRaises(RuntimeError):
+            patch_humming_sm90_source("no tuning selection here")
 
     def test_correctness_config_has_only_humming_and_bf16(self):
         config = json.loads(
