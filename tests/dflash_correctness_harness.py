@@ -77,6 +77,18 @@ def deterministic_token_fill(
     rng = random.Random((int(variant) << 32) ^ int(length) ^ 0xDFA5124096)
     return [int(corpus[rng.randrange(len(corpus))]) for _ in range(length)]
 
+def stop_token_expectation(
+    output_ids: Sequence[int], stop_position: int, no_stop_trim: bool, decode
+) -> tuple[list[int], str]:
+    """Return SGLang's raw IDs and visible text at a matched stop token."""
+
+    if not 0 <= stop_position < len(output_ids):
+        raise HarnessError("stop position is outside the discovered output")
+    raw_ids = list(output_ids[: stop_position + 1])
+    visible_end = stop_position + (1 if no_stop_trim else 0)
+    return raw_ids, decode(output_ids[:visible_end])
+
+
 
 def resolve_matrix(config: Mapping[str, Any], tier: str) -> dict[str, Any]:
     matrices = config.get("matrix", {})
@@ -458,7 +470,7 @@ class DifferentialHarness:
         if fatal is not None:
             raise fatal
         return result
-    def pair_result(self, ids, params, rid, expected_ids=None, expected_finish=None, require_finish=False):
+    def pair_result(self, ids, params, rid, expected_ids=None, expected_finish=None, require_finish=False, expected_text=None):
         tp, dp = self.payload(ids, params, "target-" + rid), self.payload(ids, params, "dflash-" + rid)
         tr, dr = self.parallel(lambda: self.target.generate(tp), lambda: self.dflash.generate(dp))
         if not isinstance(tr, dict) or not isinstance(dr, dict): raise HarnessError("single response is not an object")
@@ -466,6 +478,7 @@ class DifferentialHarness:
         activity, prompt_ok, expected = dflash_activity_check(dflash, len(dflash.output_ids) > 1), target.prompt_token_ids == list(ids) == dflash.prompt_token_ids, {}
         if expected_ids is not None: expected.update(target_ids=target.output_ids == list(expected_ids), dflash_ids=dflash.output_ids == list(expected_ids))
         if require_finish: expected.update(target_finish=target.finish_reason == expected_finish, dflash_finish=dflash.finish_reason == expected_finish)
+        if expected_text is not None: expected.update(target_text=target.text == expected_text, dflash_text=dflash.text == expected_text)
         return {"ok": comparison["ok"] and activity["ok"] and prompt_ok and all(expected.values()), "request": _request_descriptor(ids, params),
                 "target": target.to_dict(), "dflash": dflash.to_dict(), "comparison": comparison,
                 "dflash_activity": activity, "prompt_ids_exact": prompt_ok, "expected_checks": expected}
@@ -535,8 +548,8 @@ class DifferentialHarness:
             token = output[pos]
             for no_trim in (False, True):
                 params = self.greedy_params(64, False); params.update(stop_token_ids=[token], no_stop_trim=no_trim)
-                expected, suffix = output[:pos + (1 if no_trim else 0)], "keep" if no_trim else "trim"; case_id = f"stop-token-pos-{pos}-{suffix}"
-                self.execute(case_id, "stop", lambda sp=params, exp=expected, token=token, cid=case_id: self.pair_result(ids, sp, cid, exp, {"type": "stop", "matched": token}, True))
+                expected_ids, expected_text = stop_token_expectation(output, pos, no_trim, self.tokens.decode); suffix = "keep" if no_trim else "trim"; case_id = f"stop-token-pos-{pos}-{suffix}"
+                self.execute(case_id, "stop", lambda sp=params, exp=expected_ids, text=expected_text, token=token, cid=case_id: self.pair_result(ids, sp, cid, exp, {"type": "stop", "matched": token}, True, text))
         try: pos, stop_string = self.select_stop_string(output)
         except Exception as exc: self.execute("stop-string-selection", "stop", lambda exc=exc: (_ for _ in ()).throw(exc)); return
         params = self.greedy_params(64, False); params["stop"] = stop_string
@@ -589,7 +602,7 @@ class DifferentialHarness:
             return {"ok": ta and db and diverse and all(v["ok"] for v in activity), "seeds": repeat_seeds, "target": [r.to_dict() for r in a], "dflash": [r.to_dict() for r in b], "target_repeatable": ta, "dflash_repeatable": db, "different_seeds_are_diverse": diverse, "dflash_activity": activity, "note": "Cross-mode same-seed identity is not required."}
         self.execute("sampling-fixed-seed-repeatability", "sampling", repeatability)
     def run_negative(self):
-        ids = self.tokens.exact(257, 404); cases = [("min-p", {"min_p": .1}, {}, "min_p"), ("frequency-penalty", {"frequency_penalty": .2}, {}, "penalt"), ("presence-penalty", {"presence_penalty": .2}, {}, "penalt"), ("repetition-penalty", {"repetition_penalty": 1.1}, {}, "penalt"), ("min-new-tokens", {"min_new_tokens": 3}, {}, "min_new_tokens"), ("combined-top-k-top-p", {"top_k": 20, "top_p": .95}, {}, "combined top_k"), ("grammar", {"regex": "[0-9]+"}, {}, "grammar"), ("return-logprob", {}, {"return_logprob": True}, "return_logprob"), ("custom-logit-processor", {}, {"custom_logit_processor": "unsupported-test"}, "custom logit")]
+        ids = self.tokens.exact(257, 404); cases = [("min-p", {"min_p": .1}, {}, "min_p"), ("frequency-penalty", {"frequency_penalty": .2}, {}, "penalt"), ("presence-penalty", {"presence_penalty": .2}, {}, "penalt"), ("repetition-penalty", {"repetition_penalty": 1.1}, {}, "penalt"), ("min-new-tokens", {"min_new_tokens": 3}, {}, "min_new_tokens"), ("combined-top-k-top-p", {"temperature": .6, "top_k": 20, "top_p": .95}, {}, "combined top_k"), ("grammar", {"regex": "[0-9]+"}, {}, "grammar"), ("return-logprob", {}, {"return_logprob": True}, "return_logprob"), ("custom-logit-processor", {}, {"custom_logit_processor": "unsupported-test"}, "custom logit")]
         for name, sampling, top, fragment in cases:
             params = self.greedy_params(8); params.update(sampling); payload = self.payload(ids, params, "negative-" + name); payload.update(top)
             def operation(payload=payload, fragment=fragment):

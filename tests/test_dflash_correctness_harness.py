@@ -27,6 +27,7 @@ from dflash_correctness_harness import (
     resolve_matrix,
     response_from_mapping,
     sanitized_server_snapshot,
+    stop_token_expectation,
     validate_server_pair,
 )
 
@@ -37,6 +38,25 @@ class ArgumentParserTests(unittest.TestCase):
         self.assertEqual(args.phase, "graphs_no_radix")
         args = argument_parser().parse_args(["--phase", "future_test_phase"])
         self.assertEqual(args.phase, "future_test_phase")
+
+class StopExpectationTests(unittest.TestCase):
+    @staticmethod
+    def decode(ids):
+        return "/".join(str(value) for value in ids)
+
+    def test_raw_ids_keep_matched_token_while_text_obeys_trim(self):
+        output = [10, 20, 30]
+        raw, text = stop_token_expectation(output, 1, False, self.decode)
+        self.assertEqual(raw, [10, 20])
+        self.assertEqual(text, "10")
+        raw, text = stop_token_expectation(output, 1, True, self.decode)
+        self.assertEqual(raw, [10, 20])
+        self.assertEqual(text, "10/20")
+
+    def test_invalid_stop_position_is_rejected(self):
+        with self.assertRaisesRegex(HarnessError, "outside"):
+            stop_token_expectation([10], 1, False, self.decode)
+
 
 
 def chunk(ids, reason=None, text=None, index=None, prompt=None, **meta):
