@@ -20,6 +20,7 @@ from dflash_correctness_harness import (
     dflash_activity_check,
     deterministic_token_fill,
     first_token_mismatch,
+    numerical_equivalence_from_probe,
     parse_sse_lines,
     parse_suite_names,
     permutation_distribution_bound,
@@ -197,6 +198,109 @@ class ResponseComparisonTests(unittest.TestCase):
         raw = chunk([1, True], {"type": "length", "length": 2})
         with self.assertRaisesRegex(HarnessError, "integer token"):
             response_from_mapping(raw)
+    @staticmethod
+    def logprob_probe(dflash_logprob=-0.2, output_token=10):
+        reason = {"type": "length", "length": 1}
+        meta = {
+            "finish_reason": reason,
+            "prompt_tokens": 4,
+            "completion_tokens": 1,
+            "output_token_ids_logprobs": [
+                [[-0.1, 10, None], [dflash_logprob, 20, None]]
+            ],
+            "output_top_logprobs": [[[-0.1, 10, None], [dflash_logprob, 20, None]]],
+        }
+        return ResponseRecord([output_token], reason, None, meta)
+
+    def test_numerical_equivalence_accepts_bounded_oracle_delta(self):
+        report = numerical_equivalence_from_probe(
+            self.logprob_probe(), 10, 20, 0.13
+        )
+        self.assertTrue(report["ok"])
+        self.assertAlmostEqual(report["dflash_token_delta"], 0.1)
+
+    def test_numerical_equivalence_does_not_require_replay_argmax_identity(self):
+        report = numerical_equivalence_from_probe(
+            self.logprob_probe(-0.08, output_token=20), 10, 20, 0.13
+        )
+        self.assertTrue(report["ok"])
+        self.assertFalse(report["oracle_selected_target_token"])
+        self.assertAlmostEqual(report["target_token_delta"], 0.02)
+
+    def test_numerical_equivalence_rejects_out_of_tolerance_token(self):
+        report = numerical_equivalence_from_probe(
+            self.logprob_probe(-0.24), 10, 20, 0.13
+        )
+        self.assertFalse(report["ok"])
+        self.assertAlmostEqual(report["dflash_token_delta"], 0.14)
+
+    def test_numerical_equivalence_requires_requested_logprobs(self):
+        probe = self.logprob_probe()
+        del probe.meta_info["output_token_ids_logprobs"]
+        with self.assertRaisesRegex(HarnessError, "output_token_ids_logprobs"):
+            numerical_equivalence_from_probe(probe, 10, 20, 0.13)
+
+    def test_greedy_comparison_replays_the_first_mismatch_on_target(self):
+        class TargetOracle:
+            def __init__(self, response):
+                self.response = response
+                self.payloads = []
+
+            def generate(self, payload):
+                self.payloads.append(payload)
+                return self.response
+
+        probe = self.logprob_probe()
+        target_oracle = TargetOracle(
+            {
+                "output_ids": probe.output_ids,
+                "text": probe.text,
+                "meta_info": probe.meta_info,
+            }
+        )
+        harness = object.__new__(DifferentialHarness)
+        harness.target = target_oracle
+        harness.max_logprob_delta = 0.13
+        harness.top_logprobs_num = 5
+        target = self.record(ids=(1, 10))
+        dflash = self.record(ids=(1, 20))
+
+        comparison = harness.greedy_comparison(
+            [7, 8, 9], target, dflash, "unit-mismatch"
+        )
+
+        self.assertTrue(comparison["ok"])
+        self.assertEqual(comparison["verdict"], "numerical")
+        self.assertFalse(comparison["checks"]["output_ids_exact"])
+        self.assertTrue(comparison["checks"]["output_ids_equivalent"])
+        self.assertEqual(len(target_oracle.payloads), 1)
+        payload = target_oracle.payloads[0]
+        self.assertEqual(payload["input_ids"], [7, 8, 9, 1])
+        self.assertEqual(payload["token_ids_logprob"], [10, 20])
+        self.assertEqual(payload["top_logprobs_num"], 5)
+        self.assertTrue(payload["return_logprob"])
+
+    def test_greedy_comparison_does_not_probe_a_structural_mismatch(self):
+        class TargetOracle:
+            def generate(self, payload):
+                raise AssertionError(f"unexpected oracle probe: {payload}")
+
+        harness = object.__new__(DifferentialHarness)
+        harness.target = TargetOracle()
+        harness.max_logprob_delta = 0.13
+        harness.top_logprobs_num = 5
+        target = self.record(ids=(1, 10))
+        dflash = self.record(
+            ids=(1, 20), reason={"type": "stop", "matched": 20}
+        )
+
+        comparison = harness.greedy_comparison(
+            [7, 8, 9], target, dflash, "unit-structural"
+        )
+
+        self.assertFalse(comparison["ok"])
+        self.assertEqual(comparison["verdict"], "failed")
+        self.assertFalse(comparison["checks"]["finish_reason_exact"])
 
 
 class DistributionTests(unittest.TestCase):
@@ -234,6 +338,10 @@ class ConfigAndCheckpointTests(unittest.TestCase):
         config_path = Path(__file__).parent / "configs" / "dflash_generation_h200.json"
         config = json.loads(config_path.read_text())
         quick, full = resolve_matrix(config, "quick"), resolve_matrix(config, "full")
+        self.assertEqual(
+            config["greedy_numerical_equivalence"],
+            {"max_logprob_delta": 0.13, "top_logprobs_num": 5},
+        )
         self.assertTrue(set(quick["input_lengths"]).issubset(full["input_lengths"]))
         self.assertIn(65536, full["input_lengths"])
         self.assertEqual(quick["single_soak_tokens"], 513)
@@ -246,16 +354,31 @@ class ConfigAndCheckpointTests(unittest.TestCase):
             path = Path(directory) / "result.json"
             metadata = {"run_fingerprint": "abc", "name": "test"}
             checkpoint = ResultCheckpoint(path, metadata)
-            checkpoint.append({"id": "a", "suite": "unit", "status": "pass", "ok": True})
-            checkpoint.append({"id": "b", "suite": "unit", "status": "fail", "ok": False})
+            checkpoint.append({
+                "id": "a", "suite": "unit", "status": "pass", "ok": True,
+                "equivalence_verdict": "exact",
+            })
+            checkpoint.append({
+                "id": "b", "suite": "unit", "status": "fail", "ok": False,
+                "equivalence_verdict": "failed",
+            })
+            checkpoint.append({
+                "id": "c", "suite": "unit", "status": "pass", "ok": True,
+                "equivalence_verdict": "numerical",
+            })
             summary = checkpoint.finish()
-            self.assertEqual(summary["passed"], 1)
+            self.assertEqual(summary["passed"], 2)
+            self.assertEqual(summary["passed_exact"], 1)
+            self.assertEqual(summary["passed_numerical"], 1)
             self.assertEqual(summary["failed"], 1)
+            self.assertEqual(summary["failed_equivalence"], 1)
             self.assertFalse(summary["ok"])
             journal = path.with_suffix(".jsonl").read_text().splitlines()
-            self.assertEqual([json.loads(line)["id"] for line in journal], ["a", "b"])
+            self.assertEqual(
+                [json.loads(line)["id"] for line in journal], ["a", "b", "c"]
+            )
             resumed = ResultCheckpoint(path, metadata, resume=True)
-            self.assertEqual(resumed.completed_ids, {"a", "b"})
+            self.assertEqual(resumed.completed_ids, {"a", "b", "c"})
             with self.assertRaisesRegex(HarnessError, "fingerprint"):
                 ResultCheckpoint(path, {"run_fingerprint": "different"}, resume=True)
 

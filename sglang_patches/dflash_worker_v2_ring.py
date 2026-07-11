@@ -1,7 +1,7 @@
 import logging
 import math
 from copy import deepcopy
-from typing import List, Optional
+from typing import Optional
 
 import torch
 
@@ -9,6 +9,7 @@ from sglang.srt.distributed import get_tp_group
 from sglang.srt.managers.schedule_batch import ScheduleBatch
 from sglang.srt.managers.scheduler import GenerationBatchResult
 from sglang.srt.managers.tp_worker import TpModelWorker
+from sglang.srt.layers.sampler import canonical_greedy_argmax
 from sglang.srt.model_executor.forward_batch_info import (
     CaptureHiddenMode,
     ForwardBatch,
@@ -34,9 +35,6 @@ from sglang.srt.speculative.dflash_utils import (
 from sglang.srt.speculative.eagle_info_v2 import assign_extend_cache_locs_func
 from sglang.srt.speculative.spec_info import SpeculativeAlgorithm
 from sglang.srt.speculative.spec_utils import assign_req_to_token_pool_func
-from sglang.srt.speculative.triton_ops.dflash_accept_bonus import (
-    _compute_dflash_accept_bonus_triton_unchecked,
-)
 from sglang.srt.speculative.triton_ops.dflash_prepare_block import (
     _prepare_dflash_draft_block_unchecked,
 )
@@ -290,14 +288,6 @@ class DFlashWorkerV2(BaseSpecWorker):
 
         supports_gpu_triton = is_cuda() or is_hip()
         self._use_triton_prepare_block = supports_gpu_triton
-        self._use_triton_accept_bonus = supports_gpu_triton
-        self._accept_bonus_buffer_cap: int = 0
-        self._accept_bonus_buffer_slot: int = 0
-        self._accept_len_buf: Optional[torch.Tensor] = None
-        self._commit_lens_bufs: List[torch.Tensor] = []
-        self._bonus_id_bufs: List[torch.Tensor] = []
-        self._out_tokens_bufs: List[torch.Tensor] = []
-        self._new_seq_lens_bufs: List[torch.Tensor] = []
 
     @property
     def target_worker(self) -> TpModelWorker:
@@ -1232,55 +1222,6 @@ class DFlashWorkerV2(BaseSpecWorker):
             model=self.target_worker.model_runner.model,
         )
 
-    def _ensure_accept_bonus_buffers(self, bs: int) -> None:
-        if self._accept_bonus_buffer_cap >= int(bs):
-            return
-
-        new_cap = max(
-            int(bs),
-            (
-                self._accept_bonus_buffer_cap * 2
-                if self._accept_bonus_buffer_cap > 0
-                else int(bs)
-            ),
-        )
-        device = self.device
-        block_size = int(self.block_size)
-        self._accept_len_buf = torch.empty((new_cap,), dtype=torch.int32, device=device)
-        self._commit_lens_bufs = [
-            torch.empty((new_cap,), dtype=torch.int32, device=device) for _ in range(2)
-        ]
-        self._bonus_id_bufs = [
-            torch.empty((new_cap,), dtype=torch.int32, device=device) for _ in range(2)
-        ]
-        self._out_tokens_bufs = [
-            torch.empty((new_cap, block_size), dtype=torch.int64, device=device)
-            for _ in range(2)
-        ]
-        self._new_seq_lens_bufs = [
-            torch.empty((new_cap,), dtype=torch.int64, device=device) for _ in range(2)
-        ]
-        self._accept_bonus_buffer_cap = new_cap
-
-    def _next_accept_bonus_buffers(self, bs: int) -> tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-    ]:
-        self._ensure_accept_bonus_buffers(bs)
-        assert self._accept_len_buf is not None
-        slot = self._accept_bonus_buffer_slot
-        self._accept_bonus_buffer_slot = (slot + 1) % 2
-        return (
-            self._accept_len_buf[:bs],
-            self._commit_lens_bufs[slot][:bs],
-            self._bonus_id_bufs[slot][:bs],
-            self._out_tokens_bufs[slot][:bs],
-            self._new_seq_lens_bufs[slot][:bs],
-        )
-
     def _validate_phase1_sampling_support(
         self, model_worker_batch: ScheduleBatch
     ) -> None:
@@ -1778,67 +1719,23 @@ class DFlashWorkerV2(BaseSpecWorker):
             out_tokens[:, int(self.block_size) - 1].fill_(0)
             out_tokens.scatter_(1, accept_len.to(torch.int64)[:, None], bonus[:, None])
         else:
-            target_predict = torch.argmax(logits_output.next_token_logits, dim=-1).view(
+            target_predict = canonical_greedy_argmax(logits_output.next_token_logits).view(
                 bs, int(self.block_size)
             )
-            if self._use_triton_accept_bonus:
-                try:
-                    (
-                        accept_len,
-                        commit_lens,
-                        bonus,
-                        out_tokens,
-                        new_seq_lens,
-                    ) = self._next_accept_bonus_buffers(bs)
-                    _compute_dflash_accept_bonus_triton_unchecked(
-                        candidates=candidates,
-                        target_top1=target_predict,
-                        accept_lens_out=accept_len,
-                        commit_lens_out=commit_lens,
-                        bonus_ids_out=bonus,
-                        out_tokens_out=out_tokens,
-                        prefix_lens=prefix_lens,
-                        new_seq_lens_out=new_seq_lens,
-                    )
-                except Exception as e:
-                    self._use_triton_accept_bonus = False
-                    logger.warning(
-                        "DFLASH Triton accept/bonus failed; falling back to eager path: %s",
-                        e,
-                    )
-                    accept_len, bonus = compute_dflash_correct_drafts_and_bonus(
-                        candidates=candidates,
-                        target_predict=target_predict,
-                    )
-                    commit_lens = accept_len.to(torch.int32) + 1  # [bs]
-                    out_tokens = torch.empty(
-                        (bs, int(self.block_size)),
-                        dtype=torch.int64,
-                        device=device,
-                    )
-                    if int(self.block_size) > 1:
-                        out_tokens[:, : int(self.block_size) - 1].copy_(
-                            candidates[:, 1:]
-                        )
-                    out_tokens[:, int(self.block_size) - 1].fill_(0)
-                    out_tokens.scatter_(
-                        1, accept_len.to(torch.int64)[:, None], bonus[:, None]
-                    )
-            else:
-                accept_len, bonus = compute_dflash_correct_drafts_and_bonus(
-                    candidates=candidates,
-                    target_predict=target_predict,
-                )
-                commit_lens = accept_len.to(torch.int32) + 1  # [bs]
-                out_tokens = torch.empty(
-                    (bs, int(self.block_size)), dtype=torch.int64, device=device
-                )
-                if int(self.block_size) > 1:
-                    out_tokens[:, : int(self.block_size) - 1].copy_(candidates[:, 1:])
-                out_tokens[:, int(self.block_size) - 1].fill_(0)
-                out_tokens.scatter_(
-                    1, accept_len.to(torch.int64)[:, None], bonus[:, None]
-                )
+            accept_len, bonus = compute_dflash_correct_drafts_and_bonus(
+                candidates=candidates,
+                target_predict=target_predict,
+            )
+            commit_lens = accept_len.to(torch.int32) + 1
+            out_tokens = torch.empty(
+                (bs, int(self.block_size)), dtype=torch.int64, device=device
+            )
+            if int(self.block_size) > 1:
+                out_tokens[:, : int(self.block_size) - 1].copy_(candidates[:, 1:])
+            out_tokens[:, int(self.block_size) - 1].fill_(0)
+            out_tokens.scatter_(
+                1, accept_len.to(torch.int64)[:, None], bonus[:, None]
+            )
 
         if need_mamba_verify_commit:
             assert seq_lens_pre_verify is not None

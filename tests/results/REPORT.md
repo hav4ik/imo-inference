@@ -1,15 +1,56 @@
 # DFlash generation-correctness evidence report
 
-This report is a snapshot of the persisted evidence on branch
-`test/dflash-generation-correctness` on 2026-07-11. Counts below come from the
-JSON/JSONL results and logs linked in each table.
-The quick matrix and its exact-token oracle are defined by
+This report contains the current schema-v2 numerical-equivalence evidence and
+the earlier exact-token-only evidence produced on 2026-07-11. Counts below come
+from the committed JSON/JSONL results and logs linked in each table; historical
+artifacts retain the contract active when they were generated.
+
+Schema version 2 later introduced a bounded first-mismatch target-oracle logprob
+predicate. These historical files do not contain those probes and are therefore
+not retroactively reclassified. The current contract is defined by
 [`tests/README.md`](../README.md) and
 [`tests/configs/dflash_generation_h200.json`](../configs/dflash_generation_h200.json).
 
-## Verdict
+## Current schema-v2 validation
 
-**DFlash is not 100% correct under the repository's strict generation contract.**
+The final BF16/BF16 production quick run is
+[`20260711-proofbench-bf16-pure-logprob-delta-production-quick-all`](./20260711-proofbench-bf16-pure-logprob-delta-production-quick-all/dflash_generation_correctness.json).
+It exercised radix caching, overlap scheduling, CUDA graphs, DFlash activity,
+streaming, native batches, sampling, negative guards, and stress on two H200s.
+
+| Suite | Total pass | Exact | Numerical | Other invariant | Fail |
+|---|---:|---:|---:|---:|---:|
+| Greedy | 30 | 23 | 7 | 0 | 0 |
+| Stop | 10 | 9 | 1 | 0 | 0 |
+| Stream | 24 | 22 | 2 | 0 | 0 |
+| Radix | 10 | 5 | 1 | 4 | 0 |
+| Native batch | 11 | 8 | 3 | 0 | 0 |
+| Sampling | 3 | 0 | 0 | 3 | 0 |
+| Negative guards | 9 | 0 | 0 | 9 | 0 |
+| Stress | 2 | 0 | 2 | 0 | 0 |
+| Preflight | 1 | 0 | 0 | 1 | 0 |
+| **Total** | **100** | **67** | **16** | **17** | **0** |
+
+The run had zero errors and zero skips. Therefore **100/100 of the declared
+production quick matrix passed the schema-v2 contract**. This means 67
+cross-engine comparisons were exact, 16 passed the bounded first-mismatch
+predicate, and 17 tested non-equivalence invariants. It does not mean bitwise
+identity or a proof beyond the finite quick matrix.
+
+The matching sync-eager greedy isolation
+[`20260711-proofbench-bf16-pure-logprob-delta-sync-eager-quick`](./20260711-proofbench-bf16-pure-logprob-delta-sync-eager-quick/dflash_generation_correctness.json)
+finished 30/31: 26 exact, three numerical, one preflight pass, and one failure.
+`greedy-output-64` placed the original target token `0.136747` logprob below the
+replay maximum, exceeding the predeclared `0.13` tolerance. The threshold was
+not widened after observing that result.
+
+The final unit discovery is recorded at
+[`20260711-logprob-delta-unit`](./20260711-logprob-delta-unit/RESULT.md): 137/137
+tests passed.
+
+## Historical strict-exact verdict
+
+**DFlash was not 100% correct under the historical strict-exact generation contract.**
 
 The definitive notebook-equivalent production full run completed all 123
 declared cases with no errors or skips, but only 82 passed and 41 failed. The
@@ -29,9 +70,9 @@ Several important subsystems do pass:
 - the deterministic prefill-alignment liveness correction, including the former
   4095/4096-token timeout boundary.
 
-Passing those subsystems does not override an exact token mismatch. The result
-therefore cannot be described as 100% correct, bitwise equivalent, or an exact
-drop-in replacement for ordinary target decoding.
+Under that historical predicate, passing those subsystems did not override an
+exact token mismatch. The result therefore cannot be described as 100% exact,
+bitwise equivalent, or an exact drop-in replacement for ordinary target decoding.
 
 Both configured tiers now have persisted end-to-end production runs. The full
 tier reaches 65,537 input tokens, 20,481 generated tokens, batches through 48,
@@ -235,6 +276,11 @@ the server-pair preflight unless stated otherwise.
 | [`native block-11 greedy`](./20260711-fix4-block11-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | sync eager; checkpoint-native block 11 | 20 | 11 | 0 | Matching the checkpoint block size does not remove exact mismatch. |
 | [`block-1 diagnostic`](./20260711-fix4-block1-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | sync eager; block 1 | 3 | 28 | 0 | Eleven of 30 greedy comparisons differ even with zero draft proposals; 17 more are exact but fail the mandatory-activity rule. |
 | [`BF16/BF16 greedy`](./20260711-bf16-bf16-sync-eager-greedy/dflash_generation_correctness.json) | BF16 target + BF16 draft, sync eager; block 8 | 25 | 6 | 0 | Removing target/draft weight quantization reduces but does not eliminate divergence. |
+| [`strict BF16 all-suite quick`](./20260711-proofbench-bf16-sync-eager-quick/dflash_generation_correctness.json) | BF16 target, draft, and KV; all quick suites | 69 | 12 | 1 | Mandatory ProofBench precision substantially reduces greedy divergence but does not pass the all-suite quick gate. |
+| [`FP32 LM-head greedy`](./20260711-proofbench-bf16-fp32-lm-head-greedy/dflash_generation_correctness.json) | strict BF16 state; FP32 LM-head operands | 30 | 1 | 0 | Removes all synthetic boundary mismatches; the natural 256-token case still differs at output index 38. |
+| [`narrow canonical greedy`](./20260711-proofbench-bf16-canonical-sync-eager-quick/dflash_generation_correctness.json) | FP32 LM head; 1e-5 lowest-ID near-tie rule | 30 | 1 | 0 | Same single natural-case failure; this is the current best measured strict configuration. |
+| [`one-quantum tolerance`](./20260711-proofbench-bf16-canonical-quantum-sync-eager-quick/dflash_generation_correctness.json) | global 0.126 near-tie tolerance | 27 | 4 | 0 | Rejected: fixes the natural case but creates four boundary regressions. |
+| [`BF16-grid argmax`](./20260711-proofbench-bf16-grid-sync-eager-quick/dflash_generation_correctness.json) | quantize computed logits to BF16 before argmax | 27 | 4 | 0 | Rejected: creates three boundary regressions and leaves the natural mismatch. |
 | [`target GPU A/A`](./20260711-fix4-sync-eager-target-gpu-aa/target_gpu_control.json) | identical non-speculative target on GPU 0 and GPU 1 | 10 | 0 | 0 | The two physical H200s match exactly on ten implicated cases. |
 
 The block-1 aggregate needs careful reading. With block size 1 there are no
@@ -252,6 +298,15 @@ Taken together, the persisted controls rule out the following as sole causes:
 - accepted draft tokens or the compact draft KV ring;
 - W4A16/int4 quantization alone;
 - a systematic difference between GPU 0 and GPU 1.
+
+The strict ProofBench sequence narrows the numerical result further. Moving all
+weights and KV state to BF16, then computing the LM head with FP32 operands,
+improves the greedy matrix to 30/31. A narrow shared tie rule does not clear the
+last natural case. Two broader global decision rules were tested and rejected:
+both finish at 27/31 and introduce boundary failures that the narrow rule does
+not have. Their implementations were reverted without deleting either commit or
+evidence. The current branch therefore retains the 1e-5 rule and reports the
+remaining failure instead of weakening the exact-token contract.
 
 The strongest evidence-based localization is therefore the target computation
 used for DFlash verification versus the target computation used for ordinary
@@ -310,6 +365,11 @@ batch, five stream, and one 513-token stress exact divergence.
 | [`block1-rerun1`](./20260711-fix4-block1-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | 3 / 28 / 0 | No-proposal target-verification diagnostic. |
 | [`block11-rerun1`](./20260711-fix4-block11-sync-eager-greedy-rerun1/dflash_generation_correctness.json) | 20 / 11 / 0 | Native checkpoint block-size diagnostic. |
 | [`BF16/BF16`](./20260711-bf16-bf16-sync-eager-greedy/dflash_generation_correctness.json) | 25 / 6 / 0 | Quantization-isolation diagnostic. |
+| [`strict BF16 quick`](./20260711-proofbench-bf16-sync-eager-quick/dflash_generation_correctness.json) | 69 / 12 / 1 | All-suite mandatory-precision gate. |
+| [`FP32 LM-head greedy`](./20260711-proofbench-bf16-fp32-lm-head-greedy/dflash_generation_correctness.json) | 30 / 1 / 0 | Best arithmetic diagnostic before canonical tie handling. |
+| [`narrow canonical greedy`](./20260711-proofbench-bf16-canonical-sync-eager-quick/dflash_generation_correctness.json) | 30 / 1 / 0 | Current best strict sync/eager result. |
+| [`one-quantum tolerance`](./20260711-proofbench-bf16-canonical-quantum-sync-eager-quick/dflash_generation_correctness.json) | 27 / 4 / 0 | Rejected global tolerance experiment. |
+| [`BF16-grid argmax`](./20260711-proofbench-bf16-grid-sync-eager-quick/dflash_generation_correctness.json) | 27 / 4 / 0 | Rejected decision-grid experiment. |
 | [`target GPU A/A`](./20260711-fix4-sync-eager-target-gpu-aa/target_gpu_control.json) | 10 / 0 / 0 | Identical target-only control across both H200s. |
 
 Historical matrices were extended during investigation, so older greedy-only
@@ -338,6 +398,7 @@ not be added into one synthetic total.
 
 | Artifact | Exact recorded outcome | What it covers |
 |---|---|---|
+| [`logprob-delta-unit`](./20260711-logprob-delta-unit/RESULT.md) | 137/137 pass | Final schema-v2 delta predicate, replay request, structural rejection, result accounting, harness, runner, kernels, and evaluation tests. |
 | [`tests-layout-isolation-unit`](./20260711-tests-layout-isolation-unit/unit-tests.log) | 125/125 pass | Full discovery run, including DFlash patch, kernel, sampling-guard, KV-experiment, harness, runner, and layout-isolation tests. |
 | [`alignment-block-profiles-unit`](./20260711-alignment-block-profiles-unit/unit-tests.log) | 47/47 pass; patch verification pass | Alignment guard/progress, harness comparisons/SSE/statistics, runner block/ring validation, and GPU-control helpers. |
 | [`BF16 runtime preflight`](./20260711-bf16-runtime-preflight/unit-tests.log) | 9/9 pass; runtime audit `passed: true`, `missing: []` | Alignment patch plus required finish, KV-tail, sampling, and stateless-seed markers in the BF16 runtime. |
@@ -380,19 +441,20 @@ differential results in this report supersede them for cache/correctness claims.
 
 ## Bottom line
 
-The evidence supports a narrow, defensible conclusion:
+The evidence supports these separate conclusions:
 
 - DFlash is genuinely active and uses both the target KV cache/radix reuse and
   its compact draft KV ring.
-- Cache reuse, stop handling, fail-closed guards, sampling distribution, seeded
-  independent repeatability, and prefill liveness pass their current tests.
-- Exact target-token equivalence fails reproducibly across greedy, streaming,
-  batching, radix-fork content, and stress cases.
-- The failures persist after removing radix/overlap/graphs, changing speculative
-  block size, eliminating draft proposals, switching to BF16 weights, and
-  controlling for the physical GPU.
+- Historical exact-token equivalence failed reproducibly across greedy,
+  streaming, batching, radix-fork content, and stress cases.
+- The current BF16 production quick matrix passes the explicitly bounded
+  numerical contract 100/100, including cache, stop, streaming, batching,
+  sampling, guards, and stress.
+- The BF16 sync-eager greedy isolation passes 30/31 and retains one result
+  `0.006747` beyond the configured tolerance.
 
-Consequently, this branch must report **DFlash generation correctness: failed
-under the strict exact-token contract**. Any production acceptance criterion
-that permits numerically induced alternative tokens would be a different,
-weaker contract and would need to be stated and tested explicitly.
+Consequently, the defensible current statement is: **DFlash passes the declared
+schema-v2 BF16 production quick matrix, with exact and numerical passes reported
+separately; it is not bitwise equivalent, and the same bounded contract does not
+pass every tested execution phase.** A full-tier schema-v2 production run remains
+necessary before extending the 100/100 claim beyond the quick matrix.

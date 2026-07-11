@@ -1,0 +1,87 @@
+{
+  "files": {
+    "layers/sampler.py": {
+      "markers": {
+        "canonical_greedy_argmax": {
+          "marker": "# CANONICAL_GREEDY_ARGMAX: resolve numerical near-ties by lowest token id.",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/layers/sampler.py",
+      "sha256": "63997a3b4d46f1be934b0a5dea549d24ffed4c1de61f1a7ec9e9c9cb48a3cbf7"
+    },
+    "managers/schedule_batch.py": {
+      "markers": {
+        "finish_replay": {
+          "marker": "# DFLASH_FINISH_REPLAY_FIX: replay stock checks one token at a time.",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/managers/schedule_batch.py",
+      "sha256": "30ccd48cddfe230e5718758ae378bf589fae04353c1af40e457b19196feff581"
+    },
+    "managers/scheduler.py": {
+      "markers": {
+        "deterministic_alignment_guard": {
+          "marker": "# DETERMINISTIC_PREFILL_ALIGNMENT_GUARD: fail before scheduler retry loop.",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler.py",
+      "sha256": "16043e7a4c62c0a1a9f8e7497db8ab079287ba7fb376ccf0d150cfadb9b88b06"
+    },
+    "managers/scheduler_components/batch_result_processor.py": {
+      "markers": {
+        "finish_kv_hardened": {
+          "marker": "# DFLASH_FINISH_KV_HARDENED: never decommit outside this verify chunk.",
+          "present": true
+        },
+        "finish_kv_trim_call": {
+          "marker": "_trim_dflash_finished_committed_tail(",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler_components/batch_result_processor.py",
+      "sha256": "8a750b1271280766535191757b33aa92ac194ce7789d48baee2b9c12631851f6"
+    },
+    "speculative/dflash_utils.py": {
+      "markers": {
+        "sampling_guard": {
+          "marker": "# DFLASH_SAMPLING_GUARD: reject transforms this verifier cannot preserve.",
+          "present": true
+        },
+        "sampling_open_interval": {
+          "marker": "# DFLASH_SAMPLING_OPEN_INTERVAL: zero mass must never be accepted.",
+          "present": true
+        },
+        "stateless_seed": {
+          "marker": "# DFLASH_STATELESS_SEED: key verifier coins by request seed and position.",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/speculative/dflash_utils.py",
+      "sha256": "f722b3e95ffb3054836951c9530c420af14a6a1fc3a4bed76a1571125f0b3f8a"
+    },
+    "speculative/dflash_worker_v2.py": {
+      "markers": {
+        "stateless_seed_call": {
+          "marker": "# DFLASH_STATELESS_SEED_CALL: pass absolute verify positions.",
+          "present": true
+        },
+        "verify_positions_call": {
+          "marker": "verify_positions=positions_2d",
+          "present": true
+        }
+      },
+      "path": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/speculative/dflash_worker_v2.py",
+      "sha256": "9af9c2333701d9a73180a2748e085d890894e7ce7a254ff5d55aefdb79466e8a"
+    }
+  },
+  "missing": [],
+  "passed": true,
+  "python": "/workspace/pp/venv/bin/python",
+  "srt_candidates": [
+    "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt"
+  ],
+  "srt_root": "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt"
+}
