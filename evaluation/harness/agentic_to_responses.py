@@ -62,7 +62,7 @@ def main() -> None:
     f_prv = (prv_dir / "responses.jsonl").open("w")
     f_ref = (ref_dir / "responses.jsonl").open("w")
 
-    n_sel_empty = n_prv = n_ref = 0
+    n_prv = n_ref = 0
     for r in recs:
         prob = r["problem"]
         if prob not in by_problem:
@@ -72,32 +72,32 @@ def main() -> None:
         common = {"problem_id": pid, "subset": subset_of(pid),
                   "category": row["Category"], "level": row["Level"], "problem": prob}
 
-        final = (r.get("final_proof") or "").strip()
+        final = r["final_proof"].strip()
         if not final:
-            n_sel_empty += 1
+            raise ValueError(f"empty selected proof: {pid}")
         f_sel.write(json.dumps({**common, "candidates": [{"text": final}],
-                                "final_source": r.get("final_source")}, ensure_ascii=False) + "\n")
+                                "final_source": r["final_source"]}, ensure_ascii=False) + "\n")
 
         prover_cands = []
         for p in r["stages"]["prove"]:
-            if p.get("valid") and (p.get("content") or "").strip():
+            if p["valid"]:
                 prover_cands.append({"text": deterministic_clean(p["content"]),
-                                     "candidate_id": p.get("candidate_id")})
+                                     "candidate_id": p["candidate_id"]})
         n_prv += len(prover_cands)
         f_prv.write(json.dumps({**common, "candidates": prover_cands}, ensure_ascii=False) + "\n")
 
         refined_cands = []
         for rf in r["stages"]["refine"]:
-            if rf.get("valid") and (rf.get("content") or "").strip():
+            if rf["valid"]:
                 refined_cands.append({"text": deterministic_clean(rf["content"]),
-                                      "candidate_id": rf.get("refiner_id")})
+                                      "candidate_id": rf["refiner_id"]})
         n_ref += len(refined_cands)
         f_ref.write(json.dumps({**common, "candidates": refined_cands}, ensure_ascii=False) + "\n")
 
     f_sel.close()
     f_prv.close()
     f_ref.close()
-    print(f"[adapt] wrote {sel_dir}/responses.jsonl (select k=1, {n_sel_empty} empty finals)")
+    print(f"[adapt] wrote {sel_dir}/responses.jsonl (select k=1)")
     print(f"[adapt] wrote {prv_dir}/responses.jsonl (provers, {n_prv} total valid candidates)")
     print(f"[adapt] wrote {ref_dir}/responses.jsonl (refined, {n_ref} total valid candidates)")
 

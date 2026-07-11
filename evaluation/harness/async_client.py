@@ -1,18 +1,18 @@
-"""Async OpenAI-compatible chat client (httpx) for high-concurrency experiments.
-
-Mirrors client.ChatClient (same `reasoning` mapping, same return dicts) but runs on a
-single asyncio event loop with a pooled httpx.AsyncClient, so we can drive ~1000
-concurrent requests cheaply instead of spawning 1000 OS threads. The synchronous
-client.py stays for the bounded proof-generation path (run_eval.py).
-"""
+"""Async OpenAI-compatible client for the agentic ProofBench evaluation."""
 from __future__ import annotations
 
-import asyncio
 import time
 
 import httpx
 
-from client import _apply_reasoning  # reuse the no_think/high/max mapping
+
+def _apply_reasoning(payload: dict, reasoning: str) -> None:
+    if reasoning in ("high", "max"):
+        payload["reasoning_effort"] = reasoning
+    elif reasoning == "no_think":
+        payload["thinking"] = {"type": "disabled"}
+    elif reasoning != "default":
+        raise ValueError(f"unknown reasoning mode: {reasoning}")
 
 
 def _usage(data: dict) -> dict:
@@ -27,10 +27,9 @@ def _usage(data: dict) -> dict:
 
 class AsyncChatClient:
     def __init__(self, base_url: str, model: str, api_key: str | None = None, *,
-                 max_connections: int = 1000, timeout: float = 3600.0, max_retries: int = 5):
+                 max_connections: int = 1000, timeout: float = 3600.0):
         self.base_url = base_url.rstrip("/")
         self.model = model
-        self.max_retries = max_retries
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -46,20 +45,10 @@ class AsyncChatClient:
 
     async def _post(self, payload: dict) -> tuple[dict, float]:
         url = f"{self.base_url}/chat/completions"
-        last = None
-        for attempt in range(self.max_retries):
-            t0 = time.monotonic()
-            try:
-                r = await self._client.post(url, json=payload)
-                r.raise_for_status()
-                return r.json(), round(time.monotonic() - t0, 2)
-            except Exception as e:  # noqa: BLE001 - network/HTTP errors, retry w/ backoff
-                last = e
-                await asyncio.sleep(min(2 ** attempt, 30))
-        # preserve the underlying cause (httpx errors sometimes have an empty str()) via
-        # `from last` + repr, and report attempts (not "retries"): max_retries=1 means 1 try.
-        raise RuntimeError(
-            f"request failed after {self.max_retries} attempt(s): {last!r}") from last
+        t0 = time.monotonic()
+        response = await self._client.post(url, json=payload)
+        response.raise_for_status()
+        return response.json(), round(time.monotonic() - t0, 2)
 
     async def chat(self, messages: list[dict], *, max_tokens: int = 8192,
                    reasoning: str = "default", temperature: float = 0.7,

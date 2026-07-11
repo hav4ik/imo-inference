@@ -13,6 +13,7 @@ HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(M3R))
 sys.path.insert(0, str(HARNESS))
 
+from grader import parse_score  # noqa: E402
 from make_batches import build_batches  # noqa: E402
 from pipeline import Engine, solve_problem  # noqa: E402
 
@@ -89,6 +90,19 @@ class ProofBenchEvaluationTests(unittest.TestCase):
                 )
 
         asyncio.run(run())
+
+    def test_grader_requires_one_valid_points_block(self):
+        self.assertEqual(
+            parse_score("sound proof\n<points>7 out of 7</points>"),
+            {"score": 7, "rationale": "sound proof"},
+        )
+        for output in (
+            "missing score",
+            "<points>2 out of 7</points>",
+            "<points>7 out of 7</points><points>7 out of 7</points>",
+        ):
+            with self.assertRaises(ValueError):
+                parse_score(output)
 
 
 if __name__ == "__main__":

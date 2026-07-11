@@ -105,7 +105,7 @@ async def main():
         print("[full60] nothing to do."); return
 
     inner = AsyncChatClient(BASE, model, api_key="EMPTY", max_connections=args.concurrency + 8,
-                            max_retries=1, timeout=7200.0)
+                            timeout=7200.0)
     client = FixedSamplingClient(inner, args.temperature, args.top_p)
     call_sem = asyncio.Semaphore(args.concurrency)
     prob_sem = asyncio.Semaphore(args.problem_concurrency)
