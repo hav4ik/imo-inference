@@ -1,6 +1,6 @@
 #!/bin/bash
-# serve_opd32b.sh — serve the bf16 opd-32b-deploy (Olmo3Sink) with the patched
-# sglang on an H200. Self-contained: bf16 only, one GPU per replica.
+# serve_opd32b.sh — serve the BF16 OPD-32B target and BF16 DFlash draft with
+# BF16 KV caches on one H200 using the patched SGLang runtime.
 #
 # Prereqs (see README): proof-pilot-env venv staged at $VENV and patched via
 # sglang_patches/apply_patches.sh; model downloaded to $MODEL.
@@ -13,21 +13,15 @@ VENV="${VENV:-/workspace/pp/venv}"
 MODEL="${MODEL:-/workspace/models/opd-32b-deploy}"
 PORT="${PORT:-30000}"
 HOST="${HOST:-127.0.0.1}"
-TP="${TP:-1}"                  # tensor parallelism; TP=2 spans both H200s (NVLink)
-DFLASH="${DFLASH:-0}"          # 1 = DFlash speculative decoding (requires TP=1)
 DRAFT="${DRAFT:-/workspace/models/dflash-32b-draft-v2test-phaseL}"
-SWA_RATIO="${SWA_RATIO:-0.1}"  # full-attention KV pool ratio (notebook used 0.2)
+SWA_RATIO="${SWA_RATIO:-0.2}"
 CTX="${CTX:-200000}"           # context length
-MEMFRAC="${MEMFRAC:-0.88}"     # weights (61GB) + fp8 KV pool on a 143GB H200
-MAXREQ="${MAXREQ:-48}"         # max concurrent requests (= decode cuda-graph max bs)
+MEMFRAC="${MEMFRAC:-0.82}"
+MAXREQ="${MAXREQ:-2}"
 CHUNKED="${CHUNKED:-2048}"     # prefill chunk size (prefill graph buckets derive from it)
 KV_SPLITS="${KV_SPLITS:-32}"   # triton decode kv-splits (long-ctx single-stream occupancy)
 
-if [ "$TP" = 2 ]; then
-  export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
-else
-  export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
-fi
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 export FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST:-9.0a}"   # H200 = sm90
 export FLASHINFER_USE_CUDA_NORM=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -53,43 +47,40 @@ if [ -n "$_cccl" ] && [ -n "$_cuinc" ] && [ ! -e "$_cuinc/cccl/cuda/std/cstdint"
   ln -sf "$_cccl" "$_cuinc/cccl"
 fi
 
-# DFlash speculative decoding (flags + env verbatim from proof-pilot serve_final.sh;
-# the draft patch is TP=1 only — dflash_sink.py asserts it)
-SPEC_ARGS=()
-if [ "$DFLASH" = 1 ]; then
-  [ "$TP" = 1 ] || { echo "DFLASH requires TP=1"; exit 1; }
-  export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1   # draft SWA -> long target ctx is safe
-  export SGLANG_ENABLE_OVERLAP_PLAN_STREAM=1
-  export SGLANG_DFLASH_DRAFT_RING="${SGLANG_DFLASH_DRAFT_RING:-1}"
-  export SGLANG_DFLASH_DRAFT_RING_QUOTA="${SGLANG_DFLASH_DRAFT_RING_QUOTA:-4}"
-  export SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER="${SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER:-0.125}"
-  WINDOW="$("$VENV/bin/python" -c "import json;c=json.load(open('$DRAFT/config.json'));print(c.get('sliding_window') or (c.get('dflash_config') or {}).get('sliding_window') or 512)" 2>/dev/null || echo 512)"
-  SPEC_ARGS=(--speculative-algorithm DFLASH
-             --speculative-draft-model-path "$DRAFT"
-             --speculative-dflash-block-size "${BLOCK:-8}"
-             --speculative-num-draft-tokens "${NUM_DRAFT:-8}"
-             --speculative-draft-window-size "$WINDOW"
-             --speculative-draft-attention-backend triton)
-fi
+export SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
+export SGLANG_ENABLE_OVERLAP_PLAN_STREAM=1
+export SGLANG_DFLASH_DRAFT_RING=1
+export SGLANG_DFLASH_DRAFT_RING_QUOTA=4
+export SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER=0.125
+
+SPEC_ARGS=(--speculative-algorithm DFLASH
+           --speculative-draft-model-path "$DRAFT"
+           --speculative-dflash-block-size 8
+           --speculative-num-draft-tokens 8
+           --speculative-draft-window-size 512
+           --speculative-draft-attention-backend triton)
 
 # capture every decode bs 1..16 (no padding for small batches) + sparse tail to MAXREQ
 CG_BS_DECODE="$(for b in $(seq 1 16) 20 24 28 32 40 48 64 96 128; do if [ "$b" -le "$MAXREQ" ]; then printf '%s ' "$b"; fi; done)"
 
-echo "[serve_opd32b] model=$MODEL gpu=$CUDA_VISIBLE_DEVICES tp=$TP dflash=$DFLASH port=$PORT ctx=$CTX memfrac=$MEMFRAC maxreq=$MAXREQ swa=$SWA_RATIO"
+echo "[serve_opd32b] model=$MODEL draft=$DRAFT gpu=$CUDA_VISIBLE_DEVICES dtype=bf16 kv=bf16 dflash=required port=$PORT ctx=$CTX memfrac=$MEMFRAC maxreq=$MAXREQ swa=$SWA_RATIO"
 
 exec "$VENV/bin/python" -m sglang.launch_server \
   --model-path "$MODEL" \
   "${SPEC_ARGS[@]}" \
   --attention-backend triton \
-  --tp "$TP" --host "$HOST" --port "$PORT" \
+  --tp 1 --host "$HOST" --port "$PORT" \
   --mem-fraction-static "$MEMFRAC" \
   --chunked-prefill-size "$CHUNKED" \
   --context-length "$CTX" \
-  --kv-cache-dtype fp8_e4m3 \
+  --kv-cache-dtype auto \
   --stream-interval 16 \
   --swa-full-tokens-ratio "$SWA_RATIO" \
   --max-running-requests "$MAXREQ" --cuda-graph-max-bs-decode "$MAXREQ" \
   --cuda-graph-bs-decode $CG_BS_DECODE \
   --cuda-graph-backend-prefill tc_piecewise --cuda-graph-bs-prefill 256 1024 "$CHUNKED" \
   --triton-attention-num-kv-splits "$KV_SPLITS" \
-  --reasoning-parser deepseek-r1 ${EXTRA_ARGS:-}
+  --served-model-name opd-32b-dflash-bf16 \
+  --enable-cache-report --enable-metrics \
+  --random-seed 0 --enable-deterministic-inference \
+  --reasoning-parser deepseek-r1
