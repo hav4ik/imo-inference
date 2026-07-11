@@ -386,14 +386,55 @@ def _audit_harness_cli(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _assert_port_available(host: str, port: int) -> None:
+def _port_bind_error(host: str, port: int) -> OSError | None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
             sock.bind((host, port))
         except OSError as exc:
+            return exc
+    return None
+
+
+def _assert_port_available(host: str, port: int) -> None:
+    error = _port_bind_error(host, port)
+    if error is not None:
+        raise RunnerError(
+            f"refusing to disturb an existing listener on {host}:{port}: {error}"
+        ) from error
+
+
+def _wait_for_ports_released(
+    host: str, ports: Iterable[int], timeout: float
+) -> dict[str, Any]:
+    """Wait until every port owned by this run can be rebound."""
+
+    port_list = [int(port) for port in ports]
+    started = time.monotonic()
+    deadline = started + float(timeout)
+    attempts = 0
+    while True:
+        attempts += 1
+        errors = {
+            port: error
+            for port in port_list
+            if (error := _port_bind_error(host, port)) is not None
+        }
+        if not errors:
+            return {
+                "host": host,
+                "ports": port_list,
+                "ports_released": True,
+                "attempts": attempts,
+                "duration_seconds": time.monotonic() - started,
+            }
+        if time.monotonic() >= deadline:
+            details = ", ".join(
+                f"{host}:{port}: {error}" for port, error in errors.items()
+            )
             raise RunnerError(
-                f"refusing to disturb an existing listener on {host}:{port}: {exc}"
-            ) from exc
+                f"owned test ports were not released within {timeout}s: {details}"
+            )
+        time.sleep(0.1)
 
 
 def _prepend_path(environment: dict[str, str], key: str, value: Path | str) -> None:
@@ -1049,9 +1090,27 @@ def _run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         _json_dump(results_dir / "run.json", run_record)
         raise
     finally:
-        for server in reversed(servers):
-            server.stop()
-        jit_workspace.cleanup()
+        try:
+            for server in reversed(servers):
+                server.stop()
+            try:
+                cleanup = _wait_for_ports_released(
+                    host,
+                    (target_port, dflash_port),
+                    float(pair["cleanup_timeout_seconds"]),
+                )
+            except BaseException as exc:
+                run_record["cleanup"] = {
+                    "ports_released": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                }
+                _json_dump(results_dir / "run.json", run_record)
+                raise
+            else:
+                run_record["cleanup"] = cleanup
+                _json_dump(results_dir / "run.json", run_record)
+        finally:
+            jit_workspace.cleanup()
 
 
 def main() -> int:

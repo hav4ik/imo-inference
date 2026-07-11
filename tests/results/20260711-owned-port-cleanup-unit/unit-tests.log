@@ -1,0 +1,45 @@
+test_block_size_activation_policy_is_fail_closed (tests.test_dflash_runner.ActivationLogTests.test_block_size_activation_policy_is_fail_closed) ... ok
+test_mandatory_ring_activation_is_fail_closed (tests.test_dflash_runner.ActivationLogTests.test_mandatory_ring_activation_is_fail_closed) ... ok
+test_checkpoint_declares_native_block_size_consistently (tests.test_dflash_runner.RunnerConfigurationTests.test_checkpoint_declares_native_block_size_consistently) ... ok
+test_cleanup_port_timeout_is_fail_closed (tests.test_dflash_runner.RunnerConfigurationTests.test_cleanup_port_timeout_is_fail_closed) ... ok
+test_cleanup_waits_until_owned_ports_are_bindable (tests.test_dflash_runner.RunnerConfigurationTests.test_cleanup_waits_until_owned_ports_are_bindable) ... ERROR
+test_commands_keep_dflash_out_of_target_server (tests.test_dflash_runner.RunnerConfigurationTests.test_commands_keep_dflash_out_of_target_server) ... ok
+test_explicit_block_profiles_set_both_runtime_flags (tests.test_dflash_runner.RunnerConfigurationTests.test_explicit_block_profiles_set_both_runtime_flags) ... ok
+test_partial_or_inconsistent_block_override_is_rejected (tests.test_dflash_runner.RunnerConfigurationTests.test_partial_or_inconsistent_block_override_is_rejected) ... ok
+test_quick_matrix_locks_minimum_alignment_boundary (tests.test_dflash_runner.RunnerConfigurationTests.test_quick_matrix_locks_minimum_alignment_boundary) ... ok
+test_radix_suite_runs_only_in_radix_phase (tests.test_dflash_runner.RunnerConfigurationTests.test_radix_suite_runs_only_in_radix_phase) ... ok
+test_runtime_and_harness_preflights_pass (tests.test_dflash_runner.RunnerConfigurationTests.test_runtime_and_harness_preflights_pass) ... ok
+test_test_environment_requires_dflash_ring_only_for_sut (tests.test_dflash_runner.RunnerConfigurationTests.test_test_environment_requires_dflash_ring_only_for_sut) ... ok
+test_config_rejects_non_gpu_zero_one_or_non_eager_default (tests.test_target_gpu_control.TargetGPUControlConfigTests.test_config_rejects_non_gpu_zero_one_or_non_eager_default) ... ok
+test_control_cases_exactly_replay_implicated_greedy_cases (tests.test_target_gpu_control.TargetGPUControlConfigTests.test_control_cases_exactly_replay_implicated_greedy_cases) ... ok
+test_default_cli_is_sync_eager_and_test_results_scoped (tests.test_target_gpu_control.TargetGPUControlConfigTests.test_default_cli_is_sync_eager_and_test_results_scoped) ... ok
+test_launch_commands_are_same_target_and_never_speculative (tests.test_target_gpu_control.TargetGPUControlConfigTests.test_launch_commands_are_same_target_and_never_speculative) ... ok
+test_results_directory_cannot_escape_tests_results (tests.test_target_gpu_control.TargetGPUControlConfigTests.test_results_directory_cannot_escape_tests_results) ... ok
+test_equivalent_target_only_servers_pass (tests.test_target_gpu_control.TargetGPUControlPreflightTests.test_equivalent_target_only_servers_pass) ... ok
+test_gpu_setting_difference_fails_preflight (tests.test_target_gpu_control.TargetGPUControlPreflightTests.test_gpu_setting_difference_fails_preflight) ... ok
+test_speculation_on_either_server_fails_preflight (tests.test_target_gpu_control.TargetGPUControlPreflightTests.test_speculation_on_either_server_fails_preflight) ... ok
+
+======================================================================
+ERROR: test_cleanup_waits_until_owned_ports_are_bindable (tests.test_dflash_runner.RunnerConfigurationTests.test_cleanup_waits_until_owned_ports_are_bindable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/tests/test_dflash_runner.py", line 110, in test_cleanup_waits_until_owned_ports_are_bindable
+    report = _wait_for_ports_released(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/tests/run_dflash_correctness.py", line 420, in _wait_for_ports_released
+    if (error := _port_bind_error(host, port)) is not None
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/original/runtime/pybase/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/original/runtime/pybase/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/original/runtime/pybase/lib/python3.12/unittest/mock.py", line 1202, in _execute_mock_call
+    raise result
+OSError: [Errno 98] Address already in use
+
+----------------------------------------------------------------------
+Ran 20 tests in 0.090s
+
+FAILED (errors=1)

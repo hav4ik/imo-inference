@@ -60,6 +60,7 @@
     "dflash_port": 31001,
     "readiness_timeout_seconds": 1200,
     "request_timeout_seconds": 300,
+    "cleanup_timeout_seconds": 30,
     "common_environment": {
       "FLASHINFER_CUDA_ARCH_LIST": "9.0a",
       "FLASHINFER_USE_CUDA_NORM": "1",

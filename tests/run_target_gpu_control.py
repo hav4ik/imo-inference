@@ -622,9 +622,25 @@ def run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         pair_runner._json_dump(results_dir / "run.json", run_record)
         raise
     finally:
-        for server in reversed(servers):
-            server.stop()
-        temporary.cleanup()
+        try:
+            for server in reversed(servers):
+                server.stop()
+            try:
+                cleanup = pair_runner._wait_for_ports_released(
+                    host, ports, float(pair["cleanup_timeout_seconds"])
+                )
+            except BaseException as exc:
+                run_record["cleanup"] = {
+                    "ports_released": False,
+                    "error": {"type": type(exc).__name__, "message": str(exc)},
+                }
+                pair_runner._json_dump(results_dir / "run.json", run_record)
+                raise
+            else:
+                run_record["cleanup"] = cleanup
+                pair_runner._json_dump(results_dir / "run.json", run_record)
+        finally:
+            temporary.cleanup()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

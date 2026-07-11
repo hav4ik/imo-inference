@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from tests.run_dflash_correctness import (
     CONFIG_PATH,
@@ -16,6 +17,7 @@ from tests.run_dflash_correctness import (
     _effective_dflash_arguments,
     _harness_suites,
     _validate_dflash_activation,
+    _wait_for_ports_released,
 )
 
 
@@ -98,6 +100,33 @@ class RunnerConfigurationTests(unittest.TestCase):
             lengths[lengths.index(2049) : lengths.index(4095)],
             [2049, 2050, 2051],
         )
+
+    def test_cleanup_waits_until_owned_ports_are_bindable(self) -> None:
+        busy = OSError(98, "Address already in use")
+        bind_results = iter((busy, None))
+        with mock.patch(
+            "tests.run_dflash_correctness._port_bind_error",
+            side_effect=lambda *_args: next(bind_results),
+        ), mock.patch("tests.run_dflash_correctness.time.sleep"):
+            report = _wait_for_ports_released(
+                "127.0.0.1", [31000], timeout=1.0
+            )
+        self.assertTrue(report["ports_released"])
+        self.assertEqual(report["ports"], [31000])
+        self.assertEqual(report["attempts"], 2)
+
+    def test_cleanup_port_timeout_is_fail_closed(self) -> None:
+        busy = OSError(98, "Address already in use")
+        with mock.patch(
+            "tests.run_dflash_correctness._port_bind_error",
+            return_value=busy,
+        ):
+            with self.assertRaisesRegex(
+                RunnerError, "owned test ports were not released"
+            ):
+                _wait_for_ports_released(
+                    "127.0.0.1", [31000], timeout=0.0
+                )
 
     def test_test_environment_requires_dflash_ring_only_for_sut(self) -> None:
         phase = self.config["phases"]["production"]
