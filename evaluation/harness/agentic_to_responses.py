@@ -1,7 +1,7 @@
 """Adapt math_3r (DSMV2-Simple-3R) full-trace records into grade_proofs.py inputs.
 
 The agentic pipeline (distill_gen/math_3r) emits one full-trace record per problem to
-outputs/<run_id>/records.jsonl. To score it on IMO-ProofBench with the existing grader we
+stages/<problem_id>.json. To score it on IMO-ProofBench with the existing grader we
 need evaluation/runs/<id>/responses.jsonl in the shape grade_proofs.load_run expects:
 
     {problem_id, subset, category, level, problem, candidates: [{"text": ...}, ...]}
@@ -40,8 +40,8 @@ def subset_of(pid: str) -> str:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--records", required=True, type=Path,
-                    help="math_3r outputs/<run>/records.jsonl")
+    ap.add_argument("--stages-dir", required=True, type=Path,
+                    help="directory containing one full agentic trace JSON per problem")
     ap.add_argument("--data", required=True, type=Path, help="proofbench_v2.csv")
     ap.add_argument("--out-prefix", required=True,
                     help="run-id prefix; writes runs/<prefix>_select and runs/<prefix>_provers")
@@ -50,8 +50,8 @@ def main() -> None:
     df = pd.read_csv(args.data)
     by_problem = {row["Problem"]: row for _, row in df.iterrows()}
 
-    recs = [json.loads(l) for l in args.records.open() if l.strip()]
-    print(f"[adapt] {len(recs)} records from {args.records}")
+    recs = [json.loads(p.read_text()) for p in sorted(args.stages_dir.glob("*.json"))]
+    print(f"[adapt] {len(recs)} records from {args.stages_dir}")
 
     sel_dir = EVAL_ROOT / "runs" / f"{args.out_prefix}_select"
     prv_dir = EVAL_ROOT / "runs" / f"{args.out_prefix}_provers"

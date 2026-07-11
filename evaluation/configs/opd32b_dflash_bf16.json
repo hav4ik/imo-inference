@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "model": {
+    "served_model": "opd-32b-dflash-bf16",
+    "target": "/workspace/models/opd-32b-deploy",
+    "draft": "/workspace/models/dflash-32b-draft-v2test-phaseL",
+    "dtype": "bfloat16",
+    "kv_cache_dtype": "auto",
+    "speculative_algorithm": "DFLASH"
+  },
+  "server": {
+    "context_length": 200000,
+    "mem_fraction_static": 0.82,
+    "max_running_requests": 2,
+    "swa_full_tokens_ratio": 0.2,
+    "dflash_block_size": 8,
+    "dflash_window_size": 512
+  },
+  "agentic": {
+    "max_tokens": 128000,
+    "num_provers": 6,
+    "verify_k": 2,
+    "num_refiners": 3,
+    "num_selectors": 4,
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "concurrency": 2,
+    "problem_concurrency": 1
+  },
+  "shards": {
+    "basic": "http://127.0.0.1:30000/v1",
+    "advanced": "http://127.0.0.1:30001/v1"
+  },
+  "batch_size": 5
+}

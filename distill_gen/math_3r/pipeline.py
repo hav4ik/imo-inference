@@ -1,4 +1,4 @@
-"""DSMV2-Simple-3R orchestration: prove -> verify -> rank -> refine -> select-by-id -> clean/fallback.
+"""DSMV2-Simple-3R orchestration: prove -> verify -> rank -> refine -> select-by-id -> clean.
 
 Batch distill-data generator (not the single-problem timed agent):
 - no wall-clock deadlines; each call bounded only by max_tokens and the global in-flight semaphore.
@@ -7,9 +7,6 @@ Batch distill-data generator (not the single-problem timed agent):
 - the selector returns a candidate ID (\\boxed{P#|R#}); we look up that candidate's proof text
   deterministically, so the selector never re-emits (and cannot truncate/alter) the proof.
 - full trace preserved: every call keeps its prompt messages, reasoning_content, content, usage.
-
-`Engine.generate` never raises: a failed call yields a record with `error` set and the pipeline
-degrades gracefully (fewer valid proofs -> fallback).
 """
 from __future__ import annotations
 
@@ -22,7 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "evaluation" / "harness"))
 
 from bundle import build_refine_bundle, build_select_bundle      # noqa: E402
-from clean import deterministic_clean, fallback_best_available, fallback_from_raw  # noqa: E402
+from clean import deterministic_clean  # noqa: E402
 from parser import (parse_proof_package, parse_refined_package,   # noqa: E402
                     parse_selected_id, parse_verification)
 from prompts import (render_prover_prompt, render_refiner_prompt,  # noqa: E402
@@ -45,24 +42,16 @@ class Engine:
                    "finish_reason": None, "truncated": False, "prompt_tokens": None,
                    "completion_tokens": None, "reasoning_tokens": None, "latency_s": None,
                    "error": None}
-            try:
-                out = await self.client.chat_raw(messages, max_tokens=self.max_tokens,
-                                                 reasoning=self.effort)
-                m = out["message"]
-                rec.update(reasoning_content=m.get("reasoning_content") or "",
-                           content=m.get("content") or "",
-                           finish_reason=out["finish_reason"],
-                           truncated=out["finish_reason"] == "length",
-                           prompt_tokens=out["prompt_tokens"],
-                           completion_tokens=out["completion_tokens"],
-                           reasoning_tokens=out["reasoning_tokens"], latency_s=out["latency_s"])
-            except Exception as e:  # noqa: BLE001 - record cause chain, do not raise
-                parts, cur, seen = [], e, set()
-                while cur is not None and id(cur) not in seen:
-                    seen.add(id(cur))
-                    parts.append(repr(cur))
-                    cur = cur.__cause__ or cur.__context__
-                rec.update(finish_reason="error", error=" <- ".join(parts))
+            out = await self.client.chat_raw(messages, max_tokens=self.max_tokens,
+                                             reasoning=self.effort)
+            m = out["message"]
+            rec.update(reasoning_content=m.get("reasoning_content") or "",
+                       content=m.get("content") or "",
+                       finish_reason=out["finish_reason"],
+                       truncated=out["finish_reason"] == "length",
+                       prompt_tokens=out["prompt_tokens"],
+                       completion_tokens=out["completion_tokens"],
+                       reasoning_tokens=out["reasoning_tokens"], latency_s=out["latency_s"])
             return rec
 
     async def run_parallel(self, jobs: list[tuple[list[dict], str]]) -> list[dict]:
@@ -106,10 +95,7 @@ async def solve_problem(problem: str, engine: Engine, *, num_provers: int = 6,
     valid_proofs = [p for p in proofs if p.valid]
 
     if not valid_proofs:
-        return {"stages": stages, "final_proof": fallback_from_raw(proofs),
-                "final_source": "fallback_from_raw", "selected_id": None, "selected_ids": [],
-                "counts": {"n_provers": num_provers, "n_valid_proofs": 0, "n_verifs": 0,
-                           "n_refined_valid": 0}, "totals": _totals(stages)}
+        raise RuntimeError("prove stage produced no valid proof")
 
     # 2. Verify (each valid proof x verify_k identical verifiers)
     verify_jobs = [(to_messages(render_verifier_prompt(problem, p.proof, p.self_eval)),
@@ -134,27 +120,26 @@ async def solve_problem(problem: str, engine: Engine, *, num_provers: int = 6,
     stages["refine"] = [_refined_view(r) for r in refined]
     valid_refined = [r for r in refined if r.valid]
 
-    # 4. Select-by-id over REFINED candidates only (num_selectors voters) / Clean.
-    # Originals already fed the refiners; the selector picks the best refined proof. If no refined
-    # is valid, skip the selectors and fall back to the best verifier-confirmed original.
+    # 4. Select-by-id over refined candidates only.
+    if not valid_refined:
+        raise RuntimeError("refine stage produced no valid proof")
     select_bundle, id_map = build_select_bundle(valid_refined)
-    votes: list[str | None] = []
-    winner, final, final_source = None, "", None
-    if id_map:
-        sel_msgs = to_messages(render_selector_prompt(problem, select_bundle))
-        select_calls = await engine.run_parallel([(sel_msgs, f"select/S{i}") for i in range(num_selectors)])
-        stages["select"] = select_calls
-        votes = [parse_selected_id(c["content"]) for c in select_calls]
-        valid_votes = [v for v in votes if v in id_map]
-        if valid_votes:
-            counts = Counter(valid_votes)
-            order = list(id_map)  # refined in R0,R1,... order
-            winner = max(counts, key=lambda k: (counts[k], -order.index(k)))  # votes, tie -> earlier
-            final = deterministic_clean(id_map[winner])
-            final_source = f"select:{winner}({counts[winner]}/{num_selectors})"
+    sel_msgs = to_messages(render_selector_prompt(problem, select_bundle))
+    select_calls = await engine.run_parallel(
+        [(sel_msgs, f"select/S{i}") for i in range(num_selectors)]
+    )
+    stages["select"] = select_calls
+    votes = [parse_selected_id(c["content"]) for c in select_calls]
+    valid_votes = [v for v in votes if v in id_map]
+    if not valid_votes:
+        raise RuntimeError("select stage produced no valid candidate id")
+    vote_counts = Counter(valid_votes)
+    order = list(id_map)
+    winner = max(vote_counts, key=lambda k: (vote_counts[k], -order.index(k)))
+    final = deterministic_clean(id_map[winner])
     if not final:
-        final = fallback_best_available(ranked, valid_refined)
-        final_source = "fallback_no_refined" if not id_map else "fallback_no_valid_id"
+        raise RuntimeError("selected proof is empty after deterministic cleaning")
+    final_source = f"select:{winner}({vote_counts[winner]}/{num_selectors})"
 
     return {"stages": stages, "final_proof": final, "final_source": final_source,
             "selected_id": winner, "selected_ids": votes,

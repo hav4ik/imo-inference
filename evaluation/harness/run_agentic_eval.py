@@ -11,7 +11,7 @@ Resume: a problem is skipped if its id is already in records.jsonl (its stages f
 since we write the stages file BEFORE appending the record).
 """
 from __future__ import annotations
-import sys, asyncio, json, csv, time, os
+import sys, asyncio, json, csv, time, os, subprocess
 from pathlib import Path
 import urllib.request
 
@@ -58,6 +58,10 @@ async def main():
                     help="parent dir for run outputs (default: harness/runs; pass a persistent path)")
     ap.add_argument("--subset", choices=["all", "advanced", "basic"], default="all",
                     help="which ProofBench subset to run (filter on Problem ID prefix)")
+    ap.add_argument("--ids-file", required=True, type=Path,
+                    help="JSON array containing the exact Problem IDs for this batch")
+    ap.add_argument("--batch-id", required=True,
+                    help="stable batch name used for invocation metadata")
     args = ap.parse_args()
     BASE = args.base
     RUN_DIR = Path(args.runs_root) / args.run_dir
@@ -73,6 +77,9 @@ async def main():
         rows = [r for r in rows if r["Problem ID"].startswith("PB-Advanced")]
     elif args.subset == "basic":
         rows = [r for r in rows if r["Problem ID"].startswith("PB-Basic")]
+    requested_ids = json.loads(args.ids_file.read_text())
+    rows_by_id = {r["Problem ID"]: r for r in rows}
+    rows = [rows_by_id[pid] for pid in requested_ids]
     todo = [r for r in rows if r["Problem ID"] not in done]
     model = served(BASE)
     meta = {"run_dir": args.run_dir, "subset": args.subset, "base": BASE, "served_model": model,
@@ -81,13 +88,15 @@ async def main():
                        "top_p": args.top_p, "num_provers": args.num_provers, "verify_k": args.verify_k,
                        "num_refiners": args.num_refiners, "num_selectors": args.num_selectors,
                        "concurrency": args.concurrency, "problem_concurrency": args.problem_concurrency}}
-    try:
-        import subprocess
-        meta["git_commit"] = subprocess.check_output(
-            ["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True).strip()
-    except Exception:
-        meta["git_commit"] = None
-    (RUN_DIR / "run_meta.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False))
+    meta["batch_id"] = args.batch_id
+    meta["problem_ids"] = requested_ids
+    meta["git_commit"] = subprocess.check_output(
+        ["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True
+    ).strip()
+    (RUN_DIR / "batches").mkdir(parents=True, exist_ok=True)
+    (RUN_DIR / "batches" / f"{args.batch_id}.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False)
+    )
     print(f"[full60] model={model} total={len(rows)} done={len(done)} todo={len(todo)} "
           f"| provers={args.num_provers} verify_k={args.verify_k} refiners={args.num_refiners} "
           f"selectors={args.num_selectors} max_tokens={args.max_tokens} temp={args.temperature} "
@@ -96,7 +105,7 @@ async def main():
         print("[full60] nothing to do."); return
 
     inner = AsyncChatClient(BASE, model, api_key="EMPTY", max_connections=args.concurrency + 8,
-                            max_retries=3, timeout=7200.0)
+                            max_retries=1, timeout=7200.0)
     client = FixedSamplingClient(inner, args.temperature, args.top_p)
     call_sem = asyncio.Semaphore(args.concurrency)
     prob_sem = asyncio.Semaphore(args.problem_concurrency)
