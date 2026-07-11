@@ -7,6 +7,7 @@ fallback.
 
 Everything in this directory is test-only:
 
+- [`TESTING_ALGORITHM.md`](TESTING_ALGORITHM.md) explains the complete test and verdict algorithm;
 - `configs/` contains correctness profiles and finite coverage matrices;
 - `results/` contains committed, immutable evidence from completed runs;
 - `dflash_correctness_harness.py` compares already-running servers;
