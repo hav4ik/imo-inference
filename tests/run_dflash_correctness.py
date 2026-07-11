@@ -17,6 +17,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import socket
@@ -45,6 +46,11 @@ _GRAPH_ARGUMENTS = {
 }
 _SERVER_INFO_FIELD = {"tp": "tp_size"}
 _RUNTIME_PATCH_REQUIREMENTS = {
+    "managers/scheduler.py": {
+        "deterministic_alignment_guard": (
+            "# DETERMINISTIC_PREFILL_ALIGNMENT_GUARD: fail before scheduler retry loop."
+        ),
+    },
     "managers/schedule_batch.py": {
         "finish_replay": "# DFLASH_FINISH_REPLAY_FIX: replay stock checks one token at a time.",
     },
@@ -206,7 +212,88 @@ def _command_output(command: list[str]) -> dict[str, Any]:
         return {"command": command, "error": repr(exc)}
 
 
-def _validate_paths(profile: dict[str, Any]) -> None:
+def _positive_int(value: Any, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise RunnerError(f"{field} must be a positive integer, got {value!r}")
+    return value
+
+
+def _effective_dflash_arguments(
+    profile: dict[str, Any], pair: dict[str, Any]
+) -> dict[str, Any]:
+    """Merge profile overrides and require both DFlash block flags to agree."""
+
+    base = pair.get("dflash_arguments")
+    overrides = profile.get("dflash_argument_overrides", {})
+    if not isinstance(base, dict):
+        raise RunnerError("server_pair.dflash_arguments must be an object")
+    if not isinstance(overrides, dict):
+        raise RunnerError("profile dflash_argument_overrides must be an object")
+    block_keys = (
+        "speculative_dflash_block_size",
+        "speculative_num_draft_tokens",
+    )
+    overridden = [key for key in block_keys if key in overrides]
+    if overridden and len(overridden) != len(block_keys):
+        raise RunnerError(
+            "profile block-size overrides must set both "
+            "speculative_dflash_block_size and speculative_num_draft_tokens"
+        )
+    arguments = dict(base)
+    arguments.update(overrides)
+    _positive_int(
+        profile.get("expected_checkpoint_block_size"),
+        "profile expected_checkpoint_block_size",
+    )
+    effective_size = _positive_int(
+        profile.get("effective_dflash_block_size"),
+        "profile effective_dflash_block_size",
+    )
+    for key in block_keys:
+        actual = _positive_int(arguments.get(key), f"effective {key}")
+        if actual != effective_size:
+            raise RunnerError(
+                f"effective {key}={actual} does not match profile "
+                f"effective_dflash_block_size={effective_size}"
+            )
+    return arguments
+
+
+def _checkpoint_block_size_report(profile: dict[str, Any]) -> dict[str, Any]:
+    expected = _positive_int(
+        profile.get("expected_checkpoint_block_size"),
+        "profile expected_checkpoint_block_size",
+    )
+    config_path = Path(profile["draft_model"]) / "config.json"
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RunnerError(
+            f"could not read draft checkpoint config {config_path}: {exc}"
+        ) from exc
+    nested = config.get("dflash_config")
+    declarations = {
+        "block_size": config.get("block_size"),
+        "dflash_config.block_size": (
+            nested.get("block_size") if isinstance(nested, dict) else None
+        ),
+    }
+    mismatches = {
+        field: value for field, value in declarations.items() if value != expected
+    }
+    if mismatches:
+        details = ", ".join(f"{key}={value!r}" for key, value in mismatches.items())
+        raise RunnerError(
+            f"draft checkpoint must declare block_size={expected} consistently; {details}"
+        )
+    return {
+        "config_path": str(config_path),
+        "expected_checkpoint_block_size": expected,
+        "declarations": declarations,
+    }
+
+
+def _validate_paths(profile: dict[str, Any]) -> dict[str, Any]:
     python = Path(profile["python"])
     if not python.is_file() or not os.access(python, os.X_OK):
         raise RunnerError(f"configured Python is not executable: {python}")
@@ -218,6 +305,7 @@ def _validate_paths(profile: dict[str, Any]) -> None:
             raise RunnerError(f"configured {key} has no config.json: {model_path}")
     if not HARNESS_PATH.is_file():
         raise RunnerError(f"correctness harness is missing: {HARNESS_PATH}")
+    return _checkpoint_block_size_report(profile)
 
 
 def _sha256(path: Path) -> str:
@@ -390,7 +478,7 @@ def _build_command(
         quantization = profile.get("draft_quantization")
         if quantization:
             command.extend(("--speculative-draft-model-quantization", quantization))
-        for key, value in pair["dflash_arguments"].items():
+        for key, value in _effective_dflash_arguments(profile, pair).items():
             _append_cli_argument(command, key, value)
     return command
 
@@ -603,7 +691,8 @@ def _validate_server_info(
         "speculative_draft_model_quantization",
         profile.get("draft_quantization"),
     )
-    for key, expected in pair["dflash_arguments"].items():
+    effective_dflash_arguments = _effective_dflash_arguments(profile, pair)
+    for key, expected in effective_dflash_arguments.items():
         expect("dflash", dflash_info, key, expected)
     if target_info.get("version") != dflash_info.get("version"):
         mismatches.append(
@@ -619,7 +708,72 @@ def _validate_server_info(
     return report
 
 
-def _validate_dflash_activation(log_path: Path) -> dict[str, Any]:
+def _block_activation_report(
+    text: str, profile: dict[str, Any], pair: dict[str, Any]
+) -> tuple[dict[str, bool], dict[str, Any]]:
+    arguments = _effective_dflash_arguments(profile, pair)
+    checkpoint_size = profile["expected_checkpoint_block_size"]
+    effective_size = profile["effective_dflash_block_size"]
+    initialized_pattern = re.compile(
+        r"Initialized DFLASH draft runner\..*\bblock_size=(\d+),"
+    )
+    initialized_sizes = [
+        int(match.group(1)) for match in initialized_pattern.finditer(text)
+    ]
+    warning_prefix = "DFLASH block size mismatch:"
+    warning_lines = [
+        line for line in text.splitlines() if warning_prefix in line
+    ]
+    expected_warning = (
+        "DFLASH block size mismatch: using "
+        f"speculative_num_draft_tokens={effective_size} but draft config "
+        f"block_size={checkpoint_size}."
+    )
+    if checkpoint_size == effective_size:
+        warning_ok = not warning_lines
+        expected_warning_or_none: str | None = None
+    else:
+        warning_ok = (
+            len(warning_lines) == 1
+            and warning_lines[0].endswith(expected_warning)
+        )
+        expected_warning_or_none = expected_warning
+    checks = {
+        "effective_block_size": (
+            bool(initialized_sizes)
+            and all(size == effective_size for size in initialized_sizes)
+        ),
+        "checkpoint_mismatch_warning": warning_ok,
+        "runtime_block_flags_agree": all(
+            arguments[key] == effective_size
+            for key in (
+                "speculative_dflash_block_size",
+                "speculative_num_draft_tokens",
+            )
+        ),
+    }
+    report = {
+        "expected_checkpoint_block_size": checkpoint_size,
+        "expected_effective_block_size": effective_size,
+        "initialized_block_sizes": initialized_sizes,
+        "expected_mismatch_warning": expected_warning_or_none,
+        "mismatch_warning_lines": warning_lines,
+        "runtime_flags": {
+            key: arguments[key]
+            for key in (
+                "speculative_dflash_block_size",
+                "speculative_num_draft_tokens",
+            )
+        },
+    }
+    return checks, report
+
+
+def _validate_dflash_activation(
+    log_path: Path,
+    profile: dict[str, Any] | None = None,
+    pair: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Require the configured DFlash worker and compact draft ring to be active."""
 
     text = log_path.read_text(encoding="utf-8", errors="replace")
@@ -629,17 +783,30 @@ def _validate_dflash_activation(log_path: Path) -> dict[str, Any]:
         "draft_ring_pool_created": "DFLASH draft KV ring: draft pool",
     }
     checks = {name: marker in text for name, marker in required.items()}
+    block_report: dict[str, Any] | None = None
+    if profile is not None or pair is not None:
+        if profile is None or pair is None:
+            raise RunnerError(
+                "profile and server_pair must both be supplied for block-size validation"
+            )
+        block_checks, block_report = _block_activation_report(text, profile, pair)
+        checks.update(block_checks)
     excerpts = [
         line
         for line in text.splitlines()
-        if "DFLASH draft" in line or "Initialized DFLASH" in line
+        if "DFLASH draft" in line
+        or "Initialized DFLASH" in line
+        or "DFLASH block size mismatch:" in line
     ]
-    return {
+    report = {
         "passed": all(checks.values()),
         "checks": checks,
         "required_markers": required,
         "matching_log_lines": excerpts,
     }
+    if block_report is not None:
+        report["block_size"] = block_report
+    return report
 
 
 def _harness_suites(
@@ -734,7 +901,7 @@ def _run(args: argparse.Namespace, config: dict[str, Any]) -> int:
     profile = config["profiles"][args.profile]
     phase = config["phases"][args.phase]
     pair = config["server_pair"]
-    _validate_paths(profile)
+    checkpoint_block_size = _validate_paths(profile)
     host = str(pair["host"])
     target_port = int(pair["target_port"])
     dflash_port = int(pair["dflash_port"])
@@ -742,6 +909,7 @@ def _run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         raise RunnerError("target and DFlash ports must be distinct")
     results_dir = _new_results_dir(args)
     shutil.copy2(CONFIG_PATH, results_dir / CONFIG_PATH.name)
+    _json_dump(results_dir / "checkpoint_block_size.json", checkpoint_block_size)
     runtime_preflight = _audit_runtime_patches(profile)
     _json_dump(results_dir / "runtime_preflight.json", runtime_preflight)
     if not runtime_preflight["passed"]:
@@ -803,6 +971,7 @@ def _run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         "jit": jit,
         "runtime_preflight": runtime_preflight,
         "harness_preflight": harness_preflight,
+        "checkpoint_block_size": checkpoint_block_size,
         "git": _command_output(["git", "status", "--short", "--branch"]),
         "git_head": _command_output(["git", "rev-parse", "HEAD"]),
         "gpu_inventory": _command_output(
@@ -827,7 +996,7 @@ def _run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         print(f"waiting for DFlash server ({dflash.pid}) on {dflash_url}", flush=True)
         _wait_ready(dflash, servers, dflash_url, timeout)
 
-        activation = _validate_dflash_activation(dflash.log_path)
+        activation = _validate_dflash_activation(dflash.log_path, profile, pair)
         _json_dump(results_dir / "dflash_activation.json", activation)
         if not activation["passed"]:
             failed = ", ".join(

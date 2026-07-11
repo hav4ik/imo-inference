@@ -4,12 +4,42 @@
   "default_profile": "fix4_w4a16_int4",
   "profiles": {
     "fix4_w4a16_int4": {
-      "description": "H200-safe, checkpoint-matched fix4 profile: GPTQ W4A16/Marlin target plus compressed-tensors int4-MLP DFlash draft. This is not the Blackwell-only Humming W4A8 arithmetic path.",
+      "description": "H200-safe, notebook-equivalent fix4 profile: GPTQ W4A16/Marlin target plus compressed-tensors int4-MLP DFlash draft, with the supported runtime block-8 override of the checkpoint-native block 11. This is not the Blackwell-only Humming W4A8 arithmetic path.",
       "python": "/workspace/original/runtime/venv/bin/python",
       "target_model": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
       "tokenizer": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
       "draft_model": "/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp",
-      "draft_quantization": "compressed-tensors"
+      "draft_quantization": "compressed-tensors",
+      "expected_checkpoint_block_size": 11,
+      "effective_dflash_block_size": 8
+    },
+    "fix4_w4a16_int4_block11": {
+      "description": "Native checkpoint block-11 diagnostic using the fix4 H200 model pair. Both DFlash runtime flags are explicitly overridden to 11.",
+      "python": "/workspace/original/runtime/venv/bin/python",
+      "target_model": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+      "tokenizer": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+      "draft_model": "/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp",
+      "draft_quantization": "compressed-tensors",
+      "expected_checkpoint_block_size": 11,
+      "effective_dflash_block_size": 11,
+      "dflash_argument_overrides": {
+        "speculative_dflash_block_size": 11,
+        "speculative_num_draft_tokens": 11
+      }
+    },
+    "fix4_w4a16_int4_block1": {
+      "description": "Single-position DFlash diagnostic using the fix4 H200 model pair. Both DFlash runtime flags are explicitly overridden to 1.",
+      "python": "/workspace/original/runtime/venv/bin/python",
+      "target_model": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+      "tokenizer": "/workspace/original/models/opd-32b-v33-s200-gptq-w4a16",
+      "draft_model": "/workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp",
+      "draft_quantization": "compressed-tensors",
+      "expected_checkpoint_block_size": 11,
+      "effective_dflash_block_size": 1,
+      "dflash_argument_overrides": {
+        "speculative_dflash_block_size": 1,
+        "speculative_num_draft_tokens": 1
+      }
     },
     "bf16_bf16": {
       "description": "Local BF16 target and BF16 DFlash draft profile used to isolate quantization from speculative-decoding behavior.",
@@ -17,7 +47,9 @@
       "target_model": "/workspace/models/opd-32b-deploy",
       "tokenizer": "/workspace/models/opd-32b-deploy",
       "draft_model": "/workspace/models/dflash-32b-draft-v2test-phaseL",
-      "draft_quantization": null
+      "draft_quantization": null,
+      "expected_checkpoint_block_size": 11,
+      "effective_dflash_block_size": 8
     }
   },
   "server_pair": {
@@ -35,6 +67,7 @@
       "SGLANG_DECODE_NUM_STAGES": "3",
       "SGLANG_DECODE_BLOCK_N": "32",
       "SGLANG_GQA_PACKED_EXTEND": "0",
+      "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE": "2048",
       "SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER": "0.125",
       "SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW": "1",
       "HF_HUB_OFFLINE": "1",
@@ -158,6 +191,8 @@
         2047,
         2048,
         2049,
+        2050,
+        2051,
         4095,
         4096,
         4097

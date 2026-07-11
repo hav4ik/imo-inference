@@ -7,10 +7,13 @@ from pathlib import Path
 
 from tests.run_dflash_correctness import (
     CONFIG_PATH,
+    RunnerError,
     _audit_harness_cli,
     _audit_runtime_patches,
     _build_command,
     _build_environment,
+    _checkpoint_block_size_report,
+    _effective_dflash_arguments,
     _harness_suites,
     _validate_dflash_activation,
 )
@@ -35,6 +38,66 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertIn("--speculative-draft-model-path", dflash)
         mem_index = dflash.index("--mem-fraction-static")
         self.assertEqual(dflash[mem_index + 1], "0.85")
+
+        alignment = self.pair["common_environment"][
+            "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE"
+        ]
+        self.assertEqual(
+            alignment,
+            str(self.pair["common_arguments"]["chunked_prefill_size"]),
+        )
+
+    def test_explicit_block_profiles_set_both_runtime_flags(self) -> None:
+        expected = {
+            "fix4_w4a16_int4": 8,
+            "fix4_w4a16_int4_block11": 11,
+            "fix4_w4a16_int4_block1": 1,
+        }
+        phase = self.config["phases"]["sync_eager"]
+        for name, size in expected.items():
+            with self.subTest(name=name):
+                profile = self.config["profiles"][name]
+                arguments = _effective_dflash_arguments(profile, self.pair)
+                self.assertEqual(arguments["speculative_dflash_block_size"], size)
+                self.assertEqual(arguments["speculative_num_draft_tokens"], size)
+                command = _build_command(
+                    profile, self.pair, phase, dflash=True
+                )
+                for flag in (
+                    "--speculative-dflash-block-size",
+                    "--speculative-num-draft-tokens",
+                ):
+                    self.assertEqual(command[command.index(flag) + 1], str(size))
+
+    def test_partial_or_inconsistent_block_override_is_rejected(self) -> None:
+        profile = dict(self.profile)
+        profile["dflash_argument_overrides"] = {
+            "speculative_num_draft_tokens": 11
+        }
+        with self.assertRaisesRegex(RunnerError, "must set both"):
+            _effective_dflash_arguments(profile, self.pair)
+        profile["dflash_argument_overrides"] = {
+            "speculative_dflash_block_size": 11,
+            "speculative_num_draft_tokens": 11,
+        }
+        profile["effective_dflash_block_size"] = 8
+        with self.assertRaisesRegex(RunnerError, "does not match"):
+            _effective_dflash_arguments(profile, self.pair)
+
+    def test_checkpoint_declares_native_block_size_consistently(self) -> None:
+        report = _checkpoint_block_size_report(self.profile)
+        self.assertEqual(report["expected_checkpoint_block_size"], 11)
+        self.assertEqual(
+            report["declarations"],
+            {"block_size": 11, "dflash_config.block_size": 11},
+        )
+
+    def test_quick_matrix_locks_minimum_alignment_boundary(self) -> None:
+        lengths = self.config["matrix"]["quick"]["input_lengths"]
+        self.assertEqual(
+            lengths[lengths.index(2049) : lengths.index(4095)],
+            [2049, 2050, 2051],
+        )
 
     def test_test_environment_requires_dflash_ring_only_for_sut(self) -> None:
         phase = self.config["phases"]["production"]
@@ -91,6 +154,66 @@ class ActivationLogTests(unittest.TestCase):
             report = _validate_dflash_activation(path)
             self.assertFalse(report["passed"])
             self.assertFalse(report["checks"]["draft_ring_enabled"])
+
+    def test_block_size_activation_policy_is_fail_closed(self) -> None:
+        config = json.loads(CONFIG_PATH.read_text())
+        pair = config["server_pair"]
+        profiles = config["profiles"]
+
+        def log(size: int, warning: str | None) -> str:
+            lines = [] if warning is None else [warning]
+            lines.extend(
+                [
+                    "Initialized DFLASH draft runner. compact_cache=True, "
+                    f"draft_kv_ring=True, block_size={size}, ring_size=528",
+                    "DFLASH draft KV ring: draft pool 10 -> 20 tokens",
+                ]
+            )
+            return "\n".join(lines) + "\n"
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dflash.log"
+            for name, size in (
+                ("fix4_w4a16_int4", 8),
+                ("fix4_w4a16_int4_block1", 1),
+            ):
+                with self.subTest(name=name):
+                    warning = (
+                        "DFLASH block size mismatch: using "
+                        f"speculative_num_draft_tokens={size} but draft config "
+                        "block_size=11."
+                    )
+                    path.write_text(log(size, warning))
+                    report = _validate_dflash_activation(
+                        path, profiles[name], pair
+                    )
+                    self.assertTrue(report["passed"], report)
+                    path.write_text(log(size, None))
+                    self.assertFalse(
+                        _validate_dflash_activation(
+                            path, profiles[name], pair
+                        )["passed"]
+                    )
+
+            native = profiles["fix4_w4a16_int4_block11"]
+            path.write_text(log(11, None))
+            self.assertTrue(
+                _validate_dflash_activation(path, native, pair)["passed"]
+            )
+            path.write_text(
+                log(
+                    11,
+                    "DFLASH block size mismatch: using "
+                    "speculative_num_draft_tokens=11 but draft config block_size=11.",
+                )
+            )
+            self.assertFalse(
+                _validate_dflash_activation(path, native, pair)["passed"]
+            )
+            path.write_text(log(8, None))
+            self.assertFalse(
+                _validate_dflash_activation(path, native, pair)["passed"]
+            )
 
 
 if __name__ == "__main__":

@@ -57,12 +57,20 @@ The primary GPU run mirrors `submission-32b-fix4.ipynb` on this H200 host:
 | Draft attention | 8 SWA-512 layers with the compact KV ring enabled |
 | Speculative block | 8 positions: current anchor plus up to 7 proposals |
 | Static GPU fraction | 0.85; the notebook marks this as H200-safe and it leaves room for deterministic target and draft CUDA graphs |
+| Deterministic prefill alignment | 2048, explicitly equal to the 2048-token chunk budget so radix hits cannot create a zero-progress scheduling loop |
 | Radix cache | enabled in the production phase; explicitly exercised by repeats |
 | Scheduler | overlap/spec-v2, continuous batching, CUDA graphs |
 
 Both servers use the same target, tokenizer, attention backend, KV dtype,
 context limit, sampling parameters, and scheduler shapes. The only intended
 semantic difference is that one server has DFlash enabled.
+
+The primary profile intentionally keeps the notebook's runtime block size 8
+even though the draft checkpoint declares its native training block size 11.
+The runner validates that override explicitly in the command, effective server
+state, and startup warning. Separate block-1 and native block-11 profiles are
+diagnostics for verifier shape sensitivity; they never replace the block-8
+production-equivalence profile.
 
 ## Coverage matrix
 
