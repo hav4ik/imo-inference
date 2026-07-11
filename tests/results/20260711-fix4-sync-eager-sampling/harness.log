@@ -1,0 +1,12 @@
+
+=== sampling ===
+[PASS ] sampling-production-top-p-distribution (1.799s)
+[FAIL ] sampling-fixed-seed-repeatability (2.973s)
+{
+  "total": 3,
+  "passed": 2,
+  "failed": 1,
+  "errors": 0,
+  "skipped": 0,
+  "ok": false
+}
