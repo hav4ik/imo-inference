@@ -588,6 +588,8 @@ class DifferentialHarness:
         raw = client.generate(self.batch_payload([ids] * len(seeds), params, prefix))
         if not isinstance(raw, list) or len(raw) != len(seeds): raise HarnessError("sampling batch response shape mismatch")
         return [response_from_mapping(value) for value in raw]
+    def sampling_single_requests(self, client, ids, seeds, prefix):
+        return [self.sampling_batch(client, ids, [seed], f"{prefix}-{index}")[0] for index, seed in enumerate(seeds)]
     def run_sampling(self):
         ids, seeds = self.tokens.exact(257, 606), list(range(10000, 10000 + self.sampling_count)); targets, dflashes = self.parallel(lambda: self.sampling_batch(self.target, ids, seeds, "target-sampling"), lambda: self.sampling_batch(self.dflash, ids, seeds, "dflash-sampling"))
         def distribution():
@@ -597,8 +599,12 @@ class DifferentialHarness:
             unique_t, unique_d = len({tuple(r.output_ids) for r in targets}), len({tuple(r.output_ids) for r in dflashes})
             return {"ok": lengths and all(v["ok"] for v in activities) and all(v["ok"] for v in positions) and unique_t > 1 and unique_d > 1, "request": {**_request_descriptor(ids, {"temperature": .6, "top_p": .95, "top_k": -1, "max_new_tokens": 8, "sampling_seed_range": [seeds[0], seeds[-1]]}), "sampling_count": len(seeds)}, "target": [r.to_dict() for r in targets], "dflash": [r.to_dict() for r in dflashes], "position_distribution_bounds": positions, "fixed_lengths": lengths, "target_unique_sequences": unique_t, "dflash_unique_sequences": unique_d, "dflash_activity": activities}
         self.execute("sampling-production-top-p-distribution", "sampling", distribution); repeat_seeds = [314159, 314159, 271828, 271828]
+        def same_batch_control():
+            a, b = self.parallel(lambda: self.sampling_batch(self.target, ids, repeat_seeds, "target-batch-repeat-control"), lambda: self.sampling_batch(self.dflash, ids, repeat_seeds, "dflash-batch-repeat-control")); ta = a[0].output_ids == a[1].output_ids and a[2].output_ids == a[3].output_ids; db = b[0].output_ids == b[1].output_ids and b[2].output_ids == b[3].output_ids; activity = [dflash_activity_check(r, True) for r in b]
+            return {"ok": ta == db and all(v["ok"] for v in activity), "seeds": repeat_seeds, "target": [r.to_dict() for r in a], "dflash": [r.to_dict() for r in b], "target_repeatable": ta, "dflash_repeatable": db, "dflash_activity": activity, "note": "Duplicate rows in one native batch are an informational shared-arithmetic control; fixed-seed repeatability is tested with independent requests."}
+        self.execute("sampling-native-batch-duplicate-seed-control", "sampling", same_batch_control)
         def repeatability():
-            a, b = self.parallel(lambda: self.sampling_batch(self.target, ids, repeat_seeds, "target-repeat"), lambda: self.sampling_batch(self.dflash, ids, repeat_seeds, "dflash-repeat")); ta = a[0].output_ids == a[1].output_ids and a[2].output_ids == a[3].output_ids; db = b[0].output_ids == b[1].output_ids and b[2].output_ids == b[3].output_ids; diverse = a[0].output_ids != a[2].output_ids or b[0].output_ids != b[2].output_ids; activity = [dflash_activity_check(r, True) for r in b]
+            a, b = self.parallel(lambda: self.sampling_single_requests(self.target, ids, repeat_seeds, "target-repeat"), lambda: self.sampling_single_requests(self.dflash, ids, repeat_seeds, "dflash-repeat")); ta = a[0].output_ids == a[1].output_ids and a[2].output_ids == a[3].output_ids; db = b[0].output_ids == b[1].output_ids and b[2].output_ids == b[3].output_ids; diverse = a[0].output_ids != a[2].output_ids or b[0].output_ids != b[2].output_ids; activity = [dflash_activity_check(r, True) for r in b]
             return {"ok": ta and db and diverse and all(v["ok"] for v in activity), "seeds": repeat_seeds, "target": [r.to_dict() for r in a], "dflash": [r.to_dict() for r in b], "target_repeatable": ta, "dflash_repeatable": db, "different_seeds_are_diverse": diverse, "dflash_activity": activity, "note": "Cross-mode same-seed identity is not required."}
         self.execute("sampling-fixed-seed-repeatability", "sampling", repeatability)
     def run_negative(self):

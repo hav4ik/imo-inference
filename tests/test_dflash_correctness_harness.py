@@ -58,6 +58,27 @@ class StopExpectationTests(unittest.TestCase):
             stop_token_expectation([10], 1, False, self.decode)
 
 
+class SamplingRequestShapeTests(unittest.TestCase):
+    def test_repeatability_uses_independent_single_request_batches(self):
+        harness = object.__new__(DifferentialHarness)
+        calls = []
+
+        def sampling_batch(client, ids, seeds, prefix):
+            calls.append((client, ids, list(seeds), prefix))
+            return [f"response-{seeds[0]}"]
+
+        harness.sampling_batch = sampling_batch
+        responses = harness.sampling_single_requests(
+            "client", [1, 2], [7, 7, 9], "repeat"
+        )
+        self.assertEqual(responses, ["response-7", "response-7", "response-9"])
+        self.assertEqual([call[2] for call in calls], [[7], [7], [9]])
+        self.assertEqual(
+            [call[3] for call in calls],
+            ["repeat-0", "repeat-1", "repeat-2"],
+        )
+
+
 
 def chunk(ids, reason=None, text=None, index=None, prompt=None, **meta):
     info = {"finish_reason": reason, "prompt_tokens": 3,
