@@ -44,6 +44,10 @@ class HTTPRequestError(HarnessError):
         self.status, self.body, self.url = status, body, url
 
 
+class RequestTimeoutError(HarnessError):
+    pass
+
+
 def utc_now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
@@ -287,7 +291,11 @@ class NativeSGLangClient:
         request = urllib.request.Request(url, data=data, headers=headers, method=method)
         try: return urllib.request.urlopen(request, timeout=self.timeout if timeout is None else timeout)
         except urllib.error.HTTPError as exc: raise HTTPRequestError(exc.code, exc.read().decode(errors="replace"), url) from exc
-        except urllib.error.URLError as exc: raise HarnessError(f"request to {url} failed: {exc}") from exc
+        except TimeoutError as exc: raise RequestTimeoutError(f"request to {url} timed out") from exc
+        except urllib.error.URLError as exc:
+            if isinstance(exc.reason, TimeoutError):
+                raise RequestTimeoutError(f"request to {url} timed out") from exc
+            raise HarnessError(f"request to {url} failed: {exc}") from exc
     def get_json(self, path):
         with self._open(path) as response: return json.loads(response.read())
     def get_text(self, path):
@@ -431,14 +439,20 @@ class DifferentialHarness:
         self.checkpoint.data["in_progress"] = {"id": case_id, "suite": suite, "started_at": utc_now()}
         self.checkpoint._write()
         started = time.monotonic()
+        fatal = None
         try:
             result = dict(operation()); result.setdefault("status", "pass" if result.get("ok") else "fail")
         except Exception as exc:
             result = {"ok": False, "status": "error", "error": {"type": type(exc).__name__, "message": str(exc), "traceback": traceback.format_exc()}}
+            if isinstance(exc, RequestTimeoutError):
+                fatal = exc
         result.update(id=case_id, suite=suite, duration_seconds=time.monotonic() - started)
         self.checkpoint.data["in_progress"] = None
         self.checkpoint.append(result)
-        print(f"[{result['status'].upper():5}] {case_id} ({result['duration_seconds']:.3f}s)", flush=True); return result
+        print(f"[{result['status'].upper():5}] {case_id} ({result['duration_seconds']:.3f}s)", flush=True)
+        if fatal is not None:
+            raise fatal
+        return result
     def pair_result(self, ids, params, rid, expected_ids=None, expected_finish=None, require_finish=False):
         tp, dp = self.payload(ids, params, "target-" + rid), self.payload(ids, params, "dflash-" + rid)
         tr, dr = self.parallel(lambda: self.target.generate(tp), lambda: self.dflash.generate(dp))

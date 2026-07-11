@@ -61,6 +61,12 @@ class RunnerConfigurationTests(unittest.TestCase):
         self.assertNotIn("radix", eager)
         self.assertIn("stress", production)
         self.assertIn("stress", eager)
+        self.assertEqual(
+            _harness_suites(self.config["phases"]["sync_eager"], "greedy"),
+            ["greedy"],
+        )
+        with self.assertRaisesRegex(Exception, "radix suite"):
+            _harness_suites(self.config["phases"]["sync_eager"], "radix")
 
     def test_runtime_and_harness_preflights_pass(self) -> None:
         runtime = _audit_runtime_patches(self.profile)

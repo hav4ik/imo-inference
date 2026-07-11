@@ -9,7 +9,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from dflash_correctness_harness import (
+    DifferentialHarness,
     HarnessError,
+    RequestTimeoutError,
     ResponseRecord,
     ResultCheckpoint,
     categorical_total_variation,
@@ -195,6 +197,25 @@ class ConfigAndCheckpointTests(unittest.TestCase):
             self.assertEqual(resumed.completed_ids, {"a", "b"})
             with self.assertRaisesRegex(HarnessError, "fingerprint"):
                 ResultCheckpoint(path, {"run_fingerprint": "different"}, resume=True)
+
+    def test_timeout_case_is_recorded_then_aborts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            checkpoint = ResultCheckpoint(
+                Path(directory) / "result.json",
+                {"run_fingerprint": "timeout"},
+            )
+            harness = object.__new__(DifferentialHarness)
+            harness.checkpoint = checkpoint
+            with self.assertRaises(RequestTimeoutError):
+                harness.execute(
+                    "timeout-case",
+                    "unit",
+                    lambda: (_ for _ in ()).throw(
+                        RequestTimeoutError("timed out")
+                    ),
+                )
+            self.assertEqual(checkpoint.data["cases"][-1]["status"], "error")
+            self.assertIsNone(checkpoint.data["in_progress"])
 
     def test_server_pair_preflight_allows_only_speculative_difference(self):
         common = {"model_path": "/models/target", "kv_cache_dtype": "fp8_e4m3",

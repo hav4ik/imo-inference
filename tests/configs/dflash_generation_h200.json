@@ -108,6 +108,16 @@
       "overlap_schedule": true,
       "cuda_graph": true
     },
+    "graphs_no_radix": {
+      "radix_cache": false,
+      "overlap_schedule": true,
+      "cuda_graph": true
+    },
+    "radix_sync_eager": {
+      "radix_cache": true,
+      "overlap_schedule": false,
+      "cuda_graph": false
+    },
     "overlap_eager": {
       "radix_cache": false,
       "overlap_schedule": true,

@@ -138,6 +138,10 @@ def _parse_args(config: dict[str, Any]) -> argparse.Namespace:
             "tests/results"
         ),
     )
+    parser.add_argument(
+        "--suites",
+        help="optional comma-separated harness suites for an isolation run",
+    )
     return parser.parse_args()
 
 
@@ -638,8 +642,10 @@ def _validate_dflash_activation(log_path: Path) -> dict[str, Any]:
     }
 
 
-def _harness_suites(phase: dict[str, Any]) -> list[str]:
-    suites = [
+def _harness_suites(
+    phase: dict[str, Any], requested: str | None = None
+) -> list[str]:
+    supported = [
         "greedy",
         "stop",
         "stream",
@@ -649,7 +655,19 @@ def _harness_suites(phase: dict[str, Any]) -> list[str]:
         "negative",
         "stress",
     ]
-    if not phase["radix_cache"]:
+    if requested:
+        suites = []
+        for raw_name in requested.split(","):
+            name = raw_name.strip().lower().replace("_", "-")
+            if name not in supported:
+                raise RunnerError(f"unsupported harness suite: {name!r}")
+            if name not in suites:
+                suites.append(name)
+    else:
+        suites = list(supported)
+    if not phase["radix_cache"] and "radix" in suites:
+        if requested:
+            raise RunnerError("radix suite requested in a phase with radix disabled")
         suites.remove("radix")
     return suites
 
@@ -663,7 +681,7 @@ def _run_harness(
     phase: dict[str, Any],
     pair: dict[str, Any],
 ) -> tuple[int, list[str]]:
-    suites = _harness_suites(phase)
+    suites = _harness_suites(phase, args.suites)
     command = [
         profile["python"],
         "-u",
