@@ -1,8 +1,10 @@
-"""Strict HTTP differential harness for target-only and DFlash SGLang servers.
+"""Numerically tolerant differential harness for target-only and DFlash SGLang.
 
-The executable harness uses SGLang's native /generate endpoint. Greedy cases
-pass only when generated token IDs and raw finish reasons are identical. Pure
-helpers in this module are unit-tested without loading either 32B model.
+Greedy cases pass when outputs are exact or when the first differing DFlash
+token is within the configured target-oracle logprob delta at the shared prefix.
+Finish reasons, lengths, prompts, cache behavior, DFlash activity, and
+within-engine repeatability remain exact. Pure helpers are unit-tested without
+loading either 32B model.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TESTS_DIR = Path(__file__).resolve().parent
 TEST_RESULTS_ROOT = TESTS_DIR / "results"
 DEFAULT_CONFIG = TESTS_DIR / "configs" / "dflash_generation_h200.json"
@@ -285,6 +287,57 @@ def compare_records(left: ResponseRecord, right: ResponseRecord, compare_text=Tr
             "left_finish_reason": left.finish_reason, "right_finish_reason": right.finish_reason}
 
 
+def numerical_equivalence_from_probe(
+    probe: ResponseRecord,
+    target_token: int,
+    dflash_token: int,
+    max_logprob_delta: float,
+) -> dict[str, Any]:
+    rows = probe.meta_info.get("output_token_ids_logprobs")
+    top_rows = probe.meta_info.get("output_top_logprobs")
+    if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], list):
+        raise HarnessError("oracle probe returned invalid output_token_ids_logprobs")
+    if (
+        not isinstance(top_rows, list)
+        or len(top_rows) != 1
+        or not isinstance(top_rows[0], list)
+        or not top_rows[0]
+    ):
+        raise HarnessError("oracle probe returned invalid output_top_logprobs")
+
+    requested: dict[int, float] = {}
+    for entry in rows[0]:
+        if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+            raise HarnessError("oracle requested-token logprob entry is invalid")
+        requested[int(entry[1])] = float(entry[0])
+    missing = {target_token, dflash_token} - set(requested)
+    if missing:
+        raise HarnessError(f"oracle probe omitted requested token IDs: {sorted(missing)}")
+
+    top_logprob = max(float(entry[0]) for entry in top_rows[0])
+    target_delta = top_logprob - requested[target_token]
+    dflash_delta = top_logprob - requested[dflash_token]
+    selected_target = probe.output_ids == [target_token]
+    tolerance = float(max_logprob_delta)
+    return {
+        "ok": (
+            selected_target
+            and target_delta <= tolerance
+            and dflash_delta <= tolerance
+        ),
+        "max_logprob_delta": tolerance,
+        "oracle_selected_target_token": selected_target,
+        "oracle_top_logprob": top_logprob,
+        "target_token": target_token,
+        "target_token_logprob": requested[target_token],
+        "target_token_delta": target_delta,
+        "dflash_token": dflash_token,
+        "dflash_token_logprob": requested[dflash_token],
+        "dflash_token_delta": dflash_delta,
+        "probe": probe.to_dict(),
+    }
+
+
 def dflash_activity_check(record: ResponseRecord, eligible: bool) -> dict:
     active = record.spec_verify_ct > 0 and record.spec_num_proposed_drafts > 0
     return {"eligible": eligible, "active": active, "spec_verify_ct": record.spec_verify_ct,
@@ -355,10 +408,24 @@ class ResultCheckpoint:
             self._write()
         self.completed_ids = {case["id"] for case in self.data.get("cases", [])}
     def _summary(self):
-        counts = collections.Counter(case.get("status", "error") for case in self.data.get("cases", []))
-        return {"total": len(self.data.get("cases", [])), "passed": counts["pass"], "failed": counts["fail"],
-                "errors": counts["error"], "skipped": counts["skip"],
-                "ok": counts["fail"] == counts["error"] == counts["skip"] == 0}
+        cases = self.data.get("cases", [])
+        counts = collections.Counter(case.get("status", "error") for case in cases)
+        equivalence = collections.Counter(
+            case.get("equivalence_verdict")
+            for case in cases
+            if case.get("equivalence_verdict") is not None
+        )
+        return {
+            "total": len(cases),
+            "passed": counts["pass"],
+            "passed_exact": equivalence["exact"],
+            "passed_numerical": equivalence["numerical"],
+            "failed": counts["fail"],
+            "failed_equivalence": equivalence["failed"],
+            "errors": counts["error"],
+            "skipped": counts["skip"],
+            "ok": counts["fail"] == counts["error"] == counts["skip"] == 0,
+        }
     def _write(self):
         self.data["summary"] = self._summary(); temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(json.dumps(self.data, indent=2, sort_keys=True) + "\n"); os.replace(temporary, self.path)
@@ -452,11 +519,25 @@ def _request_descriptor(input_ids, sampling_params):
 
 
 class DifferentialHarness:
-    def __init__(self, target, dflash, tokens, checkpoint, matrix, target_incremental=False,
-                 dflash_incremental=False, sampling_count=512, permutations=999):
+    def __init__(
+        self,
+        target,
+        dflash,
+        tokens,
+        checkpoint,
+        matrix,
+        target_incremental=False,
+        dflash_incremental=False,
+        sampling_count=512,
+        permutations=999,
+        max_logprob_delta=0.13,
+        top_logprobs_num=5,
+    ):
         self.target, self.dflash, self.tokens, self.checkpoint = target, dflash, tokens, checkpoint
         self.matrix, self.target_incremental, self.dflash_incremental = dict(matrix), target_incremental, dflash_incremental
         self.sampling_count, self.permutations = sampling_count, permutations
+        self.max_logprob_delta = float(max_logprob_delta)
+        self.top_logprobs_num = int(top_logprobs_num)
     @staticmethod
     def greedy_params(max_new_tokens, ignore_eos=True, stream_interval=None):
         params = {"temperature": 0.0, "top_k": 1, "top_p": 1.0, "max_new_tokens": max_new_tokens, "ignore_eos": ignore_eos}
@@ -465,6 +546,56 @@ class DifferentialHarness:
     @staticmethod
     def payload(ids, params, rid):
         return {"input_ids": list(ids), "sampling_params": dict(params), "rid": rid, "return_prompt_token_ids": True}
+    def greedy_comparison(self, ids, target, dflash, rid):
+        comparison = compare_records(target, dflash)
+        comparison["verdict"] = "exact" if comparison["ok"] else "failed"
+        comparison["checks"]["output_ids_equivalent"] = comparison["checks"]["output_ids_exact"]
+        if comparison["ok"]:
+            return comparison
+
+        mismatch = comparison["first_token_mismatch"]
+        structural = all(
+            comparison["checks"][name]
+            for name in (
+                "finish_reason_exact",
+                "prompt_tokens_exact",
+                "completion_tokens_exact",
+            )
+        )
+        if (
+            not structural
+            or mismatch is None
+            or mismatch["left_token"] is None
+            or mismatch["right_token"] is None
+        ):
+            return comparison
+
+        prefix = list(ids) + target.output_ids[: mismatch["index"]]
+        probe_payload = self.payload(
+            prefix,
+            self.greedy_params(1, ignore_eos=True),
+            "target-oracle-" + rid,
+        )
+        probe_payload.update(
+            return_logprob=True,
+            top_logprobs_num=self.top_logprobs_num,
+            token_ids_logprob=[mismatch["left_token"], mismatch["right_token"]],
+        )
+        raw_probe = self.target.generate(probe_payload)
+        if not isinstance(raw_probe, dict):
+            raise HarnessError("target oracle probe response is not an object")
+        report = numerical_equivalence_from_probe(
+            response_from_mapping(raw_probe),
+            mismatch["left_token"],
+            mismatch["right_token"],
+            self.max_logprob_delta,
+        )
+        comparison["numerical_equivalence"] = report
+        comparison["checks"]["output_ids_equivalent"] = report["ok"]
+        comparison["checks"]["text_equivalent"] = report["ok"]
+        comparison["ok"] = structural and report["ok"]
+        comparison["verdict"] = "numerical" if comparison["ok"] else "failed"
+        return comparison
     def parallel(self, left, right):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
             a, b = pool.submit(left), pool.submit(right); return a.result(), b.result()
@@ -483,7 +614,8 @@ class DifferentialHarness:
         result.update(id=case_id, suite=suite, duration_seconds=time.monotonic() - started)
         self.checkpoint.data["in_progress"] = None
         self.checkpoint.append(result)
-        print(f"[{result['status'].upper():5}] {case_id} ({result['duration_seconds']:.3f}s)", flush=True)
+        label = "NUM" if result.get("equivalence_verdict") == "numerical" else result["status"].upper()
+        print(f"[{label:5}] {case_id} ({result['duration_seconds']:.3f}s)", flush=True)
         if fatal is not None:
             raise fatal
         return result
@@ -491,12 +623,14 @@ class DifferentialHarness:
         tp, dp = self.payload(ids, params, "target-" + rid), self.payload(ids, params, "dflash-" + rid)
         tr, dr = self.parallel(lambda: self.target.generate(tp), lambda: self.dflash.generate(dp))
         if not isinstance(tr, dict) or not isinstance(dr, dict): raise HarnessError("single response is not an object")
-        target, dflash = response_from_mapping(tr), response_from_mapping(dr); comparison = compare_records(target, dflash)
+        target, dflash = response_from_mapping(tr), response_from_mapping(dr)
+        comparison = self.greedy_comparison(ids, target, dflash, rid)
         activity, prompt_ok, expected = dflash_activity_check(dflash, len(dflash.output_ids) > 1), target.prompt_token_ids == list(ids) == dflash.prompt_token_ids, {}
         if expected_ids is not None: expected.update(target_ids=target.output_ids == list(expected_ids), dflash_ids=dflash.output_ids == list(expected_ids))
         if require_finish: expected.update(target_finish=target.finish_reason == expected_finish, dflash_finish=dflash.finish_reason == expected_finish)
         if expected_text is not None: expected.update(target_text=target.text == expected_text, dflash_text=dflash.text == expected_text)
-        return {"ok": comparison["ok"] and activity["ok"] and prompt_ok and all(expected.values()), "request": _request_descriptor(ids, params),
+        return {"ok": comparison["ok"] and activity["ok"] and prompt_ok and all(expected.values()),
+                "equivalence_verdict": comparison["verdict"], "request": _request_descriptor(ids, params),
                 "target": target.to_dict(), "dflash": dflash.to_dict(), "comparison": comparison,
                 "dflash_activity": activity, "prompt_ids_exact": prompt_ok, "expected_checks": expected}
     def stream_pair_result(self, ids, params, rid):
@@ -506,10 +640,16 @@ class DifferentialHarness:
                                lambda: self.dflash.stream_generate({**dp, "rid": "dflash-stream-" + rid}))
         tn, dn = response_from_mapping(tr), response_from_mapping(dr)
         ts, ds = reconstruct_sse(tc, incremental=self.target_incremental)[0], reconstruct_sse(dc, incremental=self.dflash_incremental)[0]
-        comparisons = {"target_stream_nonstream": compare_records(ts, tn), "dflash_stream_nonstream": compare_records(ds, dn),
-                       "cross_nonstream": compare_records(tn, dn), "cross_stream": compare_records(ts, ds)}
+        cross = self.greedy_comparison(ids, tn, dn, rid)
+        comparisons = {
+            "target_stream_nonstream": compare_records(ts, tn),
+            "dflash_stream_nonstream": compare_records(ds, dn),
+            "cross_nonstream": cross,
+            "cross_stream": {**cross, "derived_from": "cross_nonstream"},
+        }
         activity = dflash_activity_check(ds, len(ds.output_ids) > 1); prompt_ok = all(r.prompt_token_ids == list(ids) for r in (tn, dn, ts, ds))
-        return {"ok": all(v["ok"] for v in comparisons.values()) and activity["ok"] and prompt_ok, "request": _request_descriptor(ids, params),
+        return {"ok": all(v["ok"] for v in comparisons.values()) and activity["ok"] and prompt_ok,
+                "equivalence_verdict": cross["verdict"], "request": _request_descriptor(ids, params),
                 "target_nonstream": tn.to_dict(), "dflash_nonstream": dn.to_dict(), "target_stream": ts.to_dict(), "dflash_stream": ds.to_dict(),
                 "comparisons": comparisons, "dflash_activity": activity, "prompt_ids_exact": prompt_ok}
     def batch_payload(self, inputs, params, prefix):
@@ -524,9 +664,21 @@ class DifferentialHarness:
             tr, dr = self.parallel(lambda: self.target.generate(tp), lambda: self.dflash.generate(dp))
             if not isinstance(tr, list) or not isinstance(dr, list) or len(tr) != len(inputs) or len(dr) != len(inputs): raise HarnessError("batch response shape mismatch")
             targets, dflashes = [response_from_mapping(v) for v in tr], [response_from_mapping(v) for v in dr]
-        comparisons = [compare_records(a, b) for a, b in zip(targets, dflashes)]; activities = [dflash_activity_check(r, len(r.output_ids) > 1) for r in dflashes]
+        comparisons = [
+            self.greedy_comparison(ids, a, b, f"{rid}-{index}")
+            for index, (ids, a, b) in enumerate(zip(inputs, targets, dflashes))
+        ]
+        activities = [
+            dflash_activity_check(r, len(r.output_ids) > 1) for r in dflashes
+        ]
         prompts = [a.prompt_token_ids == list(ids) == b.prompt_token_ids for a, b, ids in zip(targets, dflashes, inputs)]
-        return {"ok": all(v["ok"] for v in comparisons) and all(v["ok"] for v in activities) and all(prompts), "request": _request_descriptor(inputs, params),
+        verdict = (
+            "failed" if any(v["verdict"] == "failed" for v in comparisons)
+            else "numerical" if any(v["verdict"] == "numerical" for v in comparisons)
+            else "exact"
+        )
+        return {"ok": all(v["ok"] for v in comparisons) and all(v["ok"] for v in activities) and all(prompts),
+                "equivalence_verdict": verdict, "request": _request_descriptor(inputs, params),
                 "stream": stream, "target": [v.to_dict() for v in targets], "dflash": [v.to_dict() for v in dflashes],
                 "comparisons": comparisons, "dflash_activity": activities, "prompt_ids_exact": prompts}
 
@@ -689,16 +841,30 @@ def main(argv=None):
     if args.phase not in config["phases"]: raise HarnessError(f"unknown phase {args.phase}")
     profile, phase, matrix = config["profiles"][profile_name], config["phases"][args.phase], resolve_matrix(config, args.tier); suites = parse_suite_names(args.suites); sampling_count = int(args.sampling_count if args.sampling_count is not None else matrix["sampling_count"])
     if sampling_count < 2: raise HarnessError("sampling-count must be at least two")
+    equivalence = config["greedy_numerical_equivalence"]
     pair, host = config["server_pair"], config["server_pair"]["host"]; target_url = args.target_url or f"http://{host}:{pair['target_port']}"; dflash_url = args.dflash_url or f"http://{host}:{pair['dflash_port']}"
-    fingerprint = {"config_sha256": file_sha256(args.config), "profile": profile_name, "phase": args.phase, "tier": args.tier, "suites": suites, "target_url": target_url, "dflash_url": dflash_url, "sampling_count": sampling_count, "permutations": args.permutations}
-    metadata = {"run_fingerprint": stable_json_hash(fingerprint), "config": {"path": str(args.config), "sha256": file_sha256(args.config), "profile": profile_name, "phase": args.phase, "tier": args.tier, "matrix": matrix}, "declared_suites": suites, "target_url": target_url, "dflash_url": dflash_url, "sampling_count": sampling_count, "permutations": args.permutations, "argv": list(sys.argv if argv is None else argv), "git": git_metadata(), "models": model_manifest(profile), "environment": {key: os.environ.get(key) for key in sorted(set(pair.get("common_environment", {})) | set(pair.get("dflash_environment", {}))) if key.startswith("SGLANG_")}}
+    fingerprint = {"config_sha256": file_sha256(args.config), "profile": profile_name, "phase": args.phase, "tier": args.tier, "suites": suites, "target_url": target_url, "dflash_url": dflash_url, "sampling_count": sampling_count, "permutations": args.permutations, "greedy_numerical_equivalence": equivalence}
+    metadata = {"run_fingerprint": stable_json_hash(fingerprint), "config": {"path": str(args.config), "sha256": file_sha256(args.config), "profile": profile_name, "phase": args.phase, "tier": args.tier, "matrix": matrix, "greedy_numerical_equivalence": equivalence}, "declared_suites": suites, "target_url": target_url, "dflash_url": dflash_url, "sampling_count": sampling_count, "permutations": args.permutations, "argv": list(sys.argv if argv is None else argv), "git": git_metadata(), "models": model_manifest(profile), "environment": {key: os.environ.get(key) for key in sorted(set(pair.get("common_environment", {})) | set(pair.get("dflash_environment", {}))) if key.startswith("SGLANG_")}}
     results_path = require_test_result_path(args.results)
     checkpoint = ResultCheckpoint(results_path, metadata, args.resume, args.overwrite); target, dflash = NativeSGLangClient(target_url, args.request_timeout), NativeSGLangClient(dflash_url, args.request_timeout)
     try:
         target.get_text("/health"); dflash.get_text("/health"); ts = sanitized_server_snapshot(target.get_json("/model_info"), target.get_json("/server_info")); ds = sanitized_server_snapshot(dflash.get_json("/model_info"), dflash.get_json("/server_info")); checkpoint.data["servers"] = {"target": ts, "dflash": ds}; checkpoint._write(); errors = validate_server_pair(ts, ds, profile, phase)
         if "preflight-server-pair" not in checkpoint.completed_ids: checkpoint.append({"id": "preflight-server-pair", "suite": "preflight", "ok": not errors, "status": "pass" if not errors else "fail", "errors": errors})
         if errors: print(json.dumps(checkpoint.finish(), indent=2)); return 1
-        harness = DifferentialHarness(target, dflash, TokenFactory(str(profile["tokenizer"])), checkpoint, matrix, bool(ts["server_info"].get("incremental_streaming_output", False)), bool(ds["server_info"].get("incremental_streaming_output", False)), sampling_count, args.permutations); harness.run(suites)
+        harness = DifferentialHarness(
+            target,
+            dflash,
+            TokenFactory(str(profile["tokenizer"])),
+            checkpoint,
+            matrix,
+            bool(ts["server_info"].get("incremental_streaming_output", False)),
+            bool(ds["server_info"].get("incremental_streaming_output", False)),
+            sampling_count,
+            args.permutations,
+            equivalence["max_logprob_delta"],
+            equivalence["top_logprobs_num"],
+        )
+        harness.run(suites)
     except Exception as exc:
         if "harness-fatal-error" not in checkpoint.completed_ids: checkpoint.append({"id": "harness-fatal-error", "suite": "harness", "ok": False, "status": "error", "error": {"type": type(exc).__name__, "message": str(exc), "traceback": traceback.format_exc()}})
         print(f"fatal harness error: {exc}", file=sys.stderr)

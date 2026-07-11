@@ -235,6 +235,10 @@
       "cuda_graph": false
     }
   },
+  "greedy_numerical_equivalence": {
+    "max_logprob_delta": 0.13,
+    "top_logprobs_num": 5
+  },
   "matrix": {
     "quick": {
       "request_timeout_seconds": 300,
