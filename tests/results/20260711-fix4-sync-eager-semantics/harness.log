@@ -1,0 +1,74 @@
+
+=== stop ===
+[PASS ] stop-discovery (5.437s)
+[FAIL ] stop-token-pos-0-trim (0.088s)
+[PASS ] stop-token-pos-0-keep (0.081s)
+[FAIL ] stop-token-pos-5-trim (0.502s)
+[PASS ] stop-token-pos-5-keep (0.510s)
+[FAIL ] stop-token-pos-7-trim (0.671s)
+[PASS ] stop-token-pos-7-keep (0.662s)
+[FAIL ] stop-token-pos-14-trim (1.264s)
+[PASS ] stop-token-pos-14-keep (1.288s)
+[PASS ] stop-string-pos-2 (0.249s)
+
+=== stream ===
+[PASS ] stream-i1-n1 (0.169s)
+[PASS ] stream-i1-n7 (1.142s)
+[PASS ] stream-i1-n8 (1.335s)
+[PASS ] stream-i1-n9 (1.507s)
+[PASS ] stream-i1-n17 (2.854s)
+[FAIL ] stream-i1-n65 (9.844s)
+[PASS ] stream-i7-n1 (0.170s)
+[PASS ] stream-i7-n7 (1.158s)
+[PASS ] stream-i7-n8 (1.353s)
+[FAIL ] stream-i7-n9 (1.490s)
+[PASS ] stream-i7-n17 (2.914s)
+[PASS ] stream-i7-n65 (9.999s)
+[PASS ] stream-i8-n1 (0.170s)
+[PASS ] stream-i8-n7 (1.184s)
+[PASS ] stream-i8-n8 (1.356s)
+[PASS ] stream-i8-n9 (1.499s)
+[FAIL ] stream-i8-n17 (2.871s)
+[FAIL ] stream-i8-n65 (9.960s)
+[PASS ] stream-i16-n1 (0.166s)
+[PASS ] stream-i16-n7 (1.178s)
+[PASS ] stream-i16-n8 (1.349s)
+[PASS ] stream-i16-n9 (1.514s)
+[PASS ] stream-i16-n17 (2.881s)
+[FAIL ] stream-i16-n65 (9.891s)
+
+=== native-batch ===
+[PASS ] native-batch-1 (0.087s)
+[PASS ] native-batch-2 (0.309s)
+[PASS ] native-batch-3 (2.699s)
+[FAIL ] native-batch-7 (3.862s)
+[FAIL ] native-batch-8 (4.043s)
+[PASS ] native-batch-9 (1.893s)
+[PASS ] native-batch-16 (2.322s)
+[FAIL ] native-batch-17 (2.363s)
+[FAIL ] native-batch-32 (3.378s)
+[FAIL ] native-batch-48 (4.221s)
+[FAIL ] native-batch-stream-8 (1.906s)
+
+=== negative ===
+[PASS ] negative-min-p (0.082s)
+[PASS ] negative-frequency-penalty (0.081s)
+[PASS ] negative-presence-penalty (0.086s)
+[PASS ] negative-repetition-penalty (1.677s)
+[PASS ] negative-min-new-tokens (0.080s)
+[FAIL ] negative-combined-top-k-top-p (0.692s)
+[PASS ] negative-grammar (0.079s)
+[PASS ] negative-return-logprob (0.077s)
+[PASS ] negative-custom-logit-processor (0.004s)
+
+=== stress ===
+[FAIL ] stress-single-513 (35.476s)
+[PASS ] stress-concurrent-2x65 (5.434s)
+{
+  "total": 57,
+  "passed": 40,
+  "failed": 17,
+  "errors": 0,
+  "skipped": 0,
+  "ok": false
+}
