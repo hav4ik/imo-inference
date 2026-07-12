@@ -22,6 +22,12 @@ import torch
 import triton
 import triton.language as tl
 
+from sglang.srt.distributed import (
+    get_tensor_model_parallel_rank,
+    get_tensor_model_parallel_world_size,
+    tensor_model_parallel_all_reduce,
+)
+
 
 @triton.jit
 def _fused_norm_rope_kernel_stacked(
@@ -387,6 +393,8 @@ class FusedKVMaterializeHelper:
         self.rotary_emb = rotary_emb
         self.n_layers = len(layers)
         self.device = device
+        self.tp_size = int(get_tensor_model_parallel_world_size())
+        self.tp_rank = int(get_tensor_model_parallel_rank())
         self.kv_size = self.num_kv_heads * self.head_dim
         self.layer_out_dim = 2 * self.kv_size
 
@@ -513,6 +521,47 @@ class FusedKVMaterializeHelper:
         self._workspace_capacity = new_capacity
         self._workspace_dtype = dtype
 
+    def _materialize_tp(
+        self,
+        proj_out: torch.Tensor,
+        positions: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        total_ctx = int(proj_out.shape[0])
+        local_k = proj_out[..., : self.kv_size]
+        local_v = proj_out[..., self.kv_size :]
+
+        sum_squares = local_k.float().square().sum(dim=-1)
+        sum_squares = tensor_model_parallel_all_reduce(sum_squares)
+        inv_rms = torch.rsqrt(
+            sum_squares / float(self.tp_size * self.kv_size)
+            + self.eps_values.unsqueeze(0)
+        )
+
+        norm_start = self.tp_rank * self.kv_size
+        norm_stop = norm_start + self.kv_size
+        local_norm_weights = self.k_norm_weights[:, norm_start:norm_stop]
+        local_k = (
+            local_k.float()
+            * inv_rms.unsqueeze(-1)
+            * local_norm_weights.float().unsqueeze(0)
+        ).to(proj_out.dtype)
+        flat_positions = positions.repeat_interleave(self.n_layers)
+        flat_k = local_k.reshape(total_ctx * self.n_layers, self.kv_size)
+        _, flat_k = self.rotary_emb(
+            flat_positions, torch.empty_like(flat_k), flat_k
+        )
+        cache_k = (
+            flat_k.view(total_ctx, self.n_layers, self.num_kv_heads, self.head_dim)
+            .permute(1, 0, 2, 3)
+            .contiguous()
+        )
+        cache_v = (
+            local_v.view(total_ctx, self.n_layers, self.num_kv_heads, self.head_dim)
+            .permute(1, 0, 2, 3)
+            .contiguous()
+        )
+        return cache_k, cache_v
+
     def materialize(
         self,
         ctx_hidden: torch.Tensor,
@@ -566,19 +615,22 @@ class FusedKVMaterializeHelper:
             proj_out_2d = torch.mm(ctx_hidden, self.flat_kv_weight_t)
 
         proj_out = proj_out_2d.view(total_ctx, self.n_layers, self.layer_out_dim)
-        tmp_k = self._k_workspace[:, :total_ctx]
-        tmp_v = self._v_workspace[:, :total_ctx]
-        cache_k, cache_v = _fused_norm_rope_stacked(
-            proj_out,
-            self.k_norm_weights,
-            self.eps_values,
-            cos_sin_cache,
-            positions,
-            self.num_kv_heads,
-            self.head_dim,
-            self.rotary_dim,
-            k_out=tmp_k,
-            v_out=tmp_v,
-        )
+        if self.tp_size > 1:
+            cache_k, cache_v = self._materialize_tp(proj_out, positions)
+        else:
+            tmp_k = self._k_workspace[:, :total_ctx]
+            tmp_v = self._v_workspace[:, :total_ctx]
+            cache_k, cache_v = _fused_norm_rope_stacked(
+                proj_out,
+                self.k_norm_weights,
+                self.eps_values,
+                cos_sin_cache,
+                positions,
+                self.num_kv_heads,
+                self.head_dim,
+                self.rotary_dim,
+                k_out=tmp_k,
+                v_out=tmp_v,
+            )
         for layer_idx in range(self.n_layers):
             write_layer_kv(layer_idx, cache_k[layer_idx], cache_v[layer_idx])

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-07-12",
+  "hardware": {
+    "gpus": [
+      "NVIDIA H200",
+      "NVIDIA H200"
+    ],
+    "topology": "NV18"
+  },
+  "server": {
+    "target": "/workspace/models/opd-32b-deploy",
+    "target_dtype": "bf16",
+    "draft": "/workspace/models/dflash-32b-draft-v2test-phaseL",
+    "draft_dtype": "bf16",
+    "tensor_parallel_size": 2,
+    "speculative_algorithm": "DFLASH",
+    "speculative_num_draft_tokens": 8,
+    "speculative_draft_window_size": 512,
+    "context_length": 262144,
+    "kv_cache_dtype": "auto",
+    "mem_fraction_static": 0.84,
+    "max_running_requests": 32,
+    "deterministic_inference": true,
+    "custom_all_reduce": false,
+    "max_total_num_tokens": 1752979
+  },
+  "request": {
+    "problem": "MathArena/imo_2025 problem 1",
+    "prompt_tokens": 426,
+    "max_completion_tokens": 8192,
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "seed": 0,
+    "concurrency": 1,
+    "warmup_requests": 0
+  },
+  "result": {
+    "completion_tokens": 8192,
+    "elapsed_seconds": 97.6027127741836,
+    "completion_tokens_per_second": 83.93209335229486,
+    "dflash_accept_length": 3.6111607142857145,
+    "finish_reason": "length",
+    "reasoning_chars": 25483,
+    "content_chars": 0,
+    "fallback_observed": false
+  },
+  "tp1_reference": {
+    "completion_tokens": 8192,
+    "elapsed_seconds": 112.06583765614778,
+    "completion_tokens_per_second": 73.099886382285,
+    "dflash_accept_length": 3.6558035714285713
+  },
+  "tp2_over_tp1_throughput_ratio": 1.1481836362010396
+}

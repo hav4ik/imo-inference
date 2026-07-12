@@ -16,11 +16,13 @@
 # kv_proj_only, apply_k_norm, apply_k_rope}; DFlashDraftModel.{project_target_hidden,
 # forward(...,input_embeds), load_weights, block_size}; EntryClass.
 #
-# Single-GPU (TP=1) only, per the deployment scope.
+# Supports tensor parallelism using the same head sharding and full-projection
+# QK-normalization collectives as the OLMo3 target implementation.
 
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Iterable, Optional, Tuple
 
 import torch
@@ -30,6 +32,8 @@ from torch import nn
 from sglang.srt.distributed import (
     get_tensor_model_parallel_rank,
     get_tensor_model_parallel_world_size,
+    split_tensor_along_last_dim,
+    tensor_model_parallel_all_gather,
 )
 from sglang.srt.layers.activation import SiluAndMul
 from sglang.srt.layers.layernorm import RMSNorm
@@ -69,13 +73,18 @@ class DFlashAttention(nn.Module):
     def __init__(self, config, layer_id: int) -> None:
         super().__init__()
         hidden_size = int(config.hidden_size)
-        tp_size = int(get_tensor_model_parallel_world_size())
-        assert tp_size == 1, "dflash_sink is single-GPU (TP=1) only"
+        self.tp_size = int(get_tensor_model_parallel_world_size())
+        self.tp_rank = int(get_tensor_model_parallel_rank())
         self.config = config
         self.total_num_heads = int(config.num_attention_heads)
         self.total_num_kv_heads = int(getattr(config, "num_key_value_heads", self.total_num_heads))
-        self.num_heads = self.total_num_heads
-        self.num_kv_heads = self.total_num_kv_heads
+        assert self.total_num_heads % self.tp_size == 0
+        self.num_heads = self.total_num_heads // self.tp_size
+        if self.total_num_kv_heads >= self.tp_size:
+            assert self.total_num_kv_heads % self.tp_size == 0
+        else:
+            assert self.tp_size % self.total_num_kv_heads == 0
+        self.num_kv_heads = max(1, self.total_num_kv_heads // self.tp_size)
         self.head_dim = int(getattr(config, "head_dim", hidden_size // self.total_num_heads))
         self.q_size = self.num_heads * self.head_dim
         self.kv_size = self.num_kv_heads * self.head_dim
@@ -90,8 +99,8 @@ class DFlashAttention(nn.Module):
             self.total_num_heads * self.head_dim, hidden_size, bias=attention_bias, prefix="o_proj",
         )
         # Full-projection QK-norm (OLMo3), not per-head.
-        self.q_norm = RMSNorm(self.q_size, eps=rms_norm_eps)
-        self.k_norm = RMSNorm(self.kv_size, eps=rms_norm_eps)
+        self.q_norm = RMSNorm(self.total_num_heads * self.head_dim, eps=rms_norm_eps)
+        self.k_norm = RMSNorm(self.total_num_kv_heads * self.head_dim, eps=rms_norm_eps)
 
         # All-SWA: default (unscaled) RoPE on every layer (trained no-dup layout).
         self.rotary_emb = get_rope(
@@ -120,11 +129,24 @@ class DFlashAttention(nn.Module):
             sliding_window_size=sliding_window, attn_type=AttentionType.ENCODER_ONLY,
         )
 
+    def _apply_qk_norm(
+        self, q: torch.Tensor, k: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        if self.tp_size > 1:
+            q = tensor_model_parallel_all_gather(q.contiguous())
+            k = tensor_model_parallel_all_gather(k.contiguous())
+        q = self.q_norm.forward_native(q)
+        k = self.k_norm.forward_native(k)
+        if self.tp_size > 1:
+            splitter = partial(split_tensor_along_last_dim, num_partitions=self.tp_size)
+            q = splitter(q)[self.tp_rank]
+            k = splitter(k)[self.tp_rank]
+        return q, k
+
     def forward(self, positions, hidden_states, forward_batch: ForwardBatch) -> torch.Tensor:
         qkv, _ = self.qkv_proj(hidden_states)
         q, k, v = qkv.split([self.q_size, self.kv_size, self.kv_size], dim=-1)
-        q = self.q_norm.forward_native(q)
-        k = self.k_norm.forward_native(k)
+        q, k = self._apply_qk_norm(q, k)
         q, k = self.rotary_emb(positions, q, k)
         attn_output = self.attn(q, k, v, forward_batch, sinks=self.sinks)
         output, _ = self.o_proj(attn_output)
@@ -146,7 +168,12 @@ class DFlashAttention(nn.Module):
 
     def apply_k_norm(self, k: torch.Tensor) -> torch.Tensor:
         # Full-projection k_norm (OLMo3), matching forward().
-        return self.k_norm.forward_native(k)
+        if self.tp_size > 1:
+            k = tensor_model_parallel_all_gather(k.contiguous())
+        k = self.k_norm.forward_native(k)
+        if self.tp_size > 1:
+            k = split_tensor_along_last_dim(k, self.tp_size)[self.tp_rank]
+        return k
 
     def apply_k_rope(self, positions: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         dummy_q = k.new_empty(k.shape)
