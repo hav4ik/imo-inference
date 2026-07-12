@@ -1,0 +1,53 @@
+benchmark_args=Namespace(backend='sglang', base_url='http://127.0.0.1:33000', host='0.0.0.0', port=None, ready_check_timeout_sec=60, dataset_name='random', dataset_path='', speed_bench_category=None, speed_bench_output_len=512, model='/workspace/models/opd-32b-deploy', served_model_name=None, tokenizer='/workspace/models/opd-32b-deploy', num_prompts=96, sharegpt_output_len=None, sharegpt_context_len=None, random_input_len=512, random_output_len=512, random_range_ratio=1.0, image_count=1, image_resolution='1080p', random_image_count=False, image_format='jpeg', image_content='random', request_rate=inf, use_trace_timestamps=False, max_concurrency=48, output_file='/workspace/aimo-proof-pilot-eval/tests/results/bf16-dflash-ab-capacity48-20260712/target_only/throughput/concurrency-48-prompts-96.jsonl', output_details=False, print_requests=False, disable_tqdm=True, disable_stream=False, return_logprob=False, top_logprobs_num=0, token_ids_logprob=None, logprob_start_len=-1, return_routed_experts=False, cache_report=False, seed=20260711, disable_ignore_eos=False, temperature=0.0, top_p=1.0, extra_request_body=None, apply_chat_template=False, profile=False, plot_throughput=False, profile_activities=['CPU', 'GPU'], profile_start_step=None, profile_steps=None, profile_num_steps=None, profile_by_stage=False, profile_stages=None, profile_output_dir=None, profile_prefix=None, lora_name=None, lora_request_distribution='uniform', lora_zipf_alpha=1.5, prompt_suffix='', pd_separated=False, profile_prefill_url=None, profile_decode_url=None, flush_cache=True, warmup_requests=1, tokenize_prompt=False, gsp_num_groups=64, gsp_prompts_per_group=16, gsp_system_prompt_len=2048, gsp_question_len=128, gsp_output_len=256, gsp_range_ratio=1.0, gsp_fast_prepare=False, gsp_send_routing_key=False, gsp_num_turns=1, gsp_ordered=False, gsp_group_distribution='uniform', gsp_zipf_alpha=None, mooncake_slowdown_factor=1.0, mooncake_num_rounds=1, mooncake_workload='conversation', fake_prefill=False, tag=None, header=None)
+Waiting up to 60s for http://127.0.0.1:33000/v1/models to become ready...
+Server ready in 0.0s.
+Namespace(backend='sglang', base_url='http://127.0.0.1:33000', host='0.0.0.0', port=30000, ready_check_timeout_sec=60, dataset_name='random', dataset_path='', speed_bench_category=None, speed_bench_output_len=512, model='/workspace/models/opd-32b-deploy', served_model_name=None, tokenizer='/workspace/models/opd-32b-deploy', num_prompts=96, sharegpt_output_len=None, sharegpt_context_len=None, random_input_len=512, random_output_len=512, random_range_ratio=1.0, image_count=1, image_resolution='1080p', random_image_count=False, image_format='jpeg', image_content='random', request_rate=inf, use_trace_timestamps=False, max_concurrency=48, output_file='/workspace/aimo-proof-pilot-eval/tests/results/bf16-dflash-ab-capacity48-20260712/target_only/throughput/concurrency-48-prompts-96.jsonl', output_details=False, print_requests=False, disable_tqdm=True, disable_stream=False, return_logprob=False, top_logprobs_num=0, token_ids_logprob=None, logprob_start_len=-1, return_routed_experts=False, cache_report=False, seed=20260711, disable_ignore_eos=False, temperature=0.0, top_p=1.0, extra_request_body=None, apply_chat_template=False, profile=False, plot_throughput=False, profile_activities=['CPU', 'GPU'], profile_start_step=None, profile_steps=None, profile_num_steps=None, profile_by_stage=False, profile_stages=None, profile_output_dir=None, profile_prefix=None, lora_name=None, lora_request_distribution='uniform', lora_zipf_alpha=1.5, prompt_suffix='', pd_separated=False, profile_prefill_url=None, profile_decode_url=None, flush_cache=True, warmup_requests=1, tokenize_prompt=False, gsp_num_groups=64, gsp_prompts_per_group=16, gsp_system_prompt_len=2048, gsp_question_len=128, gsp_output_len=256, gsp_range_ratio=1.0, gsp_fast_prepare=False, gsp_send_routing_key=False, gsp_num_turns=1, gsp_ordered=False, gsp_group_distribution='uniform', gsp_zipf_alpha=None, mooncake_slowdown_factor=1.0, mooncake_num_rounds=1, mooncake_workload='conversation', fake_prefill=False, tag=None, header=None)
+
+#Input tokens: 49152
+#Output tokens: 49152
+Starting warmup with 1 sequences...
+Warmup completed with 1 sequences. Starting main benchmark run...
+
+============ Serving Benchmark Result ============
+Backend:                                 sglang    
+Traffic request rate:                    inf       
+Max request concurrency:                 48        
+Successful requests:                     96        
+Benchmark duration (s):                  57.52     
+Total input tokens:                      49152     
+Total input text tokens:                 49152     
+Total generated tokens:                  49152     
+Total generated tokens (retokenized):    49134     
+Request throughput (req/s):              1.67      
+Input token throughput (tok/s):          854.52    
+Output token throughput (tok/s):         854.52    
+Peak output token throughput (tok/s):    1003.00   
+Peak concurrent requests:                79        
+Total token throughput (tok/s):          1709.04   
+Concurrency:                             47.93     
+----------------End-to-End Latency----------------
+Mean E2E Latency (ms):                   28717.59  
+Median E2E Latency (ms):                 28487.49  
+P90 E2E Latency (ms):                    28996.15  
+P95 E2E Latency (ms):                    28997.78  
+P99 E2E Latency (ms):                    28999.53  
+---------------Time to First Token----------------
+Mean TTFT (ms):                          1764.85   
+Median TTFT (ms):                        1785.09   
+P90 TTFT (ms):                           2790.03   
+P95 TTFT (ms):                           3006.77   
+P99 TTFT (ms):                           3215.65   
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          52.75     
+Median TPOT (ms):                        52.65     
+P90 TPOT (ms):                           54.85     
+P95 TPOT (ms):                           55.26     
+P99 TPOT (ms):                           55.34     
+---------------Inter-Token Latency----------------
+Mean ITL (ms):                           52.75     
+Median ITL (ms):                         50.38     
+P90 ITL (ms):                            50.83     
+P95 ITL (ms):                            52.28     
+P99 ITL (ms):                            162.28    
+Max ITL (ms):                            215.77    
+==================================================
