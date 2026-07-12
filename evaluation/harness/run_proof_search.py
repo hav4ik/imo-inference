@@ -22,7 +22,8 @@ def load_requested_rows(ids_file: Path) -> list[dict]:
         raise ValueError("problem manifest must be a non-empty JSON array")
     if len(problem_ids) != len(set(problem_ids)):
         raise ValueError("problem manifest contains duplicate IDs")
-    rows = list(csv.DictReader(DATA.open()))
+    with DATA.open() as data_file:
+        rows = list(csv.DictReader(data_file))
     by_id = {row["Problem ID"]: row for row in rows}
     missing = [problem_id for problem_id in problem_ids if problem_id not in by_id]
     if missing:

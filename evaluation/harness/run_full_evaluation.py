@@ -1,21 +1,14 @@
-"""Run the complete 60-problem DFlash IMO ProofBench evaluation.
+"""Run one strict YAML-configured ProofBench generate-verify-refine evaluation."""
 
-The two local SGLang servers must already be running. Basic and Advanced shards
-run concurrently on their dedicated H200s. Generation checkpoints one problem at
-a time; completed API calls are never repeated. Any invalid generation, server
-mismatch, grader failure, or malformed score terminates the run.
-"""
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
-import csv
+import asyncio
 import datetime as dt
 import hashlib
 import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -23,13 +16,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from eval_config import active_model, load_config
+from grade_proofs import GRADER_PROMPT, grade_final_proofs
+from proof_prompts import PROMPT_SOURCE_COMMIT, prompt_hashes
+from run_proof_search import DATA, load_requested_rows, run_search
+
 REPO = Path(__file__).resolve().parents[2]
 EVALUATION = REPO / "evaluation"
 RUNS = EVALUATION / "runs"
-DEFAULT_CONFIG = EVALUATION / "configs" / "opd32b_dflash_humming_w4a8.json"
-DATA = EVALUATION / "data" / "proofbench_v2.csv"
-GRADER_PROMPT = EVALUATION / "prompts" / "grader.md"
-HARNESS = EVALUATION / "harness"
+SERVER_LOG = Path("/var/log/portal/opd32b-eval.log")
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -41,274 +36,238 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run(command: list[str]) -> None:
-    print(f"[full-eval] $ {shlex.join(command)}", flush=True)
-    subprocess.run(command, cwd=REPO, check=True)
+def atomic_json(path: Path, value: Any) -> None:
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
+    os.replace(temporary, path)
 
 
-def get_json(url: str, api_key: str | None = None) -> Any:
-    headers = {"Accept": "application/json"}
-    if api_key is not None:
-        headers["Authorization"] = f"Bearer {api_key}"
-    request = urllib.request.Request(url, headers=headers)
+def get_json(url: str, api_key: str) -> dict:
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/json", "Authorization": f"Bearer {api_key}"},
+    )
     with urllib.request.urlopen(request, timeout=60) as response:
         return json.load(response)
 
 
-def load_problem_ids() -> list[str]:
-    with DATA.open() as data_file:
-        rows = list(csv.DictReader(data_file))
-    problem_ids = [row["Problem ID"] for row in rows]
-    assert len(problem_ids) == len(set(problem_ids)) == 60
-    assert sum(pid.startswith("PB-Basic") for pid in problem_ids) == 30
-    assert sum(pid.startswith("PB-Advanced") for pid in problem_ids) == 30
-    return problem_ids
+def copy_pinned(source: Path, destination: Path) -> None:
+    if destination.exists():
+        if sha256(source) != sha256(destination):
+            raise RuntimeError(f"resume input differs: {destination}")
+        return
+    shutil.copy2(source, destination)
 
 
-def write_manifest(path: Path, manifest: dict[str, Any], phase: str, status: str) -> None:
+def update_manifest(path: Path, manifest: dict, phase: str, status: str) -> None:
     manifest["phase"] = phase
     manifest["status"] = status
     manifest["updated_at"] = utc_now()
-    temporary = path.with_suffix(".json.tmp")
-    temporary.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
-    os.replace(temporary, path)
+    atomic_json(path, manifest)
 
 
-def validate_existing_manifest(path: Path, expected: dict[str, Any]) -> dict[str, Any]:
-    if not path.exists():
-        return expected
-    actual = json.loads(path.read_text())
-    for key in ("run_id", "git_commit", "config_sha256", "grader_prompt_sha256"):
-        assert actual[key] == expected[key], f"resume manifest differs for {key}"
-    return actual
-
-
-def generation_command(
-    config: dict[str, Any],
-    subset: str,
-    batch: Path,
-    generation_root: Path,
-) -> list[str]:
-    agentic = config["agentic"]
-    return [
-        sys.executable,
-        str(HARNESS / "run_notebook_v2_eval.py"),
-        "--run-dir",
-        subset,
-        "--runs-root",
-        str(generation_root),
-        "--base-url",
-        config["shards"][subset].removesuffix("/v1"),
-        "--subset",
-        subset,
-        "--ids-file",
-        str(batch),
-        "--batch-id",
-        batch.stem,
-        "--config",
-        str(config.get("_config_path", DEFAULT_CONFIG)),
-    ]
-
-
-def run_subset(
-    config: dict[str, Any],
-    subset: str,
-    batches_root: Path,
-    generation_root: Path,
-) -> None:
-    batches = sorted(batches_root.glob(f"{subset}-*.json"))
-    assert len(batches) == 6
-    for batch in batches:
-        run(generation_command(config, subset, batch, generation_root))
-
-
-def validate_merged_run(merged: Path, expected_ids: set[str]) -> None:
+def audit_generation(generation_dir: Path, problem_ids: list[str]) -> dict:
     records = [
         json.loads(line)
-        for line in (merged / "records.jsonl").read_text().splitlines()
+        for line in (generation_dir / "records.jsonl").read_text().splitlines()
         if line.strip()
     ]
-    record_ids = [record["problem_id"] for record in records]
-    stage_ids = {path.stem for path in (merged / "stages").glob("*.json")}
-    assert len(record_ids) == len(set(record_ids)) == 60
-    assert set(record_ids) == stage_ids == expected_ids
+    if [record["problem_id"] for record in records] != problem_ids:
+        raise RuntimeError("generation record IDs/order differ from the input manifest")
+
+    call_count = 0
+    proof_count = 0
+    for problem_id in problem_ids:
+        root = generation_dir / "problems" / problem_id
+        final = json.loads((root / "final.json").read_text())
+        if final["problem_id"] != problem_id or not final["final_proof"].strip():
+            raise RuntimeError(f"invalid final proof artifact for {problem_id}")
+        calls = [
+            json.loads(line)
+            for line in (root / "calls.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        if len({call["sample_id"] for call in calls}) != len(calls):
+            raise RuntimeError(f"duplicate call ID for {problem_id}")
+        failed = [call["sample_id"] for call in calls if call["error"] is not None]
+        if failed:
+            raise RuntimeError(f"failed generation calls for {problem_id}: {failed}")
+        for call in calls:
+            if not (root / "prompts" / f"{call['prompt_sha256']}.json").is_file():
+                raise RuntimeError(f"missing prompt artifact for {call['sample_id']}")
+        call_count += len(calls)
+        proof_count += len(list((root / "proofs").glob("*.json")))
+    return {
+        "problem_count": len(problem_ids),
+        "proof_count": proof_count,
+        "call_count": call_count,
+        "failed_call_count": 0,
+    }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    args = parser.parse_args()
+def write_result(path: Path, manifest: dict, summary: dict) -> None:
+    lines = [
+        "# ProofBench evaluation result",
+        "",
+        f"- Run: `{manifest['run_id']}`",
+        f"- Git commit: `{manifest['git_commit']}`",
+        f"- Model mode: `{manifest['active_model']['mode']}`",
+        f"- DFlash: `{str(manifest['active_model']['dflash']).lower()}`",
+        f"- Problems: {len(manifest['problem_ids'])}",
+        f"- Grader attempts per proof: {summary['attempts_per_proof']}",
+        f"- Aggregation: `{summary['aggregation']}`",
+        f"- Overall score: {summary['overall_score_out_of_7']:.6f} / 7",
+        f"- Overall percentage: {summary['overall_score_percent']:.6f}%",
+        "",
+        "| Problem | Score / 7 | Zero veto |",
+        "|---|---:|:---:|",
+    ]
+    for problem in summary["problems"]:
+        lines.append(
+            f"| {problem['problem_id']} | {problem['score_out_of_7']:.6f} | "
+            f"{'yes' if problem['zero_veto_triggered'] else 'no'} |"
+        )
+    path.write_text("\n".join(lines) + "\n")
 
-    assert RUN_ID_PATTERN.fullmatch(args.run_id), "run-id must be one safe path component"
-    config = json.loads(args.config.read_text())
-    assert config["schema_version"] == 3
-    config["_config_path"] = args.config.resolve()
+
+async def evaluate(config_path: Path, ids_file: Path, run_id: str) -> Path:
+    if RUN_ID_PATTERN.fullmatch(run_id) is None:
+        raise ValueError("run-id must be one safe path component")
+    config = load_config(config_path)
+    model = active_model(config)
+    rows = load_requested_rows(ids_file)
+    problem_ids = [row["Problem ID"] for row in rows]
     grader = config["grader"]
-    assert grader["served_model"] == "deepseek-v4-flash"
-    assert grader["reasoning"] == "high"
-    assert grader["passes"] == 2
-    assert sha256(GRADER_PROMPT) == grader["prompt_sha256"]
+    if sha256(GRADER_PROMPT) != grader["prompt_sha256"]:
+        raise RuntimeError("grader prompt hash differs from the YAML")
     api_key = os.environ.get(grader["api_key_env"])
-    assert api_key, f"empty {grader['api_key_env']}"
+    if not api_key:
+        raise RuntimeError(f"empty {grader['api_key_env']}")
+    if not SERVER_LOG.is_file():
+        raise RuntimeError(f"missing supervisor server log: {SERVER_LOG}")
 
-    run_root = RUNS / args.run_id
+    run_root = RUNS / run_id
     run_root.mkdir(parents=True, exist_ok=True)
-    config_copy = run_root / "config.json"
-    if config_copy.exists():
-        assert sha256(config_copy) == sha256(args.config)
-    else:
-        shutil.copy2(args.config, config_copy)
+    pinned_config = run_root / "config.yaml"
+    pinned_ids = run_root / "problem_ids.json"
+    copy_pinned(config_path, pinned_config)
+    copy_pinned(ids_file, pinned_ids)
 
     git_commit = subprocess.check_output(
         ["git", "-C", str(REPO), "rev-parse", "HEAD"], text=True
     ).strip()
-    manifest_path = run_root / "run_manifest.json"
+    target_config = model.target / "config.json"
+    draft_config = model.draft / "config.json" if model.draft else None
     expected_manifest = {
-        "schema_version": 1,
-        "run_id": args.run_id,
+        "schema_version": 2,
+        "run_id": run_id,
         "git_commit": git_commit,
-        "config_path": str(args.config.resolve()),
-        "config_sha256": sha256(args.config),
+        "config_sha256": sha256(pinned_config),
+        "problem_ids_sha256": sha256(pinned_ids),
+        "dataset_sha256": sha256(DATA),
+        "problem_ids": problem_ids,
+        "prompt_source_repository": "https://github.com/ycchen-tw/proof-pilot-codes",
+        "prompt_source_commit": PROMPT_SOURCE_COMMIT,
+        "proof_prompt_sha256": prompt_hashes(),
         "grader_prompt_sha256": sha256(GRADER_PROMPT),
-        "grader": {
-            "base_url": grader["base_url"],
-            "served_model": grader["served_model"],
-            "reasoning": grader["reasoning"],
-            "passes": grader["passes"],
-            "max_tokens": grader["max_tokens"],
-            "concurrency": grader["concurrency"],
-            "reference_repository": grader["reference_repository"],
-            "reference_commit": grader["reference_commit"],
+        "active_model": {
+            "mode": model.mode,
+            "target": str(model.target),
+            "target_config_sha256": sha256(target_config),
+            "draft": str(model.draft) if model.draft else None,
+            "draft_config_sha256": sha256(draft_config) if draft_config else None,
+            "tensor_parallel_size": model.tensor_parallel_size,
+            "quantized": model.quantized,
+            "dflash": model.dflash,
+            "kv_cache_dtype": model.kv_cache_dtype,
         },
-        "problem_ids": load_problem_ids(),
+        "search": config["search"],
+        "grader": config["grader"],
         "started_at": utc_now(),
     }
-    manifest = validate_existing_manifest(manifest_path, expected_manifest)
-    write_manifest(manifest_path, manifest, "preflight", "running")
+    manifest_path = run_root / "run_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        for key in (
+            "run_id",
+            "git_commit",
+            "config_sha256",
+            "problem_ids_sha256",
+            "dataset_sha256",
+            "problem_ids",
+            "proof_prompt_sha256",
+            "grader_prompt_sha256",
+            "active_model",
+            "search",
+            "grader",
+        ):
+            if manifest[key] != expected_manifest[key]:
+                raise RuntimeError(f"resume manifest differs for {key}")
+    else:
+        manifest = expected_manifest
 
-    deepseek_models = get_json(
-        grader["base_url"].rstrip("/") + "/models", api_key=api_key
-    )
-    model_ids = {model["id"] for model in deepseek_models["data"]}
-    assert grader["served_model"] in model_ids
-    (run_root / "deepseek_models.json").write_text(
-        json.dumps(deepseek_models, indent=2, ensure_ascii=False) + "\n"
-    )
+    try:
+        update_manifest(manifest_path, manifest, "preflight", "running")
+        models = get_json(
+            grader["base_url"].rstrip("/") + "/models",
+            api_key,
+        )
+        if grader["model"] not in {item["id"] for item in models["data"]}:
+            raise RuntimeError(f"grader model is absent from catalog: {grader['model']}")
+        atomic_json(run_root / "deepseek_models.json", models)
 
-    for subset in ("basic", "advanced"):
-        base = config["shards"][subset]
-        root_url = base.removesuffix("/v1")
-        run(
+        server = config["server"]
+        subprocess.run(
             [
                 sys.executable,
-                str(HARNESS / "validate_dflash_server.py"),
+                str(EVALUATION / "harness" / "validate_server.py"),
                 "--url",
-                root_url,
+                f"http://{server['host']}:{server['port']}",
                 "--config",
-                str(args.config.resolve()),
+                str(pinned_config),
                 "--output",
-                str(run_root / f"{subset}_server_validation.json"),
+                str(run_root / "server_validation.json"),
                 "--server-log",
-                str(run_root / f"{subset}_server.log"),
-            ]
+                str(SERVER_LOG),
+            ],
+            cwd=REPO,
+            check=True,
         )
 
-    batches_root = run_root / "input-batches"
-    for subset in ("basic", "advanced"):
-        run(
-            [
-                sys.executable,
-                str(HARNESS / "make_batches.py"),
-                "--data",
-                str(DATA),
-                "--subset",
-                subset,
-                "--batch-size",
-                str(config["batch_size"]),
-                "--output-dir",
-                str(batches_root),
-            ]
+        update_manifest(manifest_path, manifest, "proof_search", "running")
+        generation_dir = run_root / "generation"
+        await run_search(pinned_config, pinned_ids, generation_dir)
+        manifest["generation_audit"] = audit_generation(generation_dir, problem_ids)
+        update_manifest(manifest_path, manifest, "grading", "running")
+
+        summary = await grade_final_proofs(
+            pinned_config,
+            pinned_ids,
+            generation_dir,
+            run_root / "grading",
         )
-
-    generation_root = run_root / "generation"
-    write_manifest(manifest_path, manifest, "generation", "running")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [
-            pool.submit(run_subset, config, subset, batches_root, generation_root)
-            for subset in ("basic", "advanced")
-        ]
-        for future in futures:
-            future.result()
-
-    merged = run_root / "merged"
-    expected_ids = set(manifest["problem_ids"])
-    if not merged.exists():
-        run(
-            [
-                sys.executable,
-                str(HARNESS / "merge_agentic_shards.py"),
-                "--basic",
-                str(generation_root / "basic"),
-                "--advanced",
-                str(generation_root / "advanced"),
-                "--output",
-                str(merged),
-            ]
+        write_result(run_root / "RESULT.md", manifest, summary)
+        manifest["finished_at"] = utc_now()
+        manifest["result_markdown"] = str((run_root / "RESULT.md").relative_to(REPO))
+        manifest["grading_summary"] = str(
+            (run_root / "grading" / "summary.json").relative_to(REPO)
         )
-    validate_merged_run(merged, expected_ids)
+        update_manifest(manifest_path, manifest, "complete", "complete")
+    except BaseException as error:
+        manifest["terminal_error"] = repr(error)
+        update_manifest(manifest_path, manifest, manifest["phase"], "failed")
+        raise
+    return run_root
 
-    output_prefix = f"{args.run_id}/candidates"
-    run(
-        [
-            sys.executable,
-            str(HARNESS / "agentic_to_responses.py"),
-            "--stages-dir",
-            str(merged / "stages"),
-            "--data",
-            str(DATA),
-            "--out-prefix",
-            output_prefix,
-        ]
-    )
 
-    write_manifest(manifest_path, manifest, "grading", "running")
-    selected_run = f"{output_prefix}_select"
-    run(
-        [
-            sys.executable,
-            str(HARNESS / "grade_proofs.py"),
-            "--run-ids",
-            selected_run,
-            "--data",
-            str(DATA),
-            "--passes",
-            str(grader["passes"]),
-            "--base-url",
-            grader["base_url"],
-            "--served-model",
-            grader["served_model"],
-            "--api-key-env",
-            grader["api_key_env"],
-            "--reasoning",
-            grader["reasoning"],
-            "--max-tokens",
-            str(grader["max_tokens"]),
-            "--concurrency",
-            str(grader["concurrency"]),
-            "--out-name",
-            "grades_deepseek_v4_flash_2pass.jsonl",
-            "--summary-run-id",
-            f"{args.run_id}/grading",
-        ]
-    )
-
-    summary = run_root / "grading" / "summary.json"
-    assert summary.is_file()
-    manifest["finished_at"] = utc_now()
-    manifest["summary_path"] = str(summary.relative_to(REPO))
-    write_manifest(manifest_path, manifest, "complete", "complete")
-    print(f"[full-eval] complete -> {summary}", flush=True)
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--ids-file", required=True, type=Path)
+    parser.add_argument("--run-id", required=True)
+    args = parser.parse_args()
+    run_root = asyncio.run(evaluate(args.config, args.ids_file, args.run_id))
+    print(f"[full-evaluation] complete -> {run_root / 'RESULT.md'}", flush=True)
 
 
 if __name__ == "__main__":

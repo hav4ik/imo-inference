@@ -1,38 +1,30 @@
-# Agentic evaluation harness
+# Evaluation harness
 
-The harness deliberately exposes one production evaluation route.
+The harness exposes one production path:
 
-1. `validate_humming_sm90_gemm.py` runs the real packed target MLP weights
-   through Humming directly, through the production custom op, and through a
-   CUDA graph. Fused gate/up and down projections must remain finite and within
-   10% relative L2 of their dequantized references at decode and prefill row
-   counts 1, 6, 8, 48, 64, 256, 512, 1024, and 2048. Every row count uses the
-   single H200 SM90 configuration selected at `shape_m=256`; the production
-   helper is pinned to that same numerically verified configuration.
-2. `validate_dflash_server.py` rejects a live server unless DFlash and the
-   exact selected Humming W4A8 or BF16 numerical configuration are active. In
-   Humming W4A8 mode it additionally requires the SM90 preflight and a
-   runtime marker proving that a W4A8 layer was constructed.
-3. `make_batches.py` splits each 30-problem subset into six ordered
-   five-problem ID files.
-4. `run_notebook_v2_eval.py` imports the exact hash-pinned notebook scheduler,
-   admits 12 total calls, caps prove/refine at 6, prioritizes verifiers, starts
-   six provers, uses three verifiers per candidate, and runs five selectors.
-5. `merge_agentic_shards.py` requires exactly the 60 benchmark IDs and copies
-   their full stage traces into one run.
-6. `agentic_to_responses.py` creates selected, prover, and refined grader views
-   from the same saved generation.
-7. `grade_proofs.py` sends each non-empty candidate to the required DeepSeek
-   grader twice and writes every response before producing summaries.
+1. `eval_config.py` loads `nemotron_cascade2.yaml` with exact section keys and
+   validates every serving, search, and grader value.
+2. `launch_server.py` selects BF16 or Humming W4A8 target weights and independently
+   enables DFlash, always using one TP2 SGLang server.
+3. `validate_server.py` compares the live server, model metadata, runtime markers,
+   and GPU state with the YAML before generation.
+4. `run_proof_search.py` loads exactly the IDs in the supplied JSON manifest and
+   runs the same proof-pool engine for every problem.
+5. `proof_search.py` generates, verifies, ranks, refines, and checkpoints every
+   call and proof. Its budgets are read directly from YAML.
+6. `grade_proofs.py` grades the one selected proof per problem for the configured
+   64 attempts and applies zero-veto aggregation.
+7. `run_full_evaluation.py` pins inputs, performs the audits, and writes the final
+   machine-readable and Markdown reports.
 
-Failures are terminal. HTTP requests are issued once. The wrapper rejects call
-errors and every notebook fallback final source instead of accepting them as
-evaluation answers.
+HTTP calls are issued once. Every raw response is appended and flushed before it
+can affect a derived artifact. Existing successful records are resume
+checkpoints; existing failed records terminate the resumed run. There are no
+alternate prompts, request retries, model fallbacks, proof fallbacks, stub
+graders, or synthetic scores.
 
-Generation writes one complete JSON trace per problem before appending its slim
-`records.jsonl` entry. Grading appends and flushes one lossless record per
-candidate and pass. Existing records are resume checkpoints, not retries: the
-same completed API call is never repeated.
-
-The correctness and cache-reuse test procedure is documented separately in
-[`tests/TESTING_ALGORITHM.md`](../../tests/TESTING_ALGORITHM.md).
+The proof prompt files are copied byte-for-byte from ycchen's deployed Math-3R
+pipeline at commit `bc03a2c71a076990deaad3d712c6889682e12c69`. The local code
+uses ycchen's system/user split, XML output contract, and XML candidate bundle,
+while the configurable multi-round search schedule follows the approved
+Nemotron-Cascade-style evaluation design.
