@@ -52,10 +52,6 @@
       "FLASHINFER_CUDA_ARCH_LIST": "9.0a",
       "FLASHINFER_USE_CUDA_NORM": "1",
       "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
-      "SGLANG_DECODE_NUM_STAGES": "3",
-      "SGLANG_DECODE_BLOCK_N": "32",
-      "SGLANG_GQA_PACKED_EXTEND": "0",
-      "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE": "2048",
       "SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER": "0.125",
       "SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW": "1",
       "HF_HUB_OFFLINE": "1",
@@ -68,7 +64,7 @@
       "SGLANG_DFLASH_DRAFT_RING_QUOTA": "4"
     },
     "common_arguments": {
-      "attention_backend": "triton",
+      "attention_backend": "fa3",
       "tp": 1,
       "context_length": 200000,
       "mem_fraction_static": 0.82,
@@ -108,7 +104,6 @@
         1024,
         2048
       ],
-      "triton_attention_num_kv_splits": 32,
       "random_seed": 0,
       "enable_deterministic_inference": true,
       "enable_cache_report": true,
@@ -120,7 +115,7 @@
       "speculative_dflash_block_size": 8,
       "speculative_num_draft_tokens": 8,
       "speculative_draft_window_size": 512,
-      "speculative_draft_attention_backend": "triton"
+      "speculative_draft_attention_backend": "fa3"
     }
   },
   "phases": {

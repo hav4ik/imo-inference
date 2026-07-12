@@ -14,9 +14,6 @@
       "FLASHINFER_CUDA_ARCH_LIST": "9.0a",
       "FLASHINFER_USE_CUDA_NORM": "1",
       "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
-      "SGLANG_DECODE_NUM_STAGES": "3",
-      "SGLANG_DECODE_BLOCK_N": "32",
-      "SGLANG_GQA_PACKED_EXTEND": "1",
       "TOKENIZERS_PARALLELISM": "false"
     },
     "required": {
@@ -32,8 +29,8 @@
     "speculative_algorithm": "DFLASH",
     "speculative_dflash_block_size": 8,
     "speculative_num_draft_tokens": 8,
-    "speculative_draft_attention_backend": "triton",
-    "attention_backend": "triton",
+    "speculative_draft_attention_backend": "fa3",
+    "attention_backend": "fa3",
     "tp_size": 1,
     "context_length": 200000,
     "mem_fraction_static": 0.88,
@@ -55,7 +52,6 @@
       1024,
       2048
     ],
-    "triton_attention_num_kv_splits": 32,
     "log_level": "warning"
   }
 }

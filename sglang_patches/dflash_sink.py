@@ -272,13 +272,9 @@ class DFlashDraftModel(nn.Module):
         self.mask_token_id = draft_config.mask_token_id
 
     def get_attention_sliding_window_size(self):
-        # Draft is all-SWA. Expose the window so the (draft) model_runner sets
-        # sliding_window_size, which makes the triton attention backend allocate
-        # & populate window_kv_indptr. Without this the per-layer RadixAttention
-        # sliding-window path reads a None window_kv_indptr and crashes during
-        # draft cuda-graph capture (Blackwell/triton; the H200 fa3 path never hit
-        # this because fa3 carries its own metadata). Robust read: qwen3 config
-        # parsing may null top-level sliding_window — fall back to dflash_config.
+        # Draft is all-SWA. Expose the window so the model runner carries the
+        # correct sliding-window metadata. If top-level parsing leaves the value
+        # unset, read the checkpoint's dflash_config.
         # sglang window is exclusive (HF inclusive), so -1, matching the layers.
         sw = getattr(self.config, "sliding_window", None)
         if sw is None:

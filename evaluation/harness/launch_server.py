@@ -45,10 +45,6 @@ def main() -> None:
     env["FLASHINFER_CUDA_ARCH_LIST"] = env.get("FLASHINFER_CUDA_ARCH_LIST", "9.0a")
     env["FLASHINFER_USE_CUDA_NORM"] = "1"
     env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-    env["SGLANG_DECODE_NUM_STAGES"] = env.get("SGLANG_DECODE_NUM_STAGES", "3")
-    env["SGLANG_DECODE_BLOCK_N"] = env.get("SGLANG_DECODE_BLOCK_N", "32")
-    env["SGLANG_GQA_PACKED_EXTEND"] = env.get("SGLANG_GQA_PACKED_EXTEND", "1")
-    env["SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE"] = str(server["chunked_prefill_size"])
     env["SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN"] = "1"
     env["SGLANG_ENABLE_OVERLAP_PLAN_STREAM"] = "1"
     env["SGLANG_SWA_EVICTION_INTERVAL_MULTIPLIER"] = "0.125"

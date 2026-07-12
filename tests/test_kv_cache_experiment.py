@@ -366,7 +366,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(kwargs["speculative_dflash_block_size"], 8)
         self.assertEqual(kwargs["speculative_num_draft_tokens"], 8)
         self.assertEqual(kwargs["speculative_draft_window_size"], 512)
-        self.assertEqual(kwargs["speculative_draft_attention_backend"], "triton")
+        self.assertEqual(kwargs["speculative_draft_attention_backend"], "fa3")
 
     def test_engine_defaults_come_from_test_config(self) -> None:
         config = copy.deepcopy(experiment.load_test_config())

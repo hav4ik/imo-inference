@@ -245,7 +245,7 @@ draft context can hurt acceptance, never target-verified correctness.
 | GPU/server | One RTX PRO 6000 Blackwell, TP=1 |
 | Mode | `CONFIG=w4a8-dflash` |
 | Target | 64-layer Olmo3Sink GPTQ INT4, Humming W4A8 execution |
-| Target attention | Triton, 40 query heads, 8 KV heads, hybrid SWA/full |
+| Target attention | FA3, 40 query heads, 8 KV heads, hybrid SWA/full |
 | Draft | 8 layers; INT4 compressed-tensors MLP, BF16 attention weights |
 | Shared model parts | Draft uses target input embedding and target LM head |
 | Target and draft KV | BF16 (`auto`) on the H200 deployment; the notebook used FP8 e4m3 |

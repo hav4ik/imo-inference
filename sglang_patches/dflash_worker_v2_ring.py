@@ -111,38 +111,12 @@ class DFlashWorkerV2(BaseSpecWorker):
         draft_server_args = deepcopy(server_args)
         draft_server_args.skip_tokenizer_init = True
         draft_backend = draft_server_args.speculative_draft_attention_backend
-        supported_draft_backends = ("flashinfer", "fa3", "fa4", "triton", "ascend")
-        if draft_backend is None:
-            draft_backend, _ = draft_server_args.get_attention_backends()
-        if draft_backend is None:
-            # Use triton on ROCm (no FlashInfer), flashinfer on CUDA
-            import torch as _torch
-
-            draft_backend = "triton" if _torch.version.hip else "flashinfer"
-        elif draft_backend == "trtllm_mha":
-            import torch as _torch
-
-            _fb = "triton" if _torch.version.hip else "flashinfer"
-            logger.warning(
-                "DFLASH draft worker does not support 'trtllm_mha' because the "
-                "draft path requires per-layer DFlash attention. Falling back to "
-                "'%s'.",
-                _fb,
+        if draft_backend != "fa3":
+            raise ValueError(
+                "DFLASH draft attention backend must be fa3, "
+                f"got {draft_backend!r}"
             )
-            draft_backend = _fb
-        elif draft_backend not in supported_draft_backends:
-            import torch as _torch
-
-            _fb = "triton" if _torch.version.hip else "flashinfer"
-            logger.warning(
-                "DFLASH draft worker only supports attention_backend in %s for now, "
-                "but got %r. Falling back to '%s'.",
-                supported_draft_backends,
-                draft_backend,
-                _fb,
-            )
-            draft_backend = _fb
-        # Make the draft worker backend explicit and self-contained (no further overrides).
+        # Make the draft worker backend explicit and self-contained.
         draft_server_args.speculative_draft_attention_backend = None
         draft_server_args.prefill_attention_backend = None
         draft_server_args.decode_attention_backend = None

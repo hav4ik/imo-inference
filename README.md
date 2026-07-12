@@ -9,7 +9,7 @@ verified on 2× H200 with one replica per GPU.
 Stock sglang/vLLM don't know the `Olmo3Sink` architecture, so this runs a
 patched sglang: `sglang_patches/` carries the upstream proof-pilot patch files
 (sink-aware `olmo2.py` target model, DFlash speculative-decoding support,
-SWA-eviction fix, env-gated triton decode/extend tuning) and an applier.
+SWA-eviction and deterministic speculative-finish fixes) and an applier.
 
 ## Environment (not in this repo)
 
@@ -53,7 +53,7 @@ python solve_problems.py                                  # fans out across both
 W4A8 SM90 execution, the int4-MLP phase-L DFlash draft, and BF16 KV.
 `MODEL_MODE=bf16` selects the BF16 target, draft, KV cache, and LM head. No
 other weight or activation mode is supported. Both modes use mandatory DFlash,
-200k context, and Triton attention with in-kernel sinks.
+200k context, and FA3 attention with in-kernel sinks.
 
 ## KV-cache reuse experiment
 
@@ -71,7 +71,7 @@ production launchers do not source that file. Radix prefix caching is disabled
 for both paths, so every one-token request performs a full prefill. DFlash is
 mandatory in this experiment: there is no opt-in switch and no non-DFlash
 fallback. It always loads the local BF16 draft, uses block size 8, an auto-read
-512-token draft ring, and Triton draft attention.
+512-token draft ring, and FA3 draft attention.
 
 Run the default equation-solving experiment on GPU 1 with the patched
 environment:

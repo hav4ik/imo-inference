@@ -46,14 +46,6 @@ class RunnerConfigurationTests(unittest.TestCase):
         mem_index = dflash.index("--mem-fraction-static")
         self.assertEqual(dflash[mem_index + 1], "0.82")
 
-        alignment = self.pair["common_environment"][
-            "SGLANG_TRITON_PREFILL_TRUNCATION_ALIGN_SIZE"
-        ]
-        self.assertEqual(
-            alignment,
-            str(self.pair["common_arguments"]["chunked_prefill_size"]),
-        )
-
     def test_result_directory_override_cannot_escape_tests(self) -> None:
         args = argparse.Namespace(
             results_dir=Path("outside-tests-results/escaped"),

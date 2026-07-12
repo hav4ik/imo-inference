@@ -57,13 +57,9 @@ The proof-pilot project ships whole-file replacements for a **pinned sglang
 nightly** (`0.5.14.dev20260618`), carried in `sglang_patches/`:
 
 - `olmo2_sink_dflash.py` → `models/olmo2.py`: adds `Olmo3SinkForCausalLM`
-  with sinks computed **in-kernel** (triton backend), plus hybrid-SWA memory.
+  with sinks computed **in-kernel** under FA3, plus hybrid-SWA memory.
 - `dflash_*.py`: DFlash speculative-decoding support (draft model, KV-ring
   worker, SWA-eviction fix). Inert unless a draft model is configured.
-- `patch_decode_tune.py` / `patch_gqa_packed_extend.py`: in-place edits to
-  stock triton kernels, env-gated (`SGLANG_DECODE_NUM_STAGES=3`,
-  `SGLANG_DECODE_BLOCK_N=32`, `SGLANG_GQA_PACKED_EXTEND=1`) — no-ops unless
-  the launcher sets the vars.
 
 ## 3. Why copying .py files over site-packages works at all
 
@@ -99,8 +95,8 @@ The upstream deploy scripts targeted Kaggle (offline, RTX 6000 Pro sm120,
   `12.0f` — wrong arch list = kernels compiled for the wrong GPU.
 - Serving knobs kept as-is (verified working): fp8_e4m3 KV cache, ctx 200k,
   chunked prefill 2048, CUDA graphs for every decode bs 1–16 + sparse tail
-  to 48, piecewise prefill graphs at 256/1024/2048 tokens, triton
-  `kv_splits=32`, stream interval 16.
+  to 48, piecewise prefill graphs at 256/1024/2048 tokens, FA3
+  attention, stream interval 16.
 - **Multi-GPU**: the model fits on one card, so 2 GPUs = 2 independent
   replicas (data parallel, ports 30000/30001) — strictly better than
   splitting one model across cards, which serializes layers.
@@ -128,7 +124,7 @@ hardware isn't the binding constraint. Caveat: measured on short contexts
 reads a growing KV cache.
 
 Boot profile: weights 12 s (warm page cache), CUDA graph capture ~47 s,
-plus one-time ~2 min triton JIT per GPU arch.
+plus one-time CUDA graph compilation per GPU architecture.
 
 ## 6. Operational notes
 

@@ -112,7 +112,7 @@ host, with the H200-validated BF16 KV correction:
 | Target | exact GPTQ W4A16 `opd-32b-v33-s200-gptq-w4a16` |
 | Draft | exact compressed-tensors int4-MLP DFlash draft |
 | Target and draft KV cache | BF16 (`auto`) |
-| Attention | Triton, stock GQA extend on H200 |
+| Attention | FA3 on H200 |
 | Target attention | hybrid: 48 SWA-4096 layers and 16 full-attention layers |
 | Draft attention | 8 SWA-512 layers with the compact KV ring enabled |
 | Speculative block | 8 positions: current anchor plus up to 7 proposals |

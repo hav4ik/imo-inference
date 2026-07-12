@@ -581,8 +581,7 @@ class Olmo2ForCausalLM(nn.Module):
                 weight_loader(param, loaded_weight)
         if loaded_sinks:
             logger.info(f"Olmo3Sink: loaded {loaded_sinks} attention-sink tensors")
-        # Finalize fp8 KV scales (opt-in): derive the k_scale_float/v_scale_float that the triton
-        # backend reads. Done explicitly here rather than relying on a framework post-load pass for
+        # Finalize opt-in FP8 KV scales for RadixAttention. Done explicitly here rather than relying on a framework post-load pass for
         # RadixAttention; process_weights_after_loading also safely falls back to 1.0 if a layer's
         # scale never loaded (param still -1.0). No-op when SGLANG_LOAD_KV_SCALE is off.
         if os.environ.get("SGLANG_LOAD_KV_SCALE") == "1":
