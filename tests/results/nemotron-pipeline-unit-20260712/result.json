@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "git_commit": "d5c45db60025b0d0f55dcdd59a70d90662c57b11",
+  "command": "/workspace/pp/venv/bin/python -m unittest discover -s tests -p 'test_*.py' -v",
+  "tests_run": 161,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "status": "passed",
+  "elapsed_seconds": 1.116
+}
