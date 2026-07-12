@@ -36,6 +36,7 @@ problem-specific branches.
 | `harness/proof_search.py` | resumable cumulative proof-pool engine |
 | `harness/grade_proofs.py` | resumable 64-attempt zero-veto grader |
 | `harness/run_full_evaluation.py` | preflight, search, audits, grading, report |
+| `PIPELINE_REQUEST_SIZE.md` | first-principles per-request context and fan-in derivation |
 
 ## Debug execution
 
