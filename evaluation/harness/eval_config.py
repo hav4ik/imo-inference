@@ -17,7 +17,7 @@ MODEL_KEYS = {
 SERVER_KEYS = {
     "host", "port", "context_length", "mem_fraction_static", "max_running_requests",
     "swa_full_tokens_ratio", "chunked_prefill_size", "stream_interval",
-    "triton_attention_num_kv_splits", "prefill_cuda_graph_backend",
+    "prefill_cuda_graph_backend",
     "dflash_block_size", "dflash_num_draft_tokens", "dflash_window_size",
 }
 SEARCH_KEYS = {
@@ -64,8 +64,8 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ValueError("evaluation config must be a YAML mapping")
     _exact_keys(config, ROOT_KEYS, "root")
-    if config["schema_version"] != 6:
-        raise ValueError("schema_version must be 6")
+    if config["schema_version"] != 7:
+        raise ValueError("schema_version must be 7")
     for section, keys in (
         ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
         ("search", SEARCH_KEYS), ("grader", GRADER_KEYS),
@@ -89,7 +89,7 @@ def load_config(path: Path) -> dict[str, Any]:
     server = config["server"]
     for key in (
         "port", "context_length", "max_running_requests", "chunked_prefill_size",
-        "stream_interval", "triton_attention_num_kv_splits", "dflash_block_size",
+        "stream_interval", "dflash_block_size",
         "dflash_num_draft_tokens", "dflash_window_size",
     ):
         _positive_int(server[key], f"server.{key}")

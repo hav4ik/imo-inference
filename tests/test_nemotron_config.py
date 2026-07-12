@@ -33,6 +33,7 @@ class NemotronConfigTests(unittest.TestCase):
         server = self.config["server"]
         self.assertEqual(server["max_running_requests"], 32)
         self.assertEqual(server["mem_fraction_static"], 0.84)
+        self.assertNotIn("triton_attention_num_kv_splits", server)
 
     def test_default_is_bf16_target_only_tp2_dp1(self):
         model = active_model(self.config)
@@ -100,6 +101,14 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertIn("launch_server.py", launcher)
         self.assertNotIn("MODEL_MODE", launcher)
         self.assertNotIn("DFLASH=", launcher)
+
+    def test_launcher_requires_fa3_for_target_and_draft(self):
+        launcher = (HARNESS / "launch_server.py").read_text()
+        self.assertIn('"--attention-backend", "fa3"', launcher)
+        self.assertIn('"--speculative-draft-attention-backend", "fa3"', launcher)
+        self.assertNotIn('"--attention-backend", "triton"', launcher)
+        self.assertNotIn('"--speculative-draft-attention-backend", "triton"', launcher)
+        self.assertNotIn("--triton-attention-num-kv-splits", launcher)
 
 
 if __name__ == "__main__":

@@ -93,7 +93,7 @@ def main() -> None:
 
     command = [
         str(venv / "bin/python"), "-m", "sglang.launch_server",
-        "--model-path", str(model.target), "--attention-backend", "triton",
+        "--model-path", str(model.target), "--attention-backend", "fa3",
         "--tp", str(model.tensor_parallel_size), "--dp", str(model.data_parallel_size),
         "--load-balance-method", "round_robin", "--host", str(server["host"]),
         "--port", str(server["port"]), "--mem-fraction-static", str(server["mem_fraction_static"]),
@@ -106,7 +106,6 @@ def main() -> None:
         "--cuda-graph-bs-decode", *map(str, decode_graph_batches(server["max_running_requests"])),
         "--cuda-graph-backend-prefill", str(server["prefill_cuda_graph_backend"]),
         "--cuda-graph-bs-prefill", "256", "1024", str(server["chunked_prefill_size"]),
-        "--triton-attention-num-kv-splits", str(server["triton_attention_num_kv_splits"]),
         "--enable-cache-report", "--enable-metrics", "--random-seed", str(config["search"]["seed"]),
         "--enable-deterministic-inference", "--reasoning-parser", "deepseek-r1",
     ]
@@ -119,7 +118,7 @@ def main() -> None:
                 "--speculative-dflash-block-size", str(server["dflash_block_size"]),
                 "--speculative-num-draft-tokens", str(server["dflash_num_draft_tokens"]),
                 "--speculative-draft-window-size", str(server["dflash_window_size"]),
-                "--speculative-draft-attention-backend", "triton",
+                "--speculative-draft-attention-backend", "fa3",
             ]
         )
         if model.quantized:

@@ -13,8 +13,9 @@ difficulty-specific configurations or problem-dependent budget branches.
 ## Serving modes
 
 All modes use one SGLang server with tensor parallelism 2 across both H200 GPUs,
-BF16 KV cache, radix prefix caching, overlap scheduling, and CUDA graphs. Two
-independent YAML booleans provide four supported modes:
+FA3 target attention, BF16 KV cache, radix prefix caching, overlap scheduling,
+and CUDA graphs. DFlash modes also require FA3 draft attention. Two independent
+YAML booleans provide four supported modes:
 
 | Quantized target | DFlash | Mode |
 |:---:|:---:|---|

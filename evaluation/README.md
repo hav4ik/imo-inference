@@ -9,6 +9,7 @@ Only the problem source changed from the earlier plan. The checked-in inference
 policy remains:
 
 - BF16 target-only TP2 inference by default;
+- mandatory FA3 target attention and FA3 draft attention whenever DFlash is enabled;
 - Humming W4A8 target quantization and DFlash as independent opt-in booleans;
 - 32 initial proofs, 16 verifications per proof, top 8 proofs, four
   refinements per selected proof, eight refinement analyses, and four rounds;
