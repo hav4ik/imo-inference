@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "packages": {
+    "sglang": "0.5.14.dev20260618+g343aeeef39",
+    "flash-attn-4": "4.0.0b15",
+    "nvidia-cutlass-dsl": "4.5.2",
+    "nvidia-cutlass-dsl-libs-base": "4.5.2",
+    "nvidia-cutlass-dsl-libs-cu13": "4.5.2",
+    "quack-kernels": "0.5.0",
+    "torch": "2.11.0",
+    "cuda-python": "13.3.1"
+  },
+  "gpus": [
+    "0, NVIDIA H200, 143771 MiB, 9.0",
+    "1, NVIDIA H200, 143771 MiB, 9.0"
+  ],
+  "repair": {
+    "flash_attn_4_before": "4.0.0b18",
+    "flash_attn_4_after": "4.0.0b15",
+    "cutlass_dsl_reinstalled_together": true,
+    "direct_fa4_sm90_smoke": {
+      "shape": [
+        128,
+        40,
+        128
+      ],
+      "dtype": "torch.bfloat16",
+      "finite": true,
+      "q_heads": 40,
+      "kv_heads": 8,
+      "head_dim": 128,
+      "sliding_window": 4095,
+      "attention_sinks": true
+    }
+  }
+}

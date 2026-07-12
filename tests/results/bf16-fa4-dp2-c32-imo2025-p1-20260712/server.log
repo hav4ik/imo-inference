@@ -1,0 +1,25 @@
+[serve_opd32b] mode=bf16 dflash=true tp=1 dp=2 model=/workspace/models/opd-32b-deploy draft=/workspace/models/dflash-32b-draft-v2test-phaseL kv=auto port=30000 ctx=262144
+/workspace/pp/venv/lib/python3.12/site-packages/sglang/launch_server.py:54: UserWarning: 'python -m sglang.launch_server' is still supported, but 'sglang serve' is the recommended entrypoint.
+  Example: sglang serve --model-path <model> [options]
+  warnings.warn(
+[2026-07-12 20:46:02] Hybrid swa model: self.hf_config.architectures=['Olmo3SinkForCausalLM']
+[2026-07-12 20:46:02] FlashInfer allreduce fusion is forcibly disabled via --enforce-disable-flashinfer-allreduce-fusion.
+[2026-07-12 20:46:02] Sampling backend is set to pytorch for deterministic inference.
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/pp/venv/lib/python3.12/site-packages/sglang/launch_server.py", line 66, in <module>
+    server_args = prepare_server_args(sys.argv[1:])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 8373, in prepare_server_args
+    return ServerArgs.from_cli_args(raw_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 7653, in from_cli_args
+    return cls(**{attr: getattr(args, attr) for attr in attrs})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 404, in __init__
+  File "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 1009, in __post_init__
+    self._handle_deterministic_inference()
+  File "/workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/server_args.py", line 4472, in _handle_deterministic_inference
+    raise ValueError(
+ValueError: Currently only ['flashinfer', 'fa3', 'triton', 'ascend'] attention backends are supported for deterministic inference, but you explicitly specified 'fa4'.
