@@ -1,0 +1,16 @@
+{
+  "source": "AIME 2025 I, Problem 1",
+  "problem_id": "AIME-2025-I-01",
+  "problem": "Find the sum of all integer bases $b>9$ for which $17_b$ is a divisor of $97_b$.",
+  "expected_answer": 70,
+  "solution": "In base $b$, $17_b=b+7$ and $97_b=9b+7$. Thus $17_b$ divides $97_b$ exactly when $b+7$ divides $9b+7=9(b+7)-56$, so $b+7$ must be a positive divisor of 56. Since $b>9$, we have $b+7>16$. The divisors of 56 greater than 16 are 28 and 56, giving $b=21$ and $b=49$. Both are valid bases and satisfy the divisibility condition. Their sum is $21+49=70$.",
+  "grading_guidelines": [
+    "1. [1 pt] Correctly interpret $17_b=b+7$.",
+    "2. [1 pt] Correctly interpret $97_b=9b+7$.",
+    "3. [1 pt] Reduce divisibility to $b+7\\mid 56$.",
+    "4. [1 pt] Use $b>9$ to require $b+7>16$.",
+    "5. [1 pt] Identify the eligible divisors 28 and 56.",
+    "6. [1 pt] Obtain and verify the bases $b=21$ and $b=49$.",
+    "7. [1 pt] Report the required sum $70$."
+  ]
+}

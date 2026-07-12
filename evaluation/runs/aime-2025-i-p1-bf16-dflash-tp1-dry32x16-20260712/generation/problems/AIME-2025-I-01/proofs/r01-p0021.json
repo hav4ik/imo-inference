@@ -1,0 +1,92 @@
+{
+  "proof_id": "r01-p0021",
+  "round_index": 1,
+  "parent_id": null,
+  "proof": "We are given integer bases \\(b > 9\\).  The notation \\(17_b\\) means the number \\(1\\cdot b + 7 = b+7\\), and \\(97_b\\) means \\(9\\cdot b + 7 = 9b+7\\).  The condition that \\(17_b\\) is a divisor of \\(97_b\\) is\n\\[\nb+7 \\mid 9b+7.\n\\]\n\nCompute:\n\\[\n9b+7 = 9(b+7) - 56.\n\\]\nThus \\(b+7 \\mid 9(b+7) - 56\\) implies \\(b+7 \\mid 56\\) (because if \\(d \\mid 9d - 56\\) then \\(d \\mid 56\\)).  Conversely, if \\(b+7 \\mid 56\\) then \\(b+7 \\mid 9(b+7) - 56 = 9b+7\\).  Hence the condition is equivalent to\n\\[\nb+7 \\mid 56.\n\\]\n\nSince \\(b > 9\\), we have \\(b+7 > 16\\).  The positive divisors of \\(56\\) are\n\\[\n1,\\;2,\\;4,\\;7,\\;8,\\;14,\\;28,\\;56.\n\\]\nThose greater than \\(16\\) are \\(28\\) and \\(56\\).  Correspondingly,\n\\[\nb = 28-7 = 21,\\qquad b = 56-7 = 49.\n\\]\nBoth satisfy \\(b > 9\\) and the digit constraints (the digits \\(1,7\\) and \\(9,7\\) are all less than the base).  Therefore the required bases are \\(21\\) and \\(49\\), and their sum is\n\\[\n21 + 49 = 70.\n\\]\n\n\\[\n\\boxed{70}\n\\]",
+  "self_evaluation": "The proof is complete and rigorous: it correctly translates the base notation, uses the Euclidean algorithm to reduce the divisibility condition to \\(b+7 \\mid 56\\), enumerates the positive divisors, selects those satisfying \\(b>9\\), and computes the sum.  No gaps or unsupported claims remain.",
+  "self_score": 1.0,
+  "generation_sample_id": "round-01/generate/r01-p0021",
+  "verifications": [
+    {
+      "sample_id": "round-01/verify/r01-p0021/v000",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, uses the divisibility property to reduce the condition to \\(b+7 \\mid 56\\), enumerates the positive divisors of 56, selects those that satisfy \\(b>9\\) (and the digit constraints), and computes the sum. All steps are logically justified, and no errors or omissions are present. The proof is rigorous and complete.\n</evaluation>\n<suggestions>\nNo improvements needed; the solution is already clear and correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v001",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation to algebraic expressions, uses the Euclidean algorithm to reduce the divisibility condition to \\(b+7 \\mid 56\\), enumerates the positive divisors of 56, selects those satisfying \\(b>9\\), and computes the sum. All steps are justified and no errors or omissions are present.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v002",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, uses algebraic manipulation to reduce the divisibility condition to \\(b+7 \\mid 56\\), enumerates the relevant divisors, selects those satisfying \\(b>9\\), and verifies the digit constraints. All steps are justified, and no gaps or errors are present.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is clear and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v003",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\) via the Euclidean algorithm, enumerates the positive divisors, selects those satisfying \\(b>9\\), and computes the sum. All steps are logically sound and well-justified. There are no hidden assumptions, missing cases, or errors.\n</evaluation>\n<suggestions>\nNo improvements needed; the solution is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v004",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation to algebraic expressions, reduces the divisibility condition to \\(b+7 \\mid 56\\), enumerates the positive divisors of 56, selects those satisfying \\(b>9\\), and computes the sum. All steps are logically justified and no gaps or errors are present. The digit constraints are implicitly satisfied by the condition \\(b>9\\). The proof is complete and rigorous.\n</evaluation>\n<suggestions>\nNo suggestions; the solution is fully correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v005",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe candidate solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\) via a simple linear combination, enumerates the positive divisors, selects those satisfying \\(b>9\\), verifies digit constraints, and computes the sum. All steps are logically sound and well justified. There are no gaps, hidden assumptions, or errors.\n</evaluation>\n<suggestions>\nNo improvements necessary; the proof is rigorous and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v006",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\) via algebraic manipulation, enumerates the positive divisors, selects those that satisfy \\(b>9\\), and computes the sum of the corresponding bases. All steps are logically justified, and no errors or omissions are present. The proof is rigorous and complete.\n</evaluation>\n<suggestions>\nNo suggestions needed.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v007",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\) using algebraic manipulation, enumerates the divisors of 56, selects those satisfying \\(b>9\\), and verifies the digit constraints. All steps are justified, and the final sum is computed correctly. The proof is rigorous and complete.\n</evaluation>\n<suggestions>\nNo suggestions needed; the solution is fully correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v008",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe candidate solution correctly translates the base notation into algebraic expressions, reduces the divisibility condition to \\(b+7 \\mid 56\\) using the Euclidean algorithm, enumerates the positive divisors of 56, selects those greater than 16 (since \\(b>9\\)), obtains the valid bases \\(21\\) and \\(49\\), and computes their sum as 70. All steps are logically sound and justified. The digit constraints are also noted and satisfied. There are no gaps, hidden assumptions, or errors.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v009",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation to algebraic expressions, reduces the divisibility condition to b+7 | 56, enumerates divisors, selects those satisfying b>9, and verifies digit constraints. All steps are logically justified and no errors or omissions. The reasoning is rigorous.\n</evaluation>\n<suggestions>\nNone needed.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v010",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\) using the Euclidean algorithm, enumerates the positive divisors of 56, selects those with \\(b>9\\), and verifies the digit constraints. The reasoning is complete and rigorous, with no gaps or errors.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is already thorough.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v011",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly interprets the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\), enumerates the divisors, selects those with \\(b>9\\), and computes the sum. Every step is logically justified, and the final answer is correct.\n</evaluation>\n<suggestions>\nNo significant issues; the proof is clear and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v012",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation into algebraic expressions, uses the divisibility condition to derive \\(b+7 \\mid 56\\), enumerates the positive divisors of 56, selects those satisfying \\(b > 9\\) (i.e., \\(b+7 > 16\\)), obtains \\(b = 21\\) and \\(b = 49\\), verifies digit constraints, and computes the sum as 70. All steps are logically sound and fully justified. No gaps or errors are present.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v013",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition using algebraic manipulation, identifies the relevant divisors, applies the base constraint, and computes the sum. All steps are logically sound and justified, and the final answer is correct.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is rigorous and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v014",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation, reduces the divisibility condition to \\(b+7 \\mid 56\\), enumerates the positive divisors of 56, selects those that satisfy \\(b>9\\), and computes the sum. All steps are justified, and no hidden assumptions or missing cases are present. The solution is rigorous and complete.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is correct and clear.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0021/v015",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base notation to algebraic expressions, derives the divisibility condition, reduces it to \\(b+7 \\mid 56\\) using the Euclidean algorithm, enumerates the positive divisors of 56, selects those satisfying \\(b>9\\) (and checks digit constraints), and obtains the bases 21 and 49 with sum 70. All steps are logically sound and justified; no gaps or errors are present.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    }
+  ],
+  "mean_score": 1.0
+}

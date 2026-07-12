@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "problem_id": "AIME-2025-I-01",
+  "final_source": "verification_pool",
+  "selected_proof_id": "r01-p0009",
+  "final_proof": "We interpret \\(17_b\\) and \\(97_b\\) as numbers in base \\(b\\): \\(17_b = 1\\cdot b + 7 = b+7\\) and \\(97_b = 9\\cdot b + 7 = 9b+7\\). The condition that \\(17_b\\) divides \\(97_b\\) means \\((b+7) \\mid (9b+7)\\). For integers \\(b>9\\), we have\n\\[\n9b+7 = 9(b+7) - 56.\n\\]\nThus \\((b+7) \\mid (9b+7)\\) if and only if \\((b+7) \\mid 56\\). Because if \\((b+7)\\) divides both \\(9(b+7)\\) and \\(9b+7\\), it divides their difference \\(-56\\); conversely, if \\((b+7) \\mid 56\\), then \\((b+7) \\mid 9(b+7)-56 = 9b+7\\).\n\nWe need \\(b>9\\), so \\(b+7>16\\). The positive divisors of \\(56\\) are \\(1,2,4,7,8,14,28,56\\). Among these, those greater than \\(16\\) are \\(28\\) and \\(56\\). Hence \\(b+7=28\\) or \\(b+7=56\\), giving \\(b=21\\) or \\(b=49\\). Both satisfy \\(b>9\\) and the digit constraints (digits \\(1,7,9\\) are all less than the base). Therefore the sum of all such bases is \\(21+49=70\\).\n\n\\[\n\\boxed{70}\n\\]",
+  "mean_verifier_score": 1.0,
+  "self_score": 1.0,
+  "rounds_completed": 1,
+  "proofs_in_pool": 32,
+  "calls_completed": 544
+}

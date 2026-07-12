@@ -1,0 +1,92 @@
+{
+  "proof_id": "r01-p0013",
+  "round_index": 1,
+  "parent_id": null,
+  "proof": "Let \\(b\\) be an integer base with \\(b>9\\). The numbers in base \\(b\\) are\n\\[\n17_b = 1\\cdot b + 7 = b+7,\\qquad 97_b = 9\\cdot b + 7 = 9b+7.\n\\]\nWe require that \\(b+7\\) divides \\(9b+7\\).  Compute\n\\[\n9b+7 = 9(b+7) - 56.\n\\]\nSince \\(b+7\\) divides \\(9(b+7)\\), it divides \\(9b+7\\) if and only if it divides \\(56\\).  Thus the condition is\n\\[\nb+7 \\mid 56.\n\\]\nBecause \\(b>9\\), we have \\(b+7 > 16\\).  The positive divisors of \\(56\\) are\n\\[\n1,\\,2,\\,4,\\,7,\\,8,\\,14,\\,28,\\,56.\n\\]\nOnly those exceeding \\(16\\) are \\(28\\) and \\(56\\).  Hence\n\\[\nb+7 = 28 \\quad\\text{or}\\quad b+7 = 56,\n\\]\ngiving \\(b = 21\\) or \\(b = 49\\).  Both satisfy \\(b>9\\).  The sum of these bases is\n\\[\n21 + 49 = 70.\n\\]\nTherefore the required sum is \\(\\boxed{70}\\).",
+  "self_evaluation": "The proof is complete and rigorous.  Every step is justified: the conversion from base notation to integer expressions, the algebraic manipulation to obtain the divisibility condition, the listing of divisors, and the selection of those satisfying the inequality.  No gaps or unsupported claims remain.",
+  "self_score": 1.0,
+  "generation_sample_id": "round-01/generate/r01-p0013",
+  "verifications": [
+    {
+      "sample_id": "round-01/verify/r01-p0013/v000",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly translates the base representation to algebraic expressions, derives the divisibility condition, identifies the divisors of 56, selects those consistent with b>9, and computes the sum. All steps are logically sound and fully justified.\n</evaluation>\n<suggestions>\nNo significant improvements needed; the proof is clear and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v001",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe candidate solution correctly converts the base representations to integers, manipulates the divisibility condition to obtain \\(b+7 \\mid 56\\), lists the positive divisors of 56, selects those greater than 16 (since \\(b>9\\) implies \\(b+7>16\\)), solves for \\(b\\) to get 21 and 49, and sums them to 70. Every step is justified, and no gaps or errors are present. The solution is rigorous and fully addresses the problem.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is complete and correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v002",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to integers, derives the divisibility condition, lists divisors, and selects those satisfying the base constraint. All steps are justified and no errors or gaps are present.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v003",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to integer expressions, derives the divisibility condition, lists the divisors of 56, selects those that satisfy the inequality b>9, and obtains the sum. All steps are justified, and no errors or omissions are present. The proof is rigorous and complete.\n</evaluation>\n<suggestions>\nNo suggestions needed; the solution is already correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v004",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to integer expressions, manipulates the divisibility condition to obtain \\(b+7 \\mid 56\\), lists the divisors of 56, selects those satisfying \\(b>9\\), and computes the sum. All steps are justified and there are no gaps or errors. The self-evaluation accurately reflects the completeness and rigor.\n</evaluation>\n<suggestions>\nNo improvements are necessary.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v005",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution is completely correct. All steps are justified: conversion from base notation to integer expressions, algebraic manipulation to obtain the divisibility condition, listing of divisors, selection of those satisfying b>9, and summing the resulting bases. No gaps or errors.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is rigorous and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v006",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to decimal expressions, manipulates the divisibility condition, and solves for the bases. All steps are logically sound and justified. The reasoning is complete and free of errors.\n</evaluation>\n<suggestions>\nNone needed; the proof is rigorous and complete.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v007",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe proof is complete and rigorous. The conversion from base notation to integer expressions is correct, the algebraic manipulation to derive the divisibility condition is valid, the listing of divisors and selection based on the inequality is accurate, and the final sum is correctly computed. All steps are justified, and there are no gaps, hidden assumptions, or errors.\n</evaluation>\n<suggestions>\nNo suggestions needed.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v008",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to decimal expressions, manipulates the divisibility condition to \\(b+7 \\mid 56\\), lists divisors of 56, and selects those satisfying \\(b>9\\). All steps are logically sound and justified. No errors or omissions.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is clear and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v009",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution is completely correct and rigorous. The conversion from base notation to decimal expressions is accurate, the algebraic manipulation to obtain the divisibility condition is valid, the divisor listing is correct, and the selection of bases satisfying b>9 is properly justified. No gaps, missing cases, or errors are present.\n</evaluation>\n<suggestions>\nNo suggestions; the proof is already thorough.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v010",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base‑b representations to integer expressions, derives the divisibility condition, solves for possible bases, and verifies the conditions. Every step is justified and no gaps or errors remain. The final sum is correctly computed as 70.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is fully rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v011",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base numbers to integer expressions, uses algebraic manipulation to derive the divisibility condition \\(b+7 \\mid 56\\), lists the divisors of 56, selects those that satisfy \\(b>9\\) (i.e., \\(b+7 > 16\\)), obtains \\(b = 21\\) and \\(b = 49\\), and sums them to \\(70\\). Every step is justified, and no gaps or errors are present.\n</evaluation>\n<suggestions>\nNone needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v012",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to integer expressions, derives the divisibility condition, and finds all bases satisfying the condition. Every step is logically justified, and no gaps or errors are present. The sum is computed correctly.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is clear and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v013",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to decimal, derives the divisibility condition \\(b+7 \\mid 56\\), lists the divisors, and selects those satisfying \\(b>9\\). All steps are logically sound and justified. The final sum is computed correctly. The proof is rigorous and complete.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is already clear and correct.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v014",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base numbers to integers, manipulates the divisibility condition, identifies the divisors of 56, selects those satisfying b>9, and sums the resulting bases. All steps are justified and no errors or omissions are present.\n</evaluation>\n<suggestions>\nNo suggestions needed; the proof is fully correct and rigorous.\n</suggestions>\n<score>1</score>"
+    },
+    {
+      "sample_id": "round-01/verify/r01-p0013/v015",
+      "score": 1.0,
+      "analysis": "<evaluation>\nThe solution correctly converts the base representations to integer expressions, manipulates the divisibility condition, and identifies the possible bases. All steps are logically justified, and the final sum is correctly computed. There are no gaps or errors.\n</evaluation>\n<suggestions>\nNo improvements needed; the proof is complete and rigorous.\n</suggestions>\n<score>1</score>"
+    }
+  ],
+  "mean_score": 1.0
+}
