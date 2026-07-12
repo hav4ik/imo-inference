@@ -54,6 +54,30 @@ class ScriptedClient:
         }
 
 
+class GatedClient(ScriptedClient):
+    def __init__(self, expected_calls: int):
+        super().__init__()
+        self.expected_calls = expected_calls
+        self.all_started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        self.calls.append(request_id)
+        if len(self.calls) == self.expected_calls:
+            self.all_started.set()
+        await self.release.wait()
+        return {
+            "message": {"content": "unused", "reasoning_content": ""},
+            "finish_reason": "stop",
+            "prompt_tokens": 10,
+            "cached_prompt_tokens": 0,
+            "completion_tokens": 1,
+            "reasoning_tokens": 0,
+            "requested_max_completion_tokens": 100,
+            "latency_s": 0.01,
+        }
+
+
 def small_config() -> dict:
     return {
         "proofs_per_round": 2,
@@ -72,6 +96,37 @@ def small_config() -> dict:
 
 
 class ProofSearchTests(unittest.TestCase):
+    def test_prompt_group_requests_start_concurrently(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                client = GatedClient(expected_calls=3)
+                search = ProblemSearch(
+                    problem_id="1",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(3),
+                    config=small_config(),
+                )
+                messages = generation_messages("Prove the claim.")
+                group = [
+                    search._spec(
+                        f"round-01/generate/r01-p{index:04d}", "generate", messages
+                    )
+                    for index in range(3)
+                ]
+                task = asyncio.create_task(search._perform_prompt_groups([group]))
+                await asyncio.wait_for(client.all_started.wait(), timeout=1)
+                self.assertEqual(client.calls, [spec.sample_id for spec in group])
+                client.release.set()
+                records = await task
+                self.assertEqual(
+                    [record["sample_id"] for record in records],
+                    [spec.sample_id for spec in group],
+                )
+
+        asyncio.run(run())
+
     def test_prompt_files_are_byte_identical_to_ycchen_commit(self):
         self.assertEqual(
             prompt_hashes(),

@@ -232,12 +232,7 @@ class ProblemSearch:
         )
 
     async def _perform_prompt_groups(self, groups: list[list[CallSpec]]) -> list[dict]:
-        first = [group[0] for group in groups if group]
-        rest = [spec for group in groups for spec in group[1:]]
-        first_records = await self._perform(first)
-        rest_records = await self._perform(rest) if rest else []
-        by_id = {record["sample_id"]: record for record in first_records + rest_records}
-        return [by_id[spec.sample_id] for group in groups for spec in group]
+        return await self._perform([spec for group in groups for spec in group])
 
     def _rank_key(self, proof: Proof) -> tuple[float, float, int]:
         tie = stable_seed(self.config["seed"], self.problem_id, "tie", proof.proof_id)

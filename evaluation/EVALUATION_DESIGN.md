@@ -59,9 +59,9 @@ Each full round makes 32 generation calls and 512 verifier calls. Eight rounds
 make at most 4,352 local calls per problem. Early stop
 can reduce the count without changing the algorithm.
 
-The first request for each identical prompt group completes before the remaining
-requests are admitted, establishing the shared radix-cache prefix for later
-independent continuations.
+All independent continuations are admitted together, bounded only by the YAML
+concurrency limit. The client does not serialize a full completion or issue a
+synthetic request to prime the radix cache; prefix reuse is managed by SGLang.
 
 ## Persistence
 
