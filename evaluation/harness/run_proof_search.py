@@ -82,7 +82,7 @@ async def run_search(config_path: Path, ids_file: Path, output_dir: Path) -> lis
         str(model.target),
         api_key="EMPTY",
         max_connections=config["search"]["concurrency"] + 8,
-        timeout=7200.0,
+        timeout=float(config["search"]["request_timeout_seconds"]),
     )
     semaphore = asyncio.Semaphore(config["search"]["concurrency"])
     results: list[dict] = []

@@ -29,6 +29,7 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(search["analyses_per_refinement"], 8)
         self.assertEqual(search["max_rounds"], 4)
         self.assertEqual(search["concurrency"], 32)
+        self.assertEqual(search["request_timeout_seconds"], 86400)
         server = self.config["server"]
         self.assertEqual(server["max_running_requests"], 32)
         self.assertEqual(server["mem_fraction_static"], 0.84)
