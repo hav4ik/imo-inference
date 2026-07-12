@@ -1,237 +1,262 @@
-"""Grade agentic ProofBench proofs with the required DeepSeek grader.
+"""Grade one selected proof per problem with the YAML-configured zero-veto policy."""
 
-The grader uses the paper B.5 prompt and accepts only one explicit score on the
-official 0/1/6/7 scale. Every request is written immediately for audit and resume.
-An empty proof, request failure, or malformed score aborts the run.
-
-Example:
-  python grade_proofs.py \
-    --run-ids opd32b_agentic_select \
-    --data ../data/proofbench_v2.csv --passes 2 \
-    --base-url https://api.deepseek.com/v1 --served-model deepseek-v4-flash \
-    --api-key-env DEEPSEEK_API_KEY --reasoning high --max-tokens 65536 \
-    --concurrency 60 --out-name grades_2pass.jsonl \
-    --summary-run-id opd32b-dflash-bf16-full/grading
-"""
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
-from collections import defaultdict
+import time
 from pathlib import Path
 from statistics import mean
-import time
 
-import pandas as pd
 from openai import AsyncOpenAI
 
-HERE = Path(__file__).resolve().parent
-EVAL_ROOT = HERE.parent
-sys.path.insert(0, str(HERE))
-from grader import parse_score  # noqa: E402  (canonical <points> parser)
+from eval_config import load_config
+from grader import parse_score
+from run_proof_search import load_requested_rows
+
+REPO = Path(__file__).resolve().parents[2]
+GRADER_PROMPT = REPO / "evaluation" / "prompts" / "grader.md"
 
 
-def _reasoning_extra(reasoning: str) -> dict:
-    """DeepSeek reasoning control via extra_body. high/max -> reasoning_effort; no_think ->
-    thinking disabled; default -> nothing. We never send temperature/top_p (thinking mode
-    ignores them); the calibrated production grader is 'high'."""
-    if reasoning in ("high", "max"):
-        return {"reasoning_effort": reasoning}
-    if reasoning == "no_think":
-        return {"thinking": {"type": "disabled"}}
-    return {}
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def load_run(run_id: str) -> list[dict]:
-    """Every candidate of a run, flattened: one dict per (problem, candidate_idx)."""
-    path = EVAL_ROOT / "runs" / run_id / "responses.jsonl"
-    out: list[dict] = []
-    for line in path.open():
-        r = json.loads(line)
-        for j, c in enumerate(r["candidates"]):
-            out.append({"pid": r["problem_id"], "cand": j, "subset": r["subset"],
-                        "category": r["category"], "level": r["level"],
-                        "problem": r["problem"],
-                        "text": c["text"]})
-    return out
+def load_selected_proofs(search_dir: Path, expected_ids: list[str]) -> dict[str, dict]:
+    records_path = search_dir / "records.jsonl"
+    records = [
+        json.loads(line)
+        for line in records_path.read_text().splitlines()
+        if line.strip()
+    ]
+    by_id: dict[str, dict] = {}
+    for record in records:
+        problem_id = record["problem_id"]
+        if problem_id in by_id:
+            raise RuntimeError(f"duplicate selected proof for {problem_id}")
+        if not record["final_proof"].strip():
+            raise RuntimeError(f"empty selected proof for {problem_id}")
+        by_id[problem_id] = record
+    if list(by_id) != expected_ids:
+        raise RuntimeError(
+            f"selected-proof IDs/order differ: expected={expected_ids}, actual={list(by_id)}"
+        )
+    return by_id
 
 
-async def amain(args) -> None:
-    key = os.environ.get(args.api_key_env)
-    if not key:
-        sys.exit(f"empty {args.api_key_env}")
-    run_ids = [r.strip() for r in args.run_ids.split(",") if r.strip()]
-    tpl = (EVAL_ROOT / "prompts" / "grader.md").read_text()
-    src = pd.read_csv(args.data).set_index("Problem ID")
-    keep = set(json.loads(Path(args.ids_file).read_text())) if args.ids_file else None
+def zero_veto_score(scores: list[int], attempts_per_proof: int) -> float:
+    if len(scores) != attempts_per_proof:
+        raise RuntimeError(
+            f"expected {attempts_per_proof} grader scores, received {len(scores)}"
+        )
+    return 0.0 if 0 in scores else mean(scores)
 
-    cands = {r: load_run(r) for r in run_ids}
-    out_paths = {r: EVAL_ROOT / "runs" / r / args.out_name for r in run_ids}
 
-    # resume: which (run, pid, cand, pass) already written
-    done: set[tuple] = set()
-    for r in run_ids:
-        if out_paths[r].exists():
-            for line in out_paths[r].open():
-                d = json.loads(line)
-                done.add((r, d["problem_id"], d["candidate_idx"], d["pass"]))
-    if done:
-        print(f"[resume] {len(done)} records already present")
+def aggregate_grades(
+    records: list[dict],
+    problem_ids: list[str],
+    attempts_per_proof: int,
+) -> dict:
+    grouped: dict[str, list[dict]] = {problem_id: [] for problem_id in problem_ids}
+    for record in records:
+        grouped[record["problem_id"]].append(record)
+    problems = []
+    for problem_id in problem_ids:
+        attempts = sorted(grouped[problem_id], key=lambda item: item["attempt"])
+        if [item["attempt"] for item in attempts] != list(range(attempts_per_proof)):
+            raise RuntimeError(f"incomplete grader attempt sequence for {problem_id}")
+        if any(item["error"] is not None for item in attempts):
+            raise RuntimeError(f"failed grader attempt persisted for {problem_id}")
+        scores = [item["score"] for item in attempts]
+        score = zero_veto_score(scores, attempts_per_proof)
+        problems.append(
+            {
+                "problem_id": problem_id,
+                "attempts": attempts_per_proof,
+                "attempt_scores": scores,
+                "zero_veto_triggered": 0 in scores,
+                "score_out_of_7": score,
+                "score_percent": score / 7 * 100,
+            }
+        )
+    overall = mean(item["score_out_of_7"] for item in problems)
+    return {
+        "schema_version": 1,
+        "aggregation": "zero_veto_else_arithmetic_mean",
+        "attempts_per_proof": attempts_per_proof,
+        "problems": problems,
+        "overall_score_out_of_7": overall,
+        "overall_score_percent": overall / 7 * 100,
+    }
 
-    files = {r: out_paths[r].open("a") for r in run_ids}
 
-    def write(run_id, rec):
-        files[run_id].write(json.dumps(rec, ensure_ascii=False) + "\n")
-        files[run_id].flush()
+async def grade_final_proofs(
+    config_path: Path,
+    ids_file: Path,
+    search_dir: Path,
+    output_dir: Path,
+) -> dict:
+    config = load_config(config_path)
+    grader = config["grader"]
+    if sha256(GRADER_PROMPT) != grader["prompt_sha256"]:
+        raise RuntimeError("grader prompt hash differs from the YAML")
+    api_key = os.environ.get(grader["api_key_env"])
+    if not api_key:
+        raise RuntimeError(f"empty {grader['api_key_env']}")
 
-    tasks = []
-    for r in run_ids:
-        for c in cands[r]:
-            if keep is not None and c["pid"] not in keep:
+    rows = load_requested_rows(ids_file)
+    problem_ids = [row["Problem ID"] for row in rows]
+    selected = load_selected_proofs(search_dir, problem_ids)
+    template = GRADER_PROMPT.read_text()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    records_path = output_dir / "records.jsonl"
+
+    existing: dict[tuple[str, int], dict] = {}
+    if records_path.exists():
+        for line in records_path.read_text().splitlines():
+            if not line.strip():
                 continue
-            for p in range(args.passes):
-                if (r, c["pid"], c["cand"], p) in done:
-                    continue
-                if not c["text"].strip():
-                    raise ValueError(f"empty proof: {r} {c['pid']} candidate {c['cand']}")
-                tasks.append((r, c, p))
-    for f in files.values():
-        f.flush()
-    print(f"[grade] runs={len(run_ids)} | grader calls={len(tasks)} | "
-          f"passes={args.passes} | conc={args.concurrency}")
+            record = json.loads(line)
+            key = (record["problem_id"], record["attempt"])
+            if key in existing:
+                raise RuntimeError(f"duplicate persisted grader attempt: {key}")
+            if record["error"] is not None:
+                raise RuntimeError(f"persisted failed grader attempt: {key}")
+            existing[key] = record
 
-    client = AsyncOpenAI(base_url=args.base_url, api_key=key, max_retries=0, timeout=3600.0)
-    sema = asyncio.Semaphore(args.concurrency)
-    lock = asyncio.Lock()
-    counter = {"done": 0, "total": len(tasks)}
+    jobs: list[tuple[dict, int, list[dict[str, str]], str]] = []
+    for row in rows:
+        problem_id = row["Problem ID"]
+        prompt = template.format(
+            problem_statement=row["Problem"],
+            solution=row["Solution"],
+            guidelines=row["Grading guidelines"],
+            student_answer=selected[problem_id]["final_proof"],
+        )
+        messages = [{"role": "user", "content": prompt}]
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+        for attempt in range(grader["attempts_per_proof"]):
+            if (problem_id, attempt) not in existing:
+                jobs.append((row, attempt, messages, prompt_hash))
 
-    async def work(run_id, c, p):
-        async with sema:
-            row = src.loc[c["pid"]]
-            prompt = tpl.format(problem_statement=c["problem"], solution=row["Solution"],
-                                guidelines=row["Grading guidelines"], student_answer=c["text"])
-            t0 = time.monotonic()
-            resp = await client.chat.completions.create(
-                model=args.served_model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=args.max_tokens,
-                extra_body=_reasoning_extra(args.reasoning))
-            latency = round(time.monotonic() - t0, 2)
-            m = resp.choices[0].message
-            content = m.content or ""
-            g = parse_score(content)
-            u = resp.usage
-            rtoks = getattr(u.completion_tokens_details, "reasoning_tokens", None) \
-                if u and u.completion_tokens_details else None
-            rec = {"run_id": run_id, "problem_id": c["pid"], "candidate_idx": c["cand"],
-                   "pass": p, "subset": c["subset"], "category": c["category"],
-                   "level": c["level"], "score": g["score"], "rationale": g["rationale"],
-                   "grader_content": content,
-                   "grader_reasoning": (m.model_extra or {}).get("reasoning_content") or "",
-                   "finish_reason": resp.choices[0].finish_reason,
-                   "completion_tokens": u.completion_tokens if u else None,
-                   "reasoning_tokens": rtoks, "usage": u.model_dump() if u else None,
-                   "latency_s": latency,
-                   "grader_model": args.served_model, "grader_config": f"{args.reasoning}_notool"}
-        async with lock:
-            write(run_id, rec)
-            counter["done"] += 1
-            if counter["done"] % 50 == 0 or counter["done"] == counter["total"]:
-                print(f"  [{counter['done']}/{counter['total']}] last {c['pid']} #{c['cand']} p{p}: score={rec['score']}")
+    client = AsyncOpenAI(
+        base_url=grader["base_url"],
+        api_key=api_key,
+        max_retries=0,
+        timeout=3600.0,
+    )
+    semaphore = asyncio.Semaphore(grader["concurrency"])
+    write_lock = asyncio.Lock()
 
-    if tasks:
-        await asyncio.gather(*[work(r, c, p) for r, c, p in tasks])
-    for f in files.values():
-        f.close()
-    await client.close()
+    async def append(record: dict) -> None:
+        async with write_lock:
+            with records_path.open("a") as output:
+                output.write(json.dumps(record, ensure_ascii=False) + "\n")
+                output.flush()
+            existing[(record["problem_id"], record["attempt"])] = record
 
-    aggregate(run_ids, out_paths, args)
+    async def work(
+        row: dict,
+        attempt: int,
+        messages: list[dict[str, str]],
+        prompt_hash: str,
+    ) -> None:
+        problem_id = row["Problem ID"]
+        started = time.monotonic()
+        try:
+            async with semaphore:
+                response = await client.chat.completions.create(
+                    model=grader["model"],
+                    messages=messages,
+                    max_tokens=grader["max_completion_tokens"],
+                    extra_body={"reasoning_effort": grader["reasoning"]},
+                )
+            choice = response.choices[0]
+            content = choice.message.content or ""
+            parsed = parse_score(content)
+            usage = response.usage.model_dump() if response.usage else None
+            record = {
+                "problem_id": problem_id,
+                "attempt": attempt,
+                "prompt_sha256": prompt_hash,
+                "messages": messages,
+                "grader_model": grader["model"],
+                "grader_reasoning": grader["reasoning"],
+                "grader_content": content,
+                "grader_reasoning_content": (
+                    choice.message.model_extra or {}
+                ).get("reasoning_content")
+                or "",
+                "finish_reason": choice.finish_reason,
+                "usage": usage,
+                "latency_s": round(time.monotonic() - started, 3),
+                "score": parsed["score"],
+                "rationale": parsed["rationale"],
+                "error": None,
+            }
+        except Exception as error:
+            record = {
+                "problem_id": problem_id,
+                "attempt": attempt,
+                "prompt_sha256": prompt_hash,
+                "messages": messages,
+                "grader_model": grader["model"],
+                "grader_reasoning": grader["reasoning"],
+                "latency_s": round(time.monotonic() - started, 3),
+                "error": repr(error),
+            }
+            await append(record)
+            raise
+        await append(record)
 
+    try:
+        await asyncio.gather(
+            *[
+                work(row, attempt, messages, prompt_hash)
+                for row, attempt, messages, prompt_hash in jobs
+            ]
+        )
+    finally:
+        await client.close()
 
-def _agg(scores: list[float]) -> dict:
-    n = len(scores)
-    if not n:
-        return {"n": 0, "mean": None, "almost+": None, "correct": None}
-    return {"n": n, "mean": round(mean(scores), 3),
-            "almost+": round(sum(s >= 6 for s in scores) / n, 3),
-            "correct": round(sum(s >= 7 for s in scores) / n, 3)}
-
-
-def aggregate(run_ids, out_paths, args) -> None:
-    """Aggregate best-of-k and mean-of-k scores overall and by benchmark cut.
-    A candidate's score is its mean over grading passes."""
-    per_run = {}
-    for r in run_ids:
-        recs = [json.loads(l) for l in out_paths[r].open()]
-        # (pid,cand) -> [pass scores]; meta per pid
-        cs = defaultdict(list)
-        meta = {}
-        for d in recs:
-            cs[(d["problem_id"], d["candidate_idx"])].append(d["score"])
-            meta[d["problem_id"]] = d
-        # per-candidate mean over passes
-        cand_score = {k: mean(v) for k, v in cs.items()}
-        by_pid = defaultdict(list)
-        for (pid, cand), s in cand_score.items():
-            by_pid[pid].append(s)
-        best = {pid: max(v) for pid, v in by_pid.items()}
-        mof = {pid: mean(v) for pid, v in by_pid.items()}
-        # pass agreement: candidates graded with >=2 passes that agree exactly
-        twin = [v for v in cs.values() if len(v) >= 2]
-        agree = round(sum(v[0] == v[1] for v in twin) / len(twin), 3) if twin else None
-        cut = {}
-        for field in ("subset", "level", "category"):
-            g = defaultdict(list)
-            for pid, b in best.items():
-                g[meta[pid][field]].append(b)
-            cut[field] = {k: _agg(v) for k, v in sorted(g.items())}
-        per_run[r] = {"n_problems": len(by_pid), "n_candidates_scored": len(cand_score),
-                      "best_of_k": _agg(list(best.values())),
-                      "mean_of_k": _agg(list(mof.values())),
-                      "pass_exact_agreement": agree,
-                      "by_subset": cut["subset"], "by_level": cut["level"],
-                      "by_category": cut["category"],
-                      "best_per_problem": {p: round(v, 2) for p, v in sorted(best.items())}}
-
-    out = {"grader": f"{args.served_model} {args.reasoning}_notool",
-           "passes": args.passes, "runs": per_run}
-
-    out_dir = EVAL_ROOT / "runs" / args.summary_run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "summary.json").write_text(json.dumps(out, indent=2, ensure_ascii=False))
-
-    print("\n=== grading summary (best-of-k | mean-of-k) ===")
-    for r in run_ids:
-        s = per_run[r]
-        b, m = s["best_of_k"], s["mean_of_k"]
-        print(f"{r}:")
-        print(f"   best-of-k mean={b['mean']} almost+={b['almost+']} correct={b['correct']}  "
-              f"| mean-of-k mean={m['mean']} correct={m['correct']}  "
-              f"(probs={s['n_problems']}, pass-agree={s['pass_exact_agreement']})")
-        print(f"   by subset: " + "  ".join(f"{k}={v['mean']}" for k, v in s["by_subset"].items()))
-    print(f"\n[done] -> {out_dir/'summary.json'}")
+    records = list(existing.values())
+    summary = aggregate_grades(
+        records,
+        problem_ids,
+        grader["attempts_per_proof"],
+    )
+    summary.update(
+        {
+            "grader_model": grader["model"],
+            "grader_reasoning": grader["reasoning"],
+            "grader_prompt_sha256": grader["prompt_sha256"],
+        }
+    )
+    (output_dir / "summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n"
+    )
+    return summary
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--run-ids", required=True, help="comma-separated run ids to grade")
-    ap.add_argument("--data", required=True, help="source CSV (Solution + Grading guidelines)")
-    ap.add_argument("--ids-file", default=None, help="JSON list of problem ids to restrict to")
-    ap.add_argument("--passes", type=int, default=2, help="grader calls per candidate")
-    ap.add_argument("--base-url", required=True)
-    ap.add_argument("--served-model", default="deepseek-v4-flash")
-    ap.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
-    ap.add_argument("--summary-run-id", required=True,
-                    help="directory below evaluation/runs for the aggregate summary")
-    ap.add_argument("--reasoning", default="high", choices=["default", "no_think", "high", "max"])
-    ap.add_argument("--max-tokens", type=int, default=65536)
-    ap.add_argument("--concurrency", type=int, default=200)
-    ap.add_argument("--out-name", default="grades_2pass.jsonl")
-    args = ap.parse_args()
-    asyncio.run(amain(args))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--ids-file", required=True, type=Path)
+    parser.add_argument("--search-dir", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    args = parser.parse_args()
+    asyncio.run(
+        grade_final_proofs(
+            args.config,
+            args.ids_file,
+            args.search_dir,
+            args.output_dir,
+        )
+    )
 
 
 if __name__ == "__main__":
