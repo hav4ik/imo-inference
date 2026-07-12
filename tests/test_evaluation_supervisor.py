@@ -25,6 +25,18 @@ class EvaluationSupervisorTests(unittest.TestCase):
         self.assertIn("killasgroup=true", config)
         self.assertIn("stdout_logfile=/dev/stdout", config)
 
+    def test_dry_run_is_supervised_and_never_restarts_api_calls(self):
+        wrapper = (
+            REPO / "evaluation/supervisor/imo-2025-problem1-eval.sh"
+        ).read_text()
+        config = (
+            REPO / "evaluation/supervisor/imo-2025-problem1-eval.conf"
+        ).read_text()
+        self.assertIn("run_full_evaluation.py", wrapper)
+        self.assertIn("imo-2025-problem-1.json", wrapper)
+        self.assertIn("imo-2025-problem-1-dryrun-20260712", wrapper)
+        self.assertIn("autorestart=false", config)
+
 
 if __name__ == "__main__":
     unittest.main()

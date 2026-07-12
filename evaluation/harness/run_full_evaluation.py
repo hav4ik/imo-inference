@@ -233,6 +233,7 @@ async def evaluate(config_path: Path, ids_file: Path, run_id: str) -> Path:
             cwd=REPO,
             check=True,
         )
+        shutil.copy2(SERVER_LOG, run_root / "server.log")
 
         update_manifest(manifest_path, manifest, "proof_search", "running")
         generation_dir = run_root / "generation"
