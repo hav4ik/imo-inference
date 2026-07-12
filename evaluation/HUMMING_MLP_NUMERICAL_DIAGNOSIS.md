@@ -279,4 +279,4 @@ draft models. That validation should confirm:
 5. real proof requests complete successfully; and
 6. measured throughput and acceptance are recorded before the full evaluation.
 
-Only after those checks pass should the full ProofBench evaluation be restarted.
+Only after those checks pass should the full IMO 2025 evaluation be restarted.

@@ -2,7 +2,7 @@
 
 This directory preserves inputs and results from the original six-problem AIMO
 Proof Pilot experiment. It is historical evidence, not executable evaluation
-code and not an input to the active ProofBench pipeline.
+code and not an input to the active IMO 2025 pipeline.
 
 Contents:
 

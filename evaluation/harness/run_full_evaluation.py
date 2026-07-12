@@ -1,4 +1,4 @@
-"""Run one strict YAML-configured ProofBench generate-verify-refine evaluation."""
+"""Run one strict YAML-configured IMO 2025 generate-verify-refine evaluation."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def audit_generation(generation_dir: Path, problem_ids: list[str]) -> dict:
 
 def write_result(path: Path, manifest: dict, summary: dict) -> None:
     lines = [
-        "# ProofBench evaluation result",
+        "# IMO 2025 evaluation result",
         "",
         f"- Run: `{manifest['run_id']}`",
         f"- Git commit: `{manifest['git_commit']}`",

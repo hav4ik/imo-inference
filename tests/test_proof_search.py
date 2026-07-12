@@ -87,12 +87,8 @@ class ProofSearchTests(unittest.TestCase):
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
         self.assertNotIn("===SYSTEM===", messages[0]["content"])
         self.assertIn("Problem:\nProve it.", messages[1]["content"])
-
         refined = refinement_messages(
-            "Prove it.",
-            "r01-p0000",
-            "Candidate proof.",
-            "Candidate audit.",
+            "Prove it.", "r01-p0000", "Candidate proof.", "Candidate audit.",
             [(0.0, "Fatal review."), (1.0, "Positive review.")],
         )
         user = refined[1]["content"]
@@ -103,14 +99,12 @@ class ProofSearchTests(unittest.TestCase):
     def test_strict_xml_response_parsers(self):
         proof, evaluation, score = parse_generation(
             "<solution>Proof.</solution>\n"
-            "<self_evaluation>Audit.</self_evaluation>\n"
-            "<score>0.5</score>"
+            "<self_evaluation>Audit.</self_evaluation>\n<score>0.5</score>"
         )
         self.assertEqual((proof, evaluation, score), ("Proof.", "Audit.", 0.5))
         verifier, verifier_score = parse_verification(
             "<evaluation>Valid.</evaluation>\n"
-            "<suggestions>No repairs.</suggestions>\n"
-            "<score>1</score>"
+            "<suggestions>No repairs.</suggestions>\n<score>1</score>"
         )
         self.assertIn("<evaluation>Valid.</evaluation>", verifier)
         self.assertEqual(verifier_score, 1.0)
@@ -124,7 +118,7 @@ class ProofSearchTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 client = ScriptedClient()
                 search = ProblemSearch(
-                    problem_id="PB-Basic-001",
+                    problem_id="1",
                     problem="Prove the claim.",
                     output_dir=Path(directory),
                     client=client,
@@ -145,7 +139,7 @@ class ProofSearchTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as directory:
                 client = ScriptedClient(stop_after_first_round=True)
                 search = ProblemSearch(
-                    problem_id="PB-Advanced-030",
+                    problem_id="6",
                     problem="Prove the claim.",
                     output_dir=Path(directory),
                     client=client,

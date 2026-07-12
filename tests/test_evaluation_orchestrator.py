@@ -11,21 +11,25 @@ HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(HARNESS))
 
 from run_full_evaluation import audit_generation  # noqa: E402
-from run_proof_search import load_requested_rows  # noqa: E402
+from run_proof_search import DATA, load_requested_rows  # noqa: E402
 
 
 class EvaluationOrchestratorTests(unittest.TestCase):
-    def test_checked_in_debug_manifest_is_exactly_first_two_basic_problems(self):
-        manifest = (
-            REPO / "evaluation/manifests/proofbench-basic-001-002.json"
-        )
+    def test_checked_in_debug_manifest_is_exactly_imo_2025_problem_one(self):
+        manifest = REPO / "evaluation/manifests/imo-2025-problem-1.json"
+        self.assertEqual(json.loads(manifest.read_text()), ["1"])
+        rows = load_requested_rows(manifest)
+        self.assertEqual([row["Problem ID"] for row in rows], ["1"])
+        self.assertIn("sunny", rows[0]["Problem"])
+        self.assertEqual(rows[0]["Points"], 7)
+        self.assertEqual(len(rows[0]["Grading guidelines"].splitlines()), 7)
+
+    def test_dataset_is_the_pinned_matharena_parquet(self):
+        import hashlib
+
         self.assertEqual(
-            json.loads(manifest.read_text()),
-            ["PB-Basic-001", "PB-Basic-002"],
-        )
-        self.assertEqual(
-            [row["Problem ID"] for row in load_requested_rows(manifest)],
-            ["PB-Basic-001", "PB-Basic-002"],
+            hashlib.sha256(DATA.read_bytes()).hexdigest(),
+            "17592c82ae91049ae6215b3cece719fa62d37bcb82f9df16719d436797d03a6f",
         )
 
     def test_orchestrator_exposes_one_config_ids_and_run_id_interface(self):
@@ -40,26 +44,15 @@ class EvaluationOrchestratorTests(unittest.TestCase):
     def test_generation_audit_requires_lossless_calls_and_prompt_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
             generation = Path(directory)
-            problem_id = "PB-Basic-001"
+            problem_id = "1"
             root = generation / "problems" / problem_id
             (root / "prompts").mkdir(parents=True)
             (root / "proofs").mkdir()
             (generation / "records.jsonl").write_text(
-                json.dumps(
-                    {
-                        "problem_id": problem_id,
-                        "final_proof": "Proof.",
-                    }
-                )
-                + "\n"
+                json.dumps({"problem_id": problem_id, "final_proof": "Proof."}) + "\n"
             )
             (root / "final.json").write_text(
-                json.dumps(
-                    {
-                        "problem_id": problem_id,
-                        "final_proof": "Proof.",
-                    }
-                )
+                json.dumps({"problem_id": problem_id, "final_proof": "Proof."})
             )
             prompt_hash = "a" * 64
             (root / "prompts" / f"{prompt_hash}.json").write_text("[]\n")
@@ -74,9 +67,8 @@ class EvaluationOrchestratorTests(unittest.TestCase):
                 )
                 + "\n"
             )
-            audit = audit_generation(generation, [problem_id])
             self.assertEqual(
-                audit,
+                audit_generation(generation, [problem_id]),
                 {
                     "problem_count": 1,
                     "proof_count": 1,
@@ -85,21 +77,10 @@ class EvaluationOrchestratorTests(unittest.TestCase):
                 },
             )
 
-    def test_superseded_evaluator_paths_are_absent(self):
-        stale_paths = [
-            "distill_gen/math_3r",
-            "evaluation/configs/opd32b_dflash_bf16.json",
-            "evaluation/configs/opd32b_dflash_humming_w4a8.json",
-            "evaluation/harness/agentic_to_responses.py",
-            "evaluation/harness/make_batches.py",
-            "evaluation/harness/merge_agentic_shards.py",
-            "evaluation/harness/run_agentic_eval.py",
-            "evaluation/harness/run_notebook_v2_eval.py",
-            "evaluation/legacy-six-problem/run_legacy_eval.sh",
-        ]
-        self.assertEqual(
-            [path for path in stale_paths if (REPO / path).exists()],
-            [],
+    def test_superseded_problem_source_is_absent(self):
+        self.assertFalse((REPO / "evaluation/data/proofbench_v2.csv").exists())
+        self.assertFalse(
+            (REPO / "evaluation/manifests/proofbench-basic-001-002.json").exists()
         )
 
 

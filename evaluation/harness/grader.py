@@ -1,4 +1,4 @@
-"""Parse the official ProofBench grader output."""
+"""Parse the existing 0/1/6/7 grader output."""
 
 import re
 
@@ -13,7 +13,7 @@ def parse_score(text: str) -> dict:
         raise ValueError(f"expected one <points> block, found {len(matches)}")
     score = int(matches[0])
     if score not in VALID:
-        raise ValueError(f"off-scale ProofBench score: {score}")
+        raise ValueError(f"off-scale grader score: {score}")
     return {
         "score": score,
         "rationale": POINTS_RE.sub("", text).strip()[-400:],

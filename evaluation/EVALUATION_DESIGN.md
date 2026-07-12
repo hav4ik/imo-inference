@@ -1,43 +1,20 @@
-# Nemotron-style ProofBench evaluation design
+# Nemotron-style IMO 2025 evaluation design
 
-## Objective
+## Scope
 
-Evaluate OPD-32B through one auditable generate-verify-refine pipeline. The
-search budget mirrors the high-compute inference pattern discussed in
-Nemotron-Cascade 2 and DeepSeekMath-V2, while the actual model-facing prompts
-remain byte-identical to ycchen's deployed Math-3R prompts. This separation is
-intentional: the papers determine the search schedule; the checkpoint's deployed
-prompt distribution determines how each role is expressed.
+The active problem source is the six-record `MathArena/imo_2025` dataset. The
+approved debug run selects exactly problem `1`, the sunny-lines problem. This
+dataset change does not alter serving, prompts, search, selection, or final
+DeepSeek aggregation.
 
-The approved debug scope is exactly `PB-Basic-001` and `PB-Basic-002`. The same
-code evaluates any explicit ID manifest, including all 60 problems.
-
-## One configuration
-
-`configs/nemotron_cascade2.yaml` is the only configuration file. There are no
-Basic and Advanced configurations and no category-dependent branches. To run a
-smaller diagnostic, edit the numeric values in this YAML; the search engine does
-not contain hidden debug budgets.
-
-The checked-in search values are:
-
-| Setting | Value |
-|---|---:|
-| Initial proofs | 128 |
-| Verifications per new proof | 64 |
-| Parents selected for refinement | 32 |
-| Refinements per parent | 4 |
-| Verifier reviews placed in each refinement prompt | 8 |
-| Maximum rounds | 8 |
-| Search concurrency | 48 |
-| Temperature | 1.0 |
-| Top-p | 0.95 |
+`configs/nemotron_cascade2.yaml` remains the only configuration. There are no
+difficulty-specific configurations or problem-dependent budget branches.
 
 ## Serving modes
 
-All serving modes use one TP2 SGLang server across both H200 GPUs, BF16 KV cache,
-radix prefix caching, overlap scheduling, and CUDA graphs. Two independent YAML
-booleans produce four supported modes:
+All modes use one SGLang server with tensor parallelism 2 across both H200 GPUs,
+BF16 KV cache, radix prefix caching, overlap scheduling, and CUDA graphs. Two
+independent YAML booleans provide four supported modes:
 
 | Quantized target | DFlash | Mode |
 |:---:|:---:|---|
@@ -46,91 +23,73 @@ booleans produce four supported modes:
 | false | true | BF16 target with BF16 DFlash draft |
 | true | true | Humming W4A8 target with quantized DFlash draft |
 
-No mode is selected automatically after a failure. The live server must exactly
-match the chosen YAML values or preflight terminates.
+No mode is selected automatically after failure. The live server must exactly
+match YAML or preflight terminates.
 
-## Prompt contract
+## Ycchen prompt contract
 
-The three active files under `prompts/ycchen_math_3r/` are copied byte-for-byte
-from `ycchen-tw/proof-pilot-codes` commit
-`bc03a2c71a076990deaad3d712c6889682e12c69`:
+The active prover, verifier, and refiner templates are copied byte-for-byte from
+`ycchen-tw/proof-pilot-codes` commit
+`bc03a2c71a076990deaad3d712c6889682e12c69`. The code uses ycchen's system/user
+split, strict XML outputs, and XML candidate bundle. The unused selector is not
+copied because final selection is deterministic from verifier scores.
 
-- `prover.txt` generates a solution, self-evaluation, and score in XML;
-- `verifier.txt` returns an evaluation, repair suggestions, and score in XML;
-- `refiner.txt` consumes an XML candidate bundle and produces an improved proof.
-
-Their hashes are tests, source constants, and run-manifest fields. The unused
-ycchen selector is not copied because final selection is deterministic from the
-64 verifier scores. No DeepSeekMath prompt implementation remains in the tree.
+The IMO 2025 statement is substituted only into ycchen's existing `{problem}`
+field. No MathArena-specific generation prompt or algorithm is used.
 
 ## Search algorithm
 
-For each problem, the engine performs the following steps.
+For each requested problem:
 
-1. In round 1, send the same ycchen prover messages 128 times with stable,
-   distinct request seeds.
-2. Parse each natural-stop response using the exact XML output contract.
-3. Send every new proof to 64 independent ycchen verifier calls. Include both
-   the proof and its self-evaluation, as ycchen's template requires.
-4. Store every verifier response and compute the arithmetic mean of its 64
-   scores. Rank the cumulative verified pool by mean verifier score, then
-   self-score, then a stable seeded tie-breaker.
-5. Unless the best mean is above `0.99999`, take the cumulative pool's top 32
-   proofs. For each parent, select eight informative verifier reviews, preferring
-   lower-score reviews so identified faults are represented.
-6. Render one ycchen XML candidate bundle per parent. Generate four independent
-   refinements from that same bundle, producing 128 new proofs in the round.
-7. Verify each new proof 64 times, add it to the cumulative pool, rerank, and
-   repeat until the early-stop condition or eight rounds.
-8. Select the highest-ranked proof from the cumulative verified pool. There is
-   no selector-model call and no alternate-proof fallback.
+1. Generate 128 initial proofs using stable, distinct request seeds.
+2. Parse each natural-stop response using ycchen's XML contract.
+3. Verify every new proof independently 64 times using ycchen's verifier prompt,
+   including the proof's self-evaluation.
+4. Rank the cumulative verified pool by mean verifier score, self-score, and a
+   stable seeded tie-breaker.
+5. Unless the best mean exceeds `0.99999`, take the cumulative top 32 proofs.
+6. For every selected parent, place eight informative verifier reviews into one
+   ycchen XML candidate bundle and generate four independent refinements.
+7. Verify all 128 new proofs 64 times, add them to the cumulative pool, rerank,
+   and continue for at most eight rounds.
+8. Return the highest-ranked proof. There is no selector-model call or proof
+   fallback.
 
-At the maximum budget, each round makes 128 generation calls plus 8,192 verifier
-calls. Eight rounds therefore make 66,560 local calls per problem and 133,120
-local calls for the approved two-problem run. Early stopping can reduce this
-count without changing the algorithm.
+Each full round makes 128 generation calls and 8,192 verifier calls. Eight
+rounds make at most 66,560 local calls for the problem-1 debug run. Early stop
+can reduce the count without changing the algorithm.
 
 The first request for each identical prompt group completes before the remaining
-requests in that group are admitted. This deliberately establishes the shared
-radix-cache prefix; subsequent calls then reuse its KV prefix while retaining
-independent sampled continuations.
+requests are admitted, establishing the shared radix-cache prefix for later
+independent continuations.
 
-## Persistence and resume
+## Persistence
 
-Each call has a stable sample ID and seed. Before a call can affect ranking, the
-runner appends and flushes a lossless record containing its content, reasoning,
-finish reason, token usage, cached-prefix tokens, latency, prompt hash, and
-error. Full message arrays are stored once in hash-addressed prompt files.
+Every call has a stable sample ID and seed. The runner flushes a lossless record
+containing content, reasoning, finish reason, usage, cached-prefix tokens,
+latency, prompt hash, and error before the call affects ranking. Full messages
+are stored once in hash-addressed prompt files. Proofs, verifier sets, round
+summaries, final selection, config, ID manifest, server validation, model hashes,
+dataset hash, prompt hashes, and source commit are persisted.
 
-Proofs, verifier sets, round summaries, final selections, pinned config and ID
-manifests, model metadata hashes, server validation, and source commit are also
-persisted. Successful records are reused on resume. A persisted failure is
-terminal; the runner never retries it or substitutes another call.
+Successful calls are resume checkpoints. A persisted failure is terminal. There
+are no request retries, prompt fallbacks, model fallbacks, or synthetic scores.
 
 ## Final grading
 
-After generation passes its audit, the selected proof for each problem is sent
-to `deepseek-v4-flash` 64 times with high reasoning effort and SDK retries set to
-zero. Each response must contain exactly one valid ProofBench score: 0, 1, 6, or
-7.
+The existing policy remains unchanged: one selected proof is sent to
+`deepseek-v4-flash` 64 times with high reasoning and SDK retries disabled. If
+any score is zero, that problem receives zero; otherwise its score is the mean
+of all 64 attempts. This is our zero-veto protocol, not MathArena's leaderboard
+judge ensemble.
 
-Aggregation is per problem:
-
-1. if any of the 64 scores is 0, the problem score is 0;
-2. otherwise, the problem score is the arithmetic mean of all 64 scores; and
-3. the evaluation score is the arithmetic mean of the per-problem scores.
-
-This zero-veto result is a new DeepSeek V4 Flash evaluation label and must not be
-presented as directly comparable with earlier V3.2 Speciale or two-pass scores.
-
-## Run artifacts
+## Artifacts
 
 ```text
 evaluation/runs/<run-id>/
   config.yaml
   problem_ids.json
   run_manifest.json
-  deepseek_models.json
   server_validation.json
   generation/
     records.jsonl
@@ -145,7 +104,3 @@ evaluation/runs/<run-id>/
     summary.json
   RESULT.md
 ```
-
-The source and configuration commit is pushed before live inference. Every later
-material source change and every completed result set is committed with a
-detailed message and pushed immediately.

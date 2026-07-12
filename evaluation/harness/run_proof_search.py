@@ -1,33 +1,60 @@
-"""Run the YAML-configured proof-pool search for an explicit problem manifest."""
+"""Run the YAML-configured proof-pool search for explicit IMO 2025 problem IDs."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import csv
 import json
 from pathlib import Path
+
+import pandas as pd
 
 from async_client import AsyncChatClient
 from eval_config import active_model, load_config
 from proof_search import ProblemSearch
 
 REPO = Path(__file__).resolve().parents[2]
-DATA = REPO / "evaluation/data/proofbench_v2.csv"
+DATA = REPO / "evaluation/data/imo_2025.parquet"
+
+
+def render_grading_scheme(items) -> str:
+    return "\n".join(
+        f"{index}. [{int(item['points'])} pts] {item['title']}: {item['desc']}"
+        for index, item in enumerate(items, start=1)
+    )
 
 
 def load_requested_rows(ids_file: Path) -> list[dict]:
     problem_ids = json.loads(ids_file.read_text())
     if not isinstance(problem_ids, list) or not problem_ids:
         raise ValueError("problem manifest must be a non-empty JSON array")
+    if not all(isinstance(problem_id, str) for problem_id in problem_ids):
+        raise ValueError("problem manifest IDs must be strings")
     if len(problem_ids) != len(set(problem_ids)):
         raise ValueError("problem manifest contains duplicate IDs")
-    with DATA.open() as data_file:
-        rows = list(csv.DictReader(data_file))
+
+    rows = []
+    for source in pd.read_parquet(DATA).to_dict(orient="records"):
+        problem_id = str(source["problem_idx"])
+        guidelines = render_grading_scheme(source["grading_scheme"])
+        rows.append(
+            {
+                "Problem ID": problem_id,
+                "Problem": source["problem"],
+                "Solution": (
+                    "The dataset provides these official solution checkpoints "
+                    "instead of a full reference proof:\n" + guidelines
+                ),
+                "Grading guidelines": guidelines,
+                "Category": "IMO",
+                "Level": "2025",
+                "Points": int(source["points"]),
+            }
+        )
     by_id = {row["Problem ID"]: row for row in rows}
     missing = [problem_id for problem_id in problem_ids if problem_id not in by_id]
     if missing:
-        raise ValueError(f"unknown ProofBench IDs: {missing}")
+        raise ValueError(f"unknown IMO 2025 problem IDs: {missing}")
     return [by_id[problem_id] for problem_id in problem_ids]
 
 
@@ -77,15 +104,17 @@ async def run_search(config_path: Path, ids_file: Path, output_dir: Path) -> lis
                 final = await search.solve()
                 record = {
                     "problem_id": problem_id,
-                    "category": row["Category"],
-                    "level": row["Level"],
+                    "competition": "IMO",
+                    "year": 2025,
+                    "points": row["Points"],
                     **final,
                 }
                 output.write(json.dumps(record, ensure_ascii=False) + "\n")
                 output.flush()
                 results.append(record)
                 print(
-                    f"[proof-search] {problem_id} rounds={record['rounds_completed']} "
+                    f"[proof-search] imo-2025-{problem_id} "
+                    f"rounds={record['rounds_completed']} "
                     f"pool={record['proofs_in_pool']} calls={record['calls_completed']} "
                     f"score={record['mean_verifier_score']:.5f}",
                     flush=True,
