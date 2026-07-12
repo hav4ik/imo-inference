@@ -11,7 +11,7 @@ HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(HARNESS))
 
 from eval_config import active_model, load_config  # noqa: E402
-from launch_server import decode_graph_batches  # noqa: E402
+from launch_server import attention_arguments, decode_graph_batches  # noqa: E402
 
 
 class NemotronConfigTests(unittest.TestCase):
@@ -102,17 +102,48 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertNotIn("MODEL_MODE", launcher)
         self.assertNotIn("DFLASH=", launcher)
 
-    def test_launcher_requires_fa4_for_target_and_draft(self):
+    def test_launcher_selects_fa3_or_fa4_strictly_from_yaml(self):
+        fa4 = self.config["server"]
+        self.assertEqual(
+            attention_arguments(fa4),
+            ["--attention-backend", "fa4", "--page-size", "128"],
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "fa3.yaml"
+            path.write_text(
+                self.path.read_text()
+                .replace("attention_backend: fa4", "attention_backend: fa3")
+                .replace("page_size: 128", "page_size: 1")
+                .replace("deterministic_inference: false", "deterministic_inference: true")
+            )
+            fa3 = load_config(path)["server"]
+        self.assertEqual(
+            attention_arguments(fa3),
+            [
+                "--attention-backend", "fa3", "--page-size", "1",
+                "--enable-deterministic-inference",
+            ],
+        )
+
         launcher = (HARNESS / "launch_server.py").read_text()
-        self.assertIn('"--attention-backend", "fa4"', launcher)
-        self.assertIn('"--speculative-draft-attention-backend", "fa4"', launcher)
-        self.assertIn('"--page-size", "128"', launcher)
-        self.assertNotIn("--enable-deterministic-inference", launcher)
-        self.assertNotIn('"--attention-backend", "fa3"', launcher)
-        self.assertNotIn('"--speculative-draft-attention-backend", "fa3"', launcher)
-        self.assertNotIn('"--attention-backend", "triton"', launcher)
-        self.assertNotIn('"--speculative-draft-attention-backend", "triton"', launcher)
-        self.assertNotIn("--triton-attention-num-kv-splits", launcher)
+        self.assertIn("str(server[\"attention_backend\"])", launcher)
+        self.assertNotIn("triton", launcher)
+        worker = (REPO / "sglang_patches/dflash_worker_v2_ring.py").read_text()
+        self.assertIn("draft_backend not in {\"fa3\", \"fa4\"}", worker)
+
+    def test_attention_backend_validation_rejects_invalid_profiles(self):
+        replacements = (
+            ("attention_backend: fa4", "attention_backend: triton"),
+            ("page_size: 128", "page_size: 1"),
+            ("deterministic_inference: false", "deterministic_inference: true"),
+        )
+        for old, new in replacements:
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "invalid.yaml"
+                path.write_text(self.path.read_text().replace(old, new))
+                with self.assertRaises(ValueError):
+                    load_config(path)
 
 
 if __name__ == "__main__":

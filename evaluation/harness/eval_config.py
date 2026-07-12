@@ -15,6 +15,7 @@ MODEL_KEYS = {
     "tensor_parallel_size", "data_parallel_size", "quantized", "dflash", "kv_cache_dtype",
 }
 SERVER_KEYS = {
+    "attention_backend", "page_size", "deterministic_inference",
     "host", "port", "context_length", "mem_fraction_static", "max_running_requests",
     "swa_full_tokens_ratio", "chunked_prefill_size", "stream_interval",
     "prefill_cuda_graph_backend",
@@ -64,8 +65,8 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ValueError("evaluation config must be a YAML mapping")
     _exact_keys(config, ROOT_KEYS, "root")
-    if config["schema_version"] != 7:
-        raise ValueError("schema_version must be 7")
+    if config["schema_version"] != 8:
+        raise ValueError("schema_version must be 8")
     for section, keys in (
         ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
         ("search", SEARCH_KEYS), ("grader", GRADER_KEYS),
@@ -88,11 +89,20 @@ def load_config(path: Path) -> dict[str, Any]:
 
     server = config["server"]
     for key in (
-        "port", "context_length", "max_running_requests", "chunked_prefill_size",
+        "page_size", "port", "context_length", "max_running_requests", "chunked_prefill_size",
         "stream_interval", "dflash_block_size",
         "dflash_num_draft_tokens", "dflash_window_size",
     ):
         _positive_int(server[key], f"server.{key}")
+    if server["attention_backend"] not in {"fa3", "fa4"}:
+        raise ValueError("server.attention_backend must be fa3 or fa4")
+    if type(server["deterministic_inference"]) is not bool:
+        raise ValueError("server.deterministic_inference must be a boolean")
+    if server["attention_backend"] == "fa4":
+        if server["page_size"] != 128:
+            raise ValueError("FA4 requires server.page_size=128")
+        if server["deterministic_inference"]:
+            raise ValueError("FA4 does not support deterministic inference")
     if server["context_length"] != 262144:
         raise ValueError("server.context_length must equal the OPD checkpoint limit 262144")
     if not 0 < server["mem_fraction_static"] < 1:

@@ -1,4 +1,4 @@
-schema_version: 7
+schema_version: 8
 
 models:
   bf16_target: /workspace/models/opd-32b-deploy
@@ -14,6 +14,11 @@ model:
   kv_cache_dtype: auto
 
 server:
+  # FA4 profile: fa4, page 128, nondeterministic.
+  # FA3 profile: fa3, page 1, deterministic.
+  attention_backend: fa4
+  page_size: 128
+  deterministic_inference: false
   host: 127.0.0.1
   port: 30000
   context_length: 262144

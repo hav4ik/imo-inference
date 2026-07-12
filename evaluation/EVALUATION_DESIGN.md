@@ -13,11 +13,11 @@ difficulty-specific configurations or problem-dependent budget branches.
 ## Serving modes
 
 All modes use one SGLang server with tensor parallelism 2 across both H200 GPUs,
-FA4 target attention, 128-token KV pages, BF16 KV cache, radix prefix caching,
-overlap scheduling, and CUDA graphs. DFlash modes also require FA4 draft
-attention. SGLang does not support deterministic inference with FA4, so this
-branch deliberately uses the FlashInfer sampling backend selected by SGLang.
-Two independent YAML booleans provide four supported modes:
+BF16 KV cache, radix prefix caching, overlap scheduling, and CUDA graphs. The
+YAML selects `fa3` or `fa4` explicitly; the target and DFlash draft always receive
+the same selected backend. Page size and deterministic inference are also explicit
+YAML values rather than backend-dependent defaults. Two independent model
+booleans provide four weight/speculation modes:
 
 | Quantized target | DFlash | Mode |
 |:---:|:---:|---|
@@ -29,10 +29,13 @@ Two independent YAML booleans provide four supported modes:
 No mode is selected automatically after failure. The live server must exactly
 match YAML or preflight terminates.
 
-FA4 requires `mem_fraction_static=0.82` here. Its 128-token pages disable the
-page-1 DFlash draft ring, so the draft receives a full KV pool. A 0.84 fraction
-left no execution headroom; 0.70 caused request retractions; 0.82 completed the
-32-by-8,192 workload without retraction.
+The checked-in profile uses FA4, page size 128, nondeterministic inference, and
+`mem_fraction_static=0.82`. FA4 requires page size 128 and does not support
+deterministic inference; config loading rejects either invalid combination. To
+select the validated FA3 shape, set `attention_backend: fa3`, `page_size: 1`, and
+`deterministic_inference: true`. Page-1 FA3 enables the compact DFlash draft KV
+ring, while page-128 FA4 uses the full draft KV pool. No backend, page-size, or
+determinism setting changes automatically after failure.
 
 ## Ycchen prompt contract
 

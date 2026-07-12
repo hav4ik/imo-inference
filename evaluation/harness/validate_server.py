@@ -52,9 +52,9 @@ def main() -> None:
     assert server["disable_radix_cache"] is False
     assert server["disable_overlap_schedule"] is False
     assert server["disable_cuda_graph"] is False
-    assert server["enable_deterministic_inference"] is False
-    assert server["attention_backend"] == "fa4"
-    assert server["page_size"] == 128
+    assert server["enable_deterministic_inference"] is expected["deterministic_inference"]
+    assert server["attention_backend"] == expected["attention_backend"]
+    assert server["page_size"] == expected["page_size"]
     assert models["data"][0]["id"] == str(model.target)
 
     if model.quantized:
@@ -75,9 +75,13 @@ def main() -> None:
         assert server["speculative_dflash_block_size"] == expected["dflash_block_size"]
         assert server["speculative_num_draft_tokens"] == expected["dflash_num_draft_tokens"]
         assert server["speculative_draft_window_size"] == expected["dflash_window_size"]
-        assert server["speculative_draft_attention_backend"] == "fa4"
-        assert "draft_kv_ring=False" in server_log
-        assert "DFLASH draft KV ring" not in server_log
+        assert server["speculative_draft_attention_backend"] == expected["attention_backend"]
+        expected_ring = expected["page_size"] == 1
+        assert f"draft_kv_ring={expected_ring}" in server_log
+        if expected_ring:
+            assert "DFLASH draft KV ring:" in server_log
+        else:
+            assert "DFLASH draft KV ring" not in server_log
         if model.quantized:
             assert draft_config["quantization_config"]["quant_method"] == "compressed-tensors"
             assert server["speculative_draft_model_quantization"] == "compressed-tensors"

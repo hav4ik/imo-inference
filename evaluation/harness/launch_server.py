@@ -24,6 +24,16 @@ def _prepend(env: dict[str, str], key: str, value: str) -> None:
     env[key] = f"{value}:{env[key]}" if env.get(key) else value
 
 
+def attention_arguments(server: dict) -> list[str]:
+    arguments = [
+        "--attention-backend", str(server["attention_backend"]),
+        "--page-size", str(server["page_size"]),
+    ]
+    if server["deterministic_inference"]:
+        arguments.append("--enable-deterministic-inference")
+    return arguments
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=Path)
@@ -89,8 +99,7 @@ def main() -> None:
 
     command = [
         str(venv / "bin/python"), "-m", "sglang.launch_server",
-        "--model-path", str(model.target), "--attention-backend", "fa4",
-        "--page-size", "128",
+        "--model-path", str(model.target), *attention_arguments(server),
         "--tp", str(model.tensor_parallel_size), "--dp", str(model.data_parallel_size),
         "--load-balance-method", "round_robin", "--host", str(server["host"]),
         "--port", str(server["port"]), "--mem-fraction-static", str(server["mem_fraction_static"]),
@@ -115,7 +124,7 @@ def main() -> None:
                 "--speculative-dflash-block-size", str(server["dflash_block_size"]),
                 "--speculative-num-draft-tokens", str(server["dflash_num_draft_tokens"]),
                 "--speculative-draft-window-size", str(server["dflash_window_size"]),
-                "--speculative-draft-attention-backend", "fa4",
+                "--speculative-draft-attention-backend", str(server["attention_backend"]),
             ]
         )
         if model.quantized:
@@ -125,6 +134,8 @@ def main() -> None:
         f"[serve_opd32b] mode={model.mode} dflash={str(model.dflash).lower()} "
         f"tp={model.tensor_parallel_size} dp={model.data_parallel_size} "
         f"model={model.target} draft={model.draft} kv={model.kv_cache_dtype} "
+        f"attention={server['attention_backend']} page_size={server['page_size']} "
+        f"deterministic={str(server['deterministic_inference']).lower()} "
         f"port={server['port']} ctx={server['context_length']}", flush=True,
     )
     os.execvpe(command[0], command, env)
