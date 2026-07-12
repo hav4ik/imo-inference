@@ -61,8 +61,9 @@ Python, base-library, and CUDA 13 CUTLASS DSL 4.5.2 wheels together. A direct
 BF16 SM90 GQA kernel with sliding-window attention and OLMo3 attention sinks
 compiled and returned finite output before the SGLang retry.
 
-The branch includes evaluation/requirements-fa4-cu13.txt and
-evaluation/harness/install_fa4_runtime.sh. No backend fallback is present.
+The branch includes the FA4 runtime pins in evaluation/requirements.txt and the
+CUTLASS repair in evaluation/harness/install_fa4_runtime.sh. No backend fallback
+is present.
 
 ## Startup attempts
 

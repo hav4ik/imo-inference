@@ -1,5 +1,0 @@
-flash-attn-4[cu13]==4.0.0b15
-nvidia-cutlass-dsl==4.5.2
-nvidia-cutlass-dsl-libs-base==4.5.2
-nvidia-cutlass-dsl-libs-cu13==4.5.2
-quack-kernels==0.5.0

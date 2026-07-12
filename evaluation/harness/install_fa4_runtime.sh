@@ -6,7 +6,7 @@ VENV="${VENV:-/workspace/pp/venv}"
 
 uv pip install \
   --python "$VENV/bin/python" \
-  --requirement "$REPO/evaluation/requirements-fa4-cu13.txt"
+  --requirement "$REPO/evaluation/requirements.txt"
 
 uv pip install \
   --reinstall \
