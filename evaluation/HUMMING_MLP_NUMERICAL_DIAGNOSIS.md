@@ -24,9 +24,9 @@ A language model does not perform arithmetic directly on text. The tokenizer
 first maps text to integer token IDs. An embedding table then maps every token ID
 to a hidden-state vector:
 
-\[
+$$
 \text{token ID} \rightarrow x \in \mathbb{R}^{K}
-\]
+$$
 
 Here, `K` is the model's hidden dimension. Every token currently being processed
 has one such vector.
@@ -34,9 +34,9 @@ has one such vector.
 If the runtime processes `M` token vectors together, it stacks them as rows of a
 matrix:
 
-\[
+$$
 X \in \mathbb{R}^{M \times K}
-\]
+$$
 
 This is the source of `M`: it is the number of token rows participating in the
 current matrix multiplication.
@@ -45,9 +45,9 @@ current matrix multiplication.
 
 A transformer linear layer is a matrix multiplication:
 
-\[
+$$
 X_{[M,K]} W_{[K,N]} = Y_{[M,N]}
-\]
+$$
 
 - `M` is the number of token vectors processed by this operation.
 - `K` is the input width, often the model's hidden dimension.
@@ -117,21 +117,21 @@ MLP. The first corrupted boundary was the MLP output.
 The model uses a gated MLP with gate, up, and down projections. Given an input
 hidden-state matrix `X`, its essential arithmetic is:
 
-\[
+$$
 G = X W_{\text{gate}}
-\]
+$$
 
-\[
+$$
 U = X W_{\text{up}}
-\]
+$$
 
-\[
+$$
 H = \operatorname{SiLU}(G) \odot U
-\]
+$$
 
-\[
+$$
 Y = H W_{\text{down}}
-\]
+$$
 
 `SiLU` is the nonlinear activation, and `odot` means element-wise
 multiplication. Implementations commonly fuse the gate and up projections into
@@ -190,9 +190,9 @@ The phrase "the logits exploded in the MLP" mixes two different stages.
 
 The MLP produces hidden activations. The language-model head produces logits:
 
-\[
+$$
 \text{logits} = H_{\text{final}} W_{\text{vocabulary}}
-\]
+$$
 
 The actual chain was:
 
@@ -208,9 +208,9 @@ finite layer-0 input
 
 Once a hidden state contains `NaN`, ordinary later arithmetic propagates it:
 
-\[
+$$
 W \times \operatorname{NaN} = \operatorname{NaN}
-\]
+$$
 
 The sampler was therefore the first component that loudly reported the problem,
 not the component that created it.

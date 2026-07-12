@@ -1,0 +1,10 @@
+{
+  "checks": {
+    "exact_humming_target_layers": true,
+    "no_dflash_draft_layers": true,
+    "no_dflash_runtime_initialization": true
+  },
+  "dflash_draft_layer_count": 0,
+  "humming_target_layer_count": 128,
+  "passed": true
+}

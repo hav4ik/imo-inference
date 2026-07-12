@@ -13,11 +13,11 @@ The cat sat on the
 ```
 
 At each transformer layer, every token is represented by a hidden vector
-\(h_i\). The layer projects that vector into a query, key, and value:
+$h_i$. The layer projects that vector into a query, key, and value:
 
-\[
+$$
 q_i = h_iW_Q, \qquad k_i = h_iW_K, \qquad v_i = h_iW_V
-\]
+$$
 
 Their roles are:
 
@@ -25,21 +25,21 @@ Their roles are:
 - **Key (K):** how a token's information can be matched or addressed.
 - **Value (V):** the information retrieved when that token is relevant.
 
-For the token at position \(t\), attention compares its query with each allowed
+For the token at position $t$, attention compares its query with each allowed
 key:
 
-\[
+$$
 \operatorname{score}(t,j) = \frac{q_t \cdot k_j}{\sqrt{d}}
-\]
+$$
 
 The scores are normalized and used to combine the corresponding values:
 
-\[
+$$
 \operatorname{attention}_t =
 \sum_{j \leq t} \operatorname{softmax}(\operatorname{score}(t,j))v_j
-\]
+$$
 
-The condition \(j \leq t\) is the **causal mask**: a token may attend to itself
+The condition $j \leq t$ is the **causal mask**: a token may attend to itself
 and earlier tokens, but not to future tokens. Consequently, adding a new token
 does not change the keys or values already computed for earlier tokens.
 
@@ -99,11 +99,11 @@ make each new token constant-time:
 
 Approximate cache memory is:
 
-\[
+$$
 2 \times \text{layers} \times \text{tokens} \times
 \text{KV heads} \times \text{head dimension} \times
 \text{bytes per element}
-\]
+$$
 
 The factor of two accounts for keys and values. Multi-query attention (MQA) and
 grouped-query attention (GQA) reduce memory use by employing fewer KV heads.

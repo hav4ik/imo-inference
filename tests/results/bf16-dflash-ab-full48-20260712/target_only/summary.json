@@ -1,0 +1,78 @@
+{
+  "equation": {
+    "completion_tokens": 577,
+    "completion_tokens_per_s": 47.12528708517956,
+    "correct": true,
+    "finish_reason": "stop",
+    "prompt_tokens": 79,
+    "wall_time_s": 12.243957240134478
+  },
+  "throughput_sweep": [
+    {
+      "accept_length": null,
+      "concurrency_limit": 1,
+      "duration_s": 126.73945486918092,
+      "max_output_tokens_per_s": 50.0,
+      "mean_in_flight_concurrency": 0.999720861892005,
+      "mean_tpot_ms": 20.412154845341757,
+      "mean_ttft_ms": 128.06196215872964,
+      "output_tokens_per_s": 48.477405921792624,
+      "request_throughput": 0.09468243344100122
+    },
+    {
+      "accept_length": null,
+      "concurrency_limit": 2,
+      "duration_s": 63.47997487382963,
+      "max_output_tokens_per_s": 100.0,
+      "mean_in_flight_concurrency": 1.9989753542065385,
+      "mean_tpot_ms": 20.397545582467817,
+      "mean_ttft_ms": 151.4296455619236,
+      "output_tokens_per_s": 96.7864277232557,
+      "request_throughput": 0.1890359916469838
+    },
+    {
+      "accept_length": null,
+      "concurrency_limit": 4,
+      "duration_s": 34.066698726732284,
+      "max_output_tokens_per_s": 188.0,
+      "mean_in_flight_concurrency": 3.996315822307587,
+      "mean_tpot_ms": 21.629248553080835,
+      "mean_ttft_ms": 292.5612506611894,
+      "output_tokens_per_s": 180.35208076028738,
+      "request_throughput": 0.3522501577349363
+    },
+    {
+      "accept_length": null,
+      "concurrency_limit": 6,
+      "duration_s": 23.96055986499414,
+      "max_output_tokens_per_s": 270.0,
+      "mean_in_flight_concurrency": 5.993584824524083,
+      "mean_tpot_ms": 22.749418176273807,
+      "mean_ttft_ms": 342.51797808489454,
+      "output_tokens_per_s": 256.42138725548944,
+      "request_throughput": 0.5008230219833778
+    },
+    {
+      "accept_length": null,
+      "concurrency_limit": 8,
+      "duration_s": 24.069496653974056,
+      "max_output_tokens_per_s": 344.0,
+      "mean_in_flight_concurrency": 6.104792107305537,
+      "mean_tpot_ms": 23.20829288651577,
+      "mean_ttft_ms": 385.50176832359284,
+      "output_tokens_per_s": 255.2608427308171,
+      "request_throughput": 0.49855633345862715
+    },
+    {
+      "accept_length": null,
+      "concurrency_limit": 12,
+      "duration_s": 14.07584670605138,
+      "max_output_tokens_per_s": 492.0,
+      "mean_in_flight_concurrency": 11.979356728791924,
+      "mean_tpot_ms": 26.471994649354595,
+      "mean_ttft_ms": 524.4431468114877,
+      "output_tokens_per_s": 436.492392131453,
+      "request_throughput": 0.8525242033817442
+    }
+  ]
+}
