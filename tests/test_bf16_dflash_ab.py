@@ -46,7 +46,11 @@ class BF16DFlashABTests(unittest.TestCase):
             self.assertEqual(command[command.index("--mem-fraction-static") + 1], "0.82")
 
     def test_concurrency_sweep_covers_notebook_client_range(self) -> None:
-        self.assertEqual(experiment.CONCURRENCY_SWEEP, (1, 2, 4, 6, 8, 12))
+        self.assertEqual(
+            experiment.CONCURRENCY_SWEEP,
+            (1, 2, 4, 6, 8, 12, 16, 24, 32, 40, 48),
+        )
+        self.assertEqual(experiment.BENCHMARK_CASES[-1], (48, 96))
 
     def test_activation_requires_bf16_kv_and_correct_dflash_side(self) -> None:
         config = self.config
@@ -87,9 +91,11 @@ class BF16DFlashABTests(unittest.TestCase):
         }
         target_rows = []
         dflash_rows = []
-        for concurrency in experiment.CONCURRENCY_SWEEP:
+        for concurrency, num_prompts in experiment.BENCHMARK_CASES:
             common = {
                 "concurrency_limit": concurrency,
+                "num_prompts": num_prompts,
+                "total_output_tokens": num_prompts * 512,
                 "mean_in_flight_concurrency": float(concurrency),
                 "accept_length": None,
             }

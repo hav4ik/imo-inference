@@ -16,7 +16,9 @@ runs:
 
 1. The seeded three-equation request.
 2. Twelve 512-input/512-output requests at client concurrency 1.
-3. The same fixed workload at concurrency 2, 4, 6, 8, and 12.
+3. The same fixed twelve-request workload at concurrency 2, 4, 6, 8, and 12.
+4. Sustained two-wave capacity workloads at concurrency 16, 24, 32, 40, and
+   48, using twice as many prompts as the concurrency limit.
 
 Each sweep flushes the radix cache first. Every raw response, server log,
 effective server configuration, benchmark JSONL record, benchmark console log,

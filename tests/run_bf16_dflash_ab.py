@@ -30,7 +30,20 @@ CONFIG_PATH = TESTS_DIR / "configs" / "dflash_generation_h200.json"
 RESULTS_ROOT = TESTS_DIR / "results"
 PROFILE_NAME = "bf16"
 PHASE_NAME = "production"
-CONCURRENCY_SWEEP = (1, 2, 4, 6, 8, 12)
+BENCHMARK_CASES = (
+    (1, 12),
+    (2, 12),
+    (4, 12),
+    (6, 12),
+    (8, 12),
+    (12, 12),
+    (16, 32),
+    (24, 48),
+    (32, 64),
+    (40, 80),
+    (48, 96),
+)
+CONCURRENCY_SWEEP = tuple(concurrency for concurrency, _ in BENCHMARK_CASES)
 MAX_RUNNING_REQUESTS = 48
 TARGET_GPU = "0"
 DFLASH_GPU = "1"
@@ -185,25 +198,28 @@ def run_side_workloads(
         side_dir / "equation_response.json",
     )
     sweeps: list[dict[str, Any]] = []
-    for concurrency in CONCURRENCY_SWEEP:
-        print(f"[{side}] benchmark concurrency={concurrency}", flush=True)
+    for concurrency, num_prompts in BENCHMARK_CASES:
+        print(
+            f"[{side}] benchmark concurrency={concurrency} prompts={num_prompts}",
+            flush=True,
+        )
+        stem = f"concurrency-{concurrency}-prompts-{num_prompts}"
         record = workload.run_benchmark(
             python=str(profile["python"]),
             base_url=base_url,
             model=str(profile["target_model"]),
             tokenizer=str(profile["tokenizer"]),
-            output_path=(
-                side_dir / "throughput" / f"concurrency-{concurrency}.jsonl"
-            ),
-            stdout_path=(
-                side_dir / "throughput" / f"concurrency-{concurrency}.log"
-            ),
+            output_path=side_dir / "throughput" / f"{stem}.jsonl",
+            stdout_path=side_dir / "throughput" / f"{stem}.log",
             concurrency=concurrency,
+            num_prompts=num_prompts,
             flush_cache=True,
         )
         sweeps.append(
             {
                 "concurrency_limit": concurrency,
+                "num_prompts": num_prompts,
+                "total_output_tokens": record["total_output_tokens"],
                 "duration_s": record["duration"],
                 "output_tokens_per_s": record["output_throughput"],
                 "request_throughput": record["request_throughput"],
@@ -226,11 +242,14 @@ def comparison(
     target_rows = target["throughput_sweep"]
     dflash_rows = dflash["throughput_sweep"]
     for target_row, dflash_row in zip(target_rows, dflash_rows, strict=True):
-        if target_row["concurrency_limit"] != dflash_row["concurrency_limit"]:
-            raise ExperimentError("throughput sweeps have different concurrency rows")
+        identity = ("concurrency_limit", "num_prompts", "total_output_tokens")
+        if any(target_row[key] != dflash_row[key] for key in identity):
+            raise ExperimentError("throughput sweeps have different workload rows")
         rows.append(
             {
                 "concurrency_limit": target_row["concurrency_limit"],
+                "num_prompts": target_row["num_prompts"],
+                "total_output_tokens": target_row["total_output_tokens"],
                 "target_only_output_tokens_per_s": target_row["output_tokens_per_s"],
                 "dflash_output_tokens_per_s": dflash_row["output_tokens_per_s"],
                 "dflash_speedup": (
@@ -252,9 +271,12 @@ def comparison(
             "mem_fraction_static": 0.82,
             "max_running_requests": MAX_RUNNING_REQUESTS,
             "cuda_graph_max_bs_decode": MAX_RUNNING_REQUESTS,
-            "requests_per_benchmark": 12,
             "input_tokens_per_request": 512,
             "output_tokens_per_request": 512,
+            "benchmark_cases": [
+                {"concurrency": concurrency, "num_prompts": num_prompts}
+                for concurrency, num_prompts in BENCHMARK_CASES
+            ],
         },
         "equation": {
             "target_only": target["equation"],
@@ -304,7 +326,10 @@ def run(args: argparse.Namespace, config: dict[str, Any]) -> int:
         "started_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "branch": launch._command_output(["git", "branch", "--show-current"]),
         "git_head": launch._command_output(["git", "rev-parse", "HEAD"]),
-        "concurrency_sweep": list(CONCURRENCY_SWEEP),
+        "benchmark_cases": [
+            {"concurrency": concurrency, "num_prompts": num_prompts}
+            for concurrency, num_prompts in BENCHMARK_CASES
+        ],
         "jit": jit,
         "servers": {
             name: {
