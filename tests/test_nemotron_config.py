@@ -39,11 +39,11 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(server["mem_fraction_static"], 0.82)
         self.assertNotIn("triton_attention_num_kv_splits", server)
 
-    def test_default_is_bf16_target_only_tp2_dp1(self):
+    def test_default_is_bf16_target_only_tp1_dp8(self):
         model = active_model(self.config)
         self.assertEqual(model.mode, "bf16")
-        self.assertEqual(model.tensor_parallel_size, 2)
-        self.assertEqual(model.data_parallel_size, 1)
+        self.assertEqual(model.tensor_parallel_size, 1)
+        self.assertEqual(model.data_parallel_size, 8)
         self.assertFalse(model.quantized)
         self.assertFalse(model.dflash)
         self.assertIsNone(model.draft)
@@ -73,7 +73,7 @@ class NemotronConfigTests(unittest.TestCase):
             path = Path(directory) / "config.yaml"
             path.write_text(
                 self.path.read_text().replace(
-                    "tensor_parallel_size: 2", "tensor_parallel_size: 4"
+                    "tensor_parallel_size: 1", "tensor_parallel_size: 4"
                 )
             )
             model = active_model(load_config(path))
@@ -84,7 +84,7 @@ class NemotronConfigTests(unittest.TestCase):
             path = Path(directory) / "config.yaml"
             path.write_text(
                 self.path.read_text().replace(
-                    "data_parallel_size: 1", "data_parallel_size: 4"
+                    "data_parallel_size: 8", "data_parallel_size: 4"
                 )
             )
             model = active_model(load_config(path))

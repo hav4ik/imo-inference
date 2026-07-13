@@ -7,8 +7,8 @@ models:
   quantized_draft: /workspace/original/models/dflash-32b-draft-v2test-phaseL-int4mlp
 
 model:
-  tensor_parallel_size: 2
-  data_parallel_size: 1
+  tensor_parallel_size: 1
+  data_parallel_size: 8
   quantized: false
   dflash: false
   kv_cache_dtype: auto
