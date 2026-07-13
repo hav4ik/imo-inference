@@ -11,8 +11,8 @@ policy remains:
 - BF16 target-only TP2 inference by default;
 - explicit FA3 or FA4 attention selected in YAML and applied identically to the target and DFlash draft, with no backend fallback;
 - Humming W4A8 target quantization and DFlash as independent opt-in booleans;
-- 32 initial proofs, 16 verifications per proof, top 8 proofs, four
-  refinements per selected proof, eight refinement analyses, and four rounds;
+- 32 initial proof attempts, 16 verifications per admitted proof, cumulative top 8
+  proofs, four lowest-rated analyses producing one refinement each, and four rounds;
 - a fixed 65,536-token local completion request, forwarded without client-side context adjustment;
 - ycchen's byte-identical deployed prover, verifier, and refiner prompts; and
 - 64 GPT-5.6 Sol Responses grader attempts on the full integer 0-7 scale per

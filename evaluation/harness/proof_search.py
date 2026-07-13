@@ -6,7 +6,6 @@ import asyncio
 import hashlib
 import json
 import os
-import random
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from statistics import mean
@@ -251,30 +250,22 @@ class ProblemSearch:
         self,
         proof: Proof,
         round_index: int,
-    ) -> list[tuple[float, str]]:
+    ) -> list[Verification]:
         limit = self.config["analyses_per_refinement"]
-        buckets: dict[float, list[Verification]] = {}
-        for verification in proof.verifications:
-            buckets.setdefault(verification.score, []).append(verification)
-        chosen: list[tuple[float, str]] = []
-        scores = sorted(buckets)
-        maximum_per_score = limit if len(scores) == 1 else max(1, limit // 2)
-        for score in scores:
-            bucket = list(buckets[score])
-            random.Random(
+        ranked = sorted(
+            proof.verifications,
+            key=lambda verification: (
+                verification.score,
                 stable_seed(
                     self.config["seed"],
                     self.problem_id,
                     proof.proof_id,
                     f"round-{round_index}",
-                    f"score-{score}",
-                )
-            ).shuffle(bucket)
-            for verification in bucket[:maximum_per_score]:
-                chosen.append((verification.score, verification.analysis))
-                if len(chosen) == limit:
-                    return chosen
-        return chosen
+                    verification.sample_id,
+                ),
+            ),
+        )
+        return ranked[:limit]
 
     async def _generate_round(self, round_index: int) -> list[Proof]:
         stage = f"round-{round_index:02d}/generate"
@@ -294,16 +285,22 @@ class ProblemSearch:
                 raise RuntimeError(f"{self.problem_id} has no verified proof to refine")
             proof_index = 0
             for parent in parents:
-                messages = refinement_messages(
-                    self.problem,
-                    parent.proof_id,
-                    parent.proof,
-                    parent.self_evaluation,
-                    self._selected_reviews(parent, round_index),
-                )
+                reviews = self._selected_reviews(parent, round_index)
+                if len(reviews) != self.config["analyses_per_refinement"]:
+                    raise RuntimeError(
+                        f"{parent.proof_id} has too few verifier analyses to refine"
+                    )
                 group = []
-                for _ in range(self.config["refinements_per_proof"]):
+                for review in reviews:
                     proof_id = f"r{round_index:02d}-p{proof_index:04d}"
+                    messages = refinement_messages(
+                        self.problem,
+                        parent.proof_id,
+                        parent.proof,
+                        parent.self_evaluation,
+                        review.score,
+                        review.analysis,
+                    )
                     group.append(self._spec(f"{stage}/{proof_id}", stage, messages))
                     identities.append((proof_id, parent.proof_id))
                     proof_index += 1
@@ -317,7 +314,12 @@ class ProblemSearch:
                 continue
             if record["finish_reason"] != "stop":
                 continue
-            proof_text, self_evaluation, self_score = parse_generation(record["content"])
+            try:
+                proof_text, self_evaluation, self_score = parse_generation(
+                    record["content"]
+                )
+            except ValueError:
+                continue
             proof = Proof(
                 proof_id=proof_id,
                 round_index=round_index,

@@ -26,7 +26,7 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(search["verifications_per_proof"], 16)
         self.assertEqual(search["top_proofs"], 8)
         self.assertEqual(search["refinements_per_proof"], 4)
-        self.assertEqual(search["analyses_per_refinement"], 8)
+        self.assertEqual(search["analyses_per_refinement"], 4)
         self.assertEqual(search["max_rounds"], 4)
         self.assertEqual(search["concurrency"], 32)
         self.assertEqual(search["request_timeout_seconds"], 86400)
@@ -100,6 +100,19 @@ class NemotronConfigTests(unittest.TestCase):
             config = load_config(path)
         self.assertEqual(config["server"]["context_length"], 262144)
         self.assertEqual(config["search"]["max_completion_tokens"], 32768)
+
+    def test_search_shape_validation_rejects_inconsistent_profiles(self):
+        replacements = (
+            ("proofs_per_round: 32", "proofs_per_round: 31"),
+            ("analyses_per_refinement: 4", "analyses_per_refinement: 3"),
+            ("verifications_per_proof: 16", "verifications_per_proof: 3"),
+        )
+        for old, new in replacements:
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "invalid.yaml"
+                path.write_text(self.path.read_text().replace(old, new))
+                with self.assertRaises(ValueError):
+                    load_config(path)
 
     def test_decode_graphs_cover_configured_ceiling(self):
         maximum = self.config["server"]["max_running_requests"]

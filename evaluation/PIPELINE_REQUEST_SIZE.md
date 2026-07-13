@@ -19,31 +19,36 @@ output. HTTP JSON bytes are a separate transport measurement.
 
 ## Pipeline structure
 
-For one problem, round 1 generates 32 proofs. Every admitted proof is verified
-16 times. Later rounds select the cumulative top eight proofs, create four
-refinements from each, and verify every admitted refinement 16 times. There
-are at most four rounds.
+For one problem, round 1 makes 32 proof attempts. Every admitted proof is
+verified 16 times. Later rounds select the cumulative top eight proofs, choose
+the four lowest-rated verifier analyses for each parent, generate one refinement
+from each analysis, and verify every admitted refinement 16 times. There are at
+most four rounds.
+
+A generation or refinement is admitted only after a natural stop and successful
+parsing of the complete ycchen XML contract. Invalid candidates are disqualified
+without replacement, so 32 is the nominal round width rather than a required
+verified population.
 
 The largest fan-in is one refinement prompt. It contains:
 
-1. one parent proof;
-2. that proof's self-evaluation; and
-3. at most eight verifier responses selected from that parent's own 16
+1. one parent proof and its self-evaluation; and
+2. exactly one verifier response selected from that parent's own 16
    verifications.
 
-It does not contain the parent's parent, earlier verifier sets, or the complete
-history of the proof pool.
+It does not contain another verifier response, the parent's parent, earlier
+verifier sets, or the complete history of the proof pool.
 
 ## Definitions
 
 Let:
 
 - `B_r` be the parent proof plus self-evaluation retained from round `r`;
-- `V_{r,i}` be selected verifier response `i` for that parent;
+- `V_{r,i}` be one selected verifier response for that parent;
 - `F_g` be the fixed generation prompt;
 - `F_v` be the verifier wrapper, problem, and chat-template overhead; and
-- `F_{r,8}` be the refinement wrapper, problem, candidate markup, chat
-  template, and eight empty review wrappers.
+- `F_{r,1}` be the refinement wrapper, problem, candidate markup, chat template,
+  and one empty review wrapper.
 
 Using the live OPD tokenizer on IMO 2025 Problem 1:
 
@@ -51,7 +56,7 @@ Using the live OPD tokenizer on IMO 2025 Problem 1:
 |---|---:|
 | Generation prompt, `F_g` | 426 |
 | Verifier with an empty candidate, `F_v` | 377 |
-| Refiner with an empty parent and eight empty reviews, `F_{r,8}` | 504 |
+| Refiner with an empty parent and one empty review, `F_{r,1}` | 399 |
 
 These fixed counts are problem- and tokenizer-specific. The formulas remain
 the same when the counts change.
@@ -118,63 +123,34 @@ tokens(V_{r,i}) <= O
 
 ## Refinement request
 
-One refinement receives one parent bundle and at most eight verifier
-responses:
+One refinement receives one parent bundle and one verifier response:
 
 ```text
 refinement_input
-  <= F_{r,8} + tokens(B_r) + sum(tokens(V_{r,i}), i=1..8)
-  <= F_{r,8} + O + 8O
-  <= F_{r,8} + 9O
+  <= F_{r,1} + tokens(B_r) + tokens(V_{r,i})
+  <= F_{r,1} + O + O
+  <= F_{r,1} + 2O
 ```
 
 For Problem 1:
 
 ```text
 parent proof and self-eval     65,536
-eight verifier responses      524,288
-fixed refinement wrapper          504
+one verifier response          65,536
+fixed refinement wrapper          399
 -------------------------------------
-maximum refinement input      590,328
+maximum refinement input      131,471
 requested output               65,536
 -------------------------------------
-requested total               655,864
+requested total               197,007
 server context                262,144
+remaining structural margin    65,137
 ```
 
-The structural worst case exceeds the server context. The client still sends
-`max_completion_tokens=65,536` unchanged and performs no special handling.
-SGLang decides whether to reject the request according to its context policy.
-
-## Required upstream invariant
-
-To guarantee that every request can receive the full fixed output budget
-without any clamp, the prompt-construction policy must eventually establish:
-
-```text
-prompt_tokens + O <= C
-```
-
-With the checked-in values:
-
-```text
-prompt_tokens <= C - O
-prompt_tokens <= 262,144 - 65,536
-prompt_tokens <= 196,608
-```
-
-For a Problem 1 refinement, the dynamic parent and review material must
-therefore satisfy:
-
-```text
-tokens(B_r) + sum(tokens(V_{r,i}), i=1..8)
-  <= 196,608 - F_{r,8}
-  <= 196,104
-```
-
-This is a design obligation for later prompt construction. The current client
-does not enforce it, reduce the output budget, truncate material, or catch a
-context overflow specially.
+The refinement request is the pipeline's structural maximum. Its requested
+input plus output remains below the configured server context without a client
+clamp, truncation, prompt-size preflight, or reduced completion budget. SGLang
+remains the sole context enforcement point.
 
 ## Why four rounds do not increase the structural bound
 
@@ -193,7 +169,7 @@ tokens(V_{r+1,i}) <= O
 Therefore every later refinement satisfies the same recurrence:
 
 ```text
-refinement_input_{r+2} <= F_{r,8} + O + 8O
+refinement_input_{r+2} <= F_{r,1} + O + O
 ```
 
 By induction, the structural bound is unchanged for rounds 2, 3, and 4. A
@@ -225,8 +201,8 @@ them into one chat payload. If 32 structural worst-case refinements were
 simultaneously submitted:
 
 ```text
-aggregate input <= 32 * 590,328 = 18,890,496 tokens
-aggregate requested total <= 32 * 655,864 = 20,987,648 tokens
+aggregate input <= 32 * 131,471 = 4,207,072 tokens
+aggregate requested total <= 32 * 197,007 = 6,304,224 tokens
 ```
 
 Those figures describe aggregate submitted work, not one context window. Each
@@ -237,7 +213,7 @@ request is independently subject to SGLang's 262,144-token context.
 Generated token IDs are decoded to text and tokenized again when embedded in a
 later prompt. Decode-then-encode is not guaranteed to preserve the original
 token count exactly, and chat-template boundaries can change tokenization.
-Consequently, `9O + F_{r,8}` is structural accounting. The authoritative
+Consequently, `2O + F_{r,1}` is structural input accounting. The authoritative
 prompt size is SGLang's tokenization of the concrete submitted messages.
 
 The client intentionally does not use `/tokenize` inside `chat_raw()` and

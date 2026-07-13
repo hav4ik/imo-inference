@@ -119,6 +119,24 @@ def load_config(path: Path) -> dict[str, Any]:
         _positive_int(search[key], f"search.{key}")
     if search["top_proofs"] > search["proofs_per_round"]:
         raise ValueError("search.top_proofs cannot exceed search.proofs_per_round")
+    if (
+        search["top_proofs"] * search["refinements_per_proof"]
+        != search["proofs_per_round"]
+    ):
+        raise ValueError(
+            "search.top_proofs * search.refinements_per_proof must equal "
+            "search.proofs_per_round"
+        )
+    if search["analyses_per_refinement"] != search["refinements_per_proof"]:
+        raise ValueError(
+            "search.analyses_per_refinement must equal "
+            "search.refinements_per_proof"
+        )
+    if search["analyses_per_refinement"] > search["verifications_per_proof"]:
+        raise ValueError(
+            "search.analyses_per_refinement cannot exceed "
+            "search.verifications_per_proof"
+        )
     if not 0 < search["early_stop_threshold"] <= 1:
         raise ValueError("search.early_stop_threshold must be in (0, 1]")
     if search["temperature"] != 1.0 or search["top_p"] != 0.95:

@@ -37,7 +37,7 @@ search:
   verifications_per_proof: 16
   top_proofs: 8
   refinements_per_proof: 4
-  analyses_per_refinement: 8
+  analyses_per_refinement: 4
   max_rounds: 4
   early_stop_threshold: 0.99999
   temperature: 1.0

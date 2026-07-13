@@ -17,7 +17,7 @@ from proof_prompts import (  # noqa: E402
     prompt_hashes,
     refinement_messages,
 )
-from proof_search import ProblemSearch  # noqa: E402
+from proof_search import ProblemSearch, Proof, Verification  # noqa: E402
 
 
 class ScriptedClient:
@@ -25,14 +25,16 @@ class ScriptedClient:
         self.stop_after_first_round = stop_after_first_round
         self.calls: list[str] = []
         self.kwargs: list[dict] = []
+        self.messages: dict[str, list[dict[str, str]]] = {}
 
     async def chat_raw(self, messages, *, request_id, **kwargs):
         self.calls.append(request_id)
         self.kwargs.append(kwargs)
+        self.messages[request_id] = messages
         if "/verify/" in request_id:
             score = 1 if self.stop_after_first_round or "round-02" in request_id else 0.5
             content = (
-                "<evaluation>The argument is checked step by step.</evaluation>\n"
+                f"<evaluation>The argument is checked for {request_id}.</evaluation>\n"
                 "<suggestions>Make every equality explicit.</suggestions>\n"
                 f"<score>{score}</score>"
             )
@@ -54,6 +56,26 @@ class ScriptedClient:
             "requested_max_completion_tokens": 100,
             "latency_s": 0.01,
         }
+
+
+class MalformedCandidateClient(ScriptedClient):
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        response = await super().chat_raw(
+            messages, request_id=request_id, **kwargs
+        )
+        if "/generate/" in request_id and request_id.endswith("p0000"):
+            response["message"]["content"] = "No XML candidate."
+        return response
+
+
+class MalformedVerifierClient(ScriptedClient):
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        response = await super().chat_raw(
+            messages, request_id=request_id, **kwargs
+        )
+        if request_id.endswith("/v000"):
+            response["message"]["content"] = "No XML verification."
+        return response
 
 
 class GatedClient(ScriptedClient):
@@ -147,12 +169,47 @@ class ProofSearchTests(unittest.TestCase):
         self.assertIn("Problem:\nProve it.", messages[1]["content"])
         refined = refinement_messages(
             "Prove it.", "r01-p0000", "Candidate proof.", "Candidate audit.",
-            [(0.0, "Fatal review."), (1.0, "Positive review.")],
+            0.0, "Fatal review.",
         )
         user = refined[1]["content"]
         self.assertIn('<candidate id="r01-p0000">', user)
         self.assertIn('<verifier_review score="0">\nFatal review.', user)
-        self.assertIn('<verifier_review score="1">\nPositive review.', user)
+        self.assertEqual(user.count("<verifier_review "), 1)
+
+    def test_lowest_reviews_are_selected_deterministically(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = small_config()
+            config["analyses_per_refinement"] = 4
+            config["refinements_per_proof"] = 4
+            search = ProblemSearch(
+                problem_id="1",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=ScriptedClient(),
+                semaphore=asyncio.Semaphore(4),
+                config=config,
+            )
+            proof = Proof(
+                proof_id="r01-p0000",
+                round_index=1,
+                parent_id=None,
+                proof="Proof.",
+                self_evaluation="Audit.",
+                self_score=1.0,
+                generation_sample_id="generate",
+                verifications=[
+                    Verification(f"v{index}", score, f"Review {index}.")
+                    for index, score in enumerate((1.0, 0.5, 0.0, 1.0, 0.5, 0.0))
+                ],
+            )
+            selected = search._selected_reviews(proof, 2)
+            repeated = search._selected_reviews(proof, 2)
+
+        self.assertEqual([item.score for item in selected], [0.0, 0.0, 0.5, 0.5])
+        self.assertEqual(
+            [item.sample_id for item in selected],
+            [item.sample_id for item in repeated],
+        )
 
     def test_strict_xml_response_parsers(self):
         proof, evaluation, score = parse_generation(
@@ -170,6 +227,62 @@ class ProofSearchTests(unittest.TestCase):
             parse_generation("unstructured")
         with self.assertRaises(ValueError):
             parse_verification("<evaluation>Evaluation only.</evaluation>")
+
+    def test_refinement_parent_selection_uses_the_cumulative_pool(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                client = ScriptedClient()
+                search = ProblemSearch(
+                    problem_id="9",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=small_config(),
+                )
+                older = Proof(
+                    proof_id="r01-p0000",
+                    round_index=1,
+                    parent_id=None,
+                    proof="Older stronger proof.",
+                    self_evaluation="Audit.",
+                    self_score=1.0,
+                    generation_sample_id="old-generate",
+                    verifications=[
+                        Verification(f"old-v{index}", 1.0, f"Old review {index}.")
+                        for index in range(2)
+                    ],
+                )
+                recent = Proof(
+                    proof_id="r02-p0000",
+                    round_index=2,
+                    parent_id=older.proof_id,
+                    proof="Recent weaker proof.",
+                    self_evaluation="Audit.",
+                    self_score=1.0,
+                    generation_sample_id="new-generate",
+                    verifications=[
+                        Verification(f"new-v{index}", 0.5, f"New review {index}.")
+                        for index in range(2)
+                    ],
+                )
+                search.proofs = {older.proof_id: older, recent.proof_id: recent}
+
+                generated = await search._generate_round(3)
+
+                self.assertEqual([proof.parent_id for proof in generated], [older.proof_id] * 2)
+                refinement_prompts = [
+                    client.messages[request_id][1]["content"]
+                    for request_id in client.calls
+                ]
+                self.assertTrue(
+                    all(
+                        f'<candidate id="{older.proof_id}">' in prompt
+                        for prompt in refinement_prompts
+                    )
+                )
+
+        asyncio.run(run())
 
     def test_arbitrary_yaml_values_drive_two_round_search(self):
         async def run():
@@ -195,6 +308,65 @@ class ProofSearchTests(unittest.TestCase):
                         for kwargs in client.kwargs
                     )
                 )
+                refinement_ids = [
+                    request_id
+                    for request_id in client.calls
+                    if request_id.startswith("round-02/generate/")
+                ]
+                review_prompts = [
+                    client.messages[request_id][1]["content"]
+                    for request_id in refinement_ids
+                ]
+                self.assertEqual(len(review_prompts), 2)
+                self.assertEqual(
+                    [prompt.count("<verifier_review ") for prompt in review_prompts],
+                    [1, 1],
+                )
+                self.assertEqual(len(set(review_prompts)), 2)
+
+        asyncio.run(run())
+
+    def test_candidates_without_xml_are_disqualified_without_replacement(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                client = MalformedCandidateClient()
+                search = ProblemSearch(
+                    problem_id="7",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+                final = await search.solve()
+                summary = Path(directory, "rounds", "round-01.json").read_text()
+
+                self.assertEqual(final["proofs_in_pool"], 1)
+                self.assertEqual(final["calls_completed"], 4)
+                self.assertIn('"generated_proof_ids": [\n    "r01-p0001"', summary)
+                self.assertFalse(
+                    any("/verify/r01-p0000/" in request_id for request_id in client.calls)
+                )
+
+        asyncio.run(run())
+
+    def test_malformed_verifier_xml_remains_fatal(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                search = ProblemSearch(
+                    problem_id="8",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=MalformedVerifierClient(),
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+                with self.assertRaises(ValueError):
+                    await search.solve()
 
         asyncio.run(run())
 

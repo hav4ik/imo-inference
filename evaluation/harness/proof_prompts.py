@@ -76,20 +76,22 @@ def refinement_messages(
     candidate_id: str,
     proof: str,
     self_evaluation: str,
-    reviews: list[tuple[float, str]],
+    review_score: float,
+    review: str,
 ) -> list[dict[str, str]]:
-    parts = [f'<candidate id="{candidate_id}">', "<proof>", proof, "</proof>"]
-    for score, review in reviews:
-        parts.extend(
-            [
-                f'<verifier_review score="{score:g}">',
-                review,
-                "</verifier_review>",
-            ]
-        )
-    parts.extend(
-        ["<self_evaluation>", self_evaluation, "</self_evaluation>", "</candidate>"]
-    )
+    parts = [
+        f'<candidate id="{candidate_id}">',
+        "<proof>",
+        proof,
+        "</proof>",
+        f'<verifier_review score="{review_score:g}">',
+        review,
+        "</verifier_review>",
+        "<self_evaluation>",
+        self_evaluation,
+        "</self_evaluation>",
+        "</candidate>",
+    ]
     rendered = (
         template("refiner.txt")
         .replace("{problem}", problem)

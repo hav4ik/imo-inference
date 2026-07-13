@@ -52,23 +52,26 @@ field. No MathArena-specific generation prompt or algorithm is used.
 
 For each requested problem:
 
-1. Generate 32 initial proofs using stable, distinct request seeds.
-2. Parse each natural-stop response using ycchen's XML contract.
-3. Verify every new proof independently 16 times using ycchen's verifier prompt,
-   including the proof's self-evaluation.
+1. Make 32 initial proof attempts using stable, distinct request seeds.
+2. Admit each natural-stop response only when it matches ycchen's complete XML
+   contract. Disqualify malformed candidates without replacement.
+3. Verify every admitted proof independently 16 times using ycchen's verifier
+   prompt, including the proof's self-evaluation.
 4. Rank the cumulative verified pool by mean verifier score, self-score, and a
    stable seeded tie-breaker.
 5. Unless the best mean exceeds `0.99999`, take the cumulative top 8 proofs.
-6. For every selected parent, place eight informative verifier reviews into one
-   ycchen XML candidate bundle and generate four independent refinements.
-7. Verify all 32 new proofs 16 times, add them to the cumulative pool, rerank,
-   and continue for at most four rounds.
+6. For every selected parent, choose its four lowest-rated verifier analyses,
+   with a stable seeded tie-break. Put each analysis into its own ycchen XML
+   candidate bundle and generate exactly one refinement from it.
+7. Verify every admitted refinement 16 times, add it to the cumulative pool,
+   rerank, and continue for at most four rounds.
 8. Return the highest-ranked proof. There is no selector-model call or proof
    fallback.
 
-Each full round makes 32 generation calls and 512 verifier calls. Four rounds
-make at most 2,176 local calls per problem. Early stop
-can reduce the count without changing the algorithm.
+A full-width round makes 32 generation calls and 512 verifier calls. Four
+full-width rounds make at most 2,176 local calls per problem. Invalid candidate
+XML and early stopping reduce the verifier count without changing the algorithm;
+there are no replacement generation calls.
 
 All independent continuations are admitted together, bounded only by the YAML
 concurrency limit. The client does not serialize a full completion or issue a
