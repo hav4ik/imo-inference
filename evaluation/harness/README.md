@@ -10,8 +10,9 @@ The harness exposes one production path:
    and GPU state with the YAML before generation.
 4. `run_proof_search.py` loads exactly the IDs in the supplied JSON manifest and
    runs the same proof-pool engine for every problem.
-5. `proof_search.py` generates, verifies, ranks, refines, and checkpoints every
-   call and proof. Its budgets are read directly from YAML.
+5. `proof_search.py` launches all round candidates together, verifies each valid
+   proof immediately while other generations continue, then ranks at the round
+   barrier. Every call and proof is checkpointed and all budgets come from YAML.
 6. `grade_proofs.py` grades the one selected proof per problem for the configured
    64 attempts and applies zero-veto aggregation.
 7. `run_full_evaluation.py` pins inputs, performs the audits, and writes the final
