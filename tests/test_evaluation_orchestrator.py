@@ -69,6 +69,7 @@ class EvaluationOrchestratorTests(unittest.TestCase):
                     {
                         "sample_id": "round-01/generate/r01-p0000",
                         "prompt_sha256": prompt_hash,
+                        "physical_request_count": 2,
                         "error": None,
                     }
                 )
@@ -80,6 +81,7 @@ class EvaluationOrchestratorTests(unittest.TestCase):
                     "problem_count": 1,
                     "proof_count": 1,
                     "call_count": 1,
+                    "physical_request_count": 2,
                     "failed_call_count": 0,
                 },
             )

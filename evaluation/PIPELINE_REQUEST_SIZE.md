@@ -6,16 +6,20 @@ This document derives request sizes for the generate-verify-refine pipeline
 under the checked-in serving semantics:
 
 - the local SGLang server context is `C = 262,144` tokens;
-- every local request sends `max_completion_tokens = O = 65,536`; and
-- the client forwards `O` unchanged.
+- the first segment of every local logical call uses the configurable
+  `max_completion_tokens = O = 65,536`;
+- a length-truncated prover or refiner may use one configurable
+  `solution_continuation_tokens = R = 16,384` native continuation; and
+- verifier calls never receive a continuation.
 
-There is no client-side subtraction, clamp, prompt-size preflight, truncation,
-or special overflow handling. SGLang's configured context length is the sole
-context enforcement point.
+The client does not subtract prompt tokens from either configured output budget,
+clamp either budget, truncate prompt material, or perform a context preflight.
+SGLang's configured context length is the sole context enforcement point.
 
-Here, **input payload** means the tokenized chat messages submitted in one LLM
-request. **Requested total context** means that input plus the fixed requested
-output. HTTP JSON bytes are a separate transport measurement.
+Here, **input payload** means the tokenized messages or explicit token IDs
+submitted in one physical inference request. **Requested total context** means
+that input plus that physical request's output budget. HTTP JSON bytes and
+aggregate concurrent work are separate measurements.
 
 ## Pipeline structure
 
@@ -25,30 +29,35 @@ the four lowest-rated verifier analyses for each parent, generate one refinement
 from each analysis, and verify every admitted refinement 16 times. There are at
 most four rounds.
 
-A generation or refinement is admitted only after a natural stop and successful
-parsing of the complete ycchen XML contract. Invalid candidates are disqualified
-without replacement, so 32 is the nominal round width rather than a required
-verified population.
+A naturally completed candidate is admitted only when it matches the complete
+ycchen XML contract. A length-truncated prover/refiner receives at most one
+continuation:
 
-The largest fan-in is one refinement prompt. It contains:
+- if `<solution>` has not started, the client appends a finalize instruction,
+  `</think>`, and `<solution>` to the token prefix;
+- if `<solution>` has started, the client continues the partial visible XML
+  without inserting another solution tag; and
+- the combined visible output must still match the complete XML contract.
 
-1. one parent proof and its self-evaluation; and
-2. exactly one verifier response selected from that parent's own 16
-   verifications.
-
-It does not contain another verifier response, the parent's parent, earlier
-verifier sets, or the complete history of the proof pool.
+Invalid candidates are disqualified without retries. Hidden thinking is stored
+for audit and for the one continuation request only. It is never inserted into a
+verifier or later refinement prompt.
 
 ## Definitions
 
 Let:
 
-- `B_r` be the parent proof plus self-evaluation retained from round `r`;
+- `O` be the configured first-segment completion budget, 65,536;
+- `R` be the configured solution-continuation budget, 16,384;
+- `L = O + R = 81,920` be the maximum logical prover/refiner output across both
+  physical segments;
+- `B_r` be the parsed parent proof plus self-evaluation retained from round `r`;
 - `V_{r,i}` be one selected verifier response for that parent;
 - `F_g` be the fixed generation prompt;
-- `F_v` be the verifier wrapper, problem, and chat-template overhead; and
+- `F_v` be the verifier wrapper, problem, and chat-template overhead;
 - `F_{r,1}` be the refinement wrapper, problem, candidate markup, chat template,
-  and one empty review wrapper.
+  and one empty review wrapper; and
+- `F_c` be the force-close steering suffix, including `</think><solution>`.
 
 Using the live OPD tokenizer on IMO 2025 Problem 1:
 
@@ -57,13 +66,14 @@ Using the live OPD tokenizer on IMO 2025 Problem 1:
 | Generation prompt, `F_g` | 426 |
 | Verifier with an empty candidate, `F_v` | 377 |
 | Refiner with an empty parent and one empty review, `F_{r,1}` | 399 |
+| Force-close steering suffix, `F_c` | 51 |
 
-These fixed counts are problem- and tokenizer-specific. The formulas remain
-the same when the counts change.
+These fixed counts are problem-, tokenizer-, and steering-text-specific. The
+formulas remain the same when the configurable budgets or fixed counts change.
 
 ## Generation request
 
-A generation request has:
+The first physical generation request has:
 
 ```text
 input  = F_g
@@ -80,141 +90,196 @@ requested total         65,962
 server context         262,144
 ```
 
-Only a natural-stop response matching the required XML contract is admitted.
-The retained proof and self-evaluation come from the same capped completion,
-so structurally:
+If this request reaches `length` without complete XML, its continuation has the
+original prompt and generated prefix as input. The thinking-only force-close is
+the larger fixed-overhead case:
 
 ```text
-tokens(B_1) <= O
+continuation_input <= F_g + O + F_c
+continuation_total <= F_g + O + F_c + R
 ```
 
-Reasoning returned in the separate `reasoning_content` field is persisted but
-is not inserted into verifier or refinement prompts.
+For Problem 1:
+
+```text
+original generation prompt       426
+first generated prefix        65,536
+force-close steering              51
+------------------------------------
+continuation input             66,013
+continuation output            16,384
+------------------------------------
+continuation total             82,397
+server context               262,144
+```
+
+A partial solution can span both segments, so structurally:
+
+```text
+tokens(B_1) <= L = 81,920
+```
+
+Reasoning remains in the separate `reasoning_content` artifact and is not part
+of `B_1`.
 
 ## Verification request
 
-Each verifier receives one proof and its self-evaluation:
+Each verifier receives one parsed proof and its self-evaluation:
 
 ```text
 verification_input <= F_v + tokens(B_r)
-                   <= F_v + O
+                   <= F_v + L
 ```
 
 For Problem 1:
 
 ```text
 fixed verifier wrapper       377
-parent proof and self-eval 65,536
+parent proof and self-eval 81,920
 ---------------------------------
-maximum verifier input     65,913
+maximum verifier input     82,297
 requested output           65,536
 ---------------------------------
-requested total           131,449
+requested total           147,833
 server context            262,144
 ```
 
-A maximum-size verification request remains within the server context. Each
-parsed verifier response is stored in full and can contribute up to `O`
-tokens to a later refinement prompt:
+Verifier calls have no continuation. Each parsed verifier response therefore
+satisfies:
 
 ```text
-tokens(V_{r,i}) <= O
+tokens(V_{r,i}) <= O = 65,536
 ```
 
-## Refinement request
+## Refinement requests
 
-One refinement receives one parent bundle and one verifier response:
+The first refinement segment receives one parent bundle and one verifier
+response:
 
 ```text
-refinement_input
-  <= F_{r,1} + tokens(B_r) + tokens(V_{r,i})
-  <= F_{r,1} + O + O
-  <= F_{r,1} + 2O
+refinement_input <= F_{r,1} + tokens(B_r) + tokens(V_{r,i})
+                 <= F_{r,1} + L + O
 ```
 
 For Problem 1:
 
 ```text
-parent proof and self-eval     65,536
+parent proof and self-eval     81,920
 one verifier response          65,536
 fixed refinement wrapper          399
 -------------------------------------
-maximum refinement input      131,471
-requested output               65,536
+maximum first input           147,855
+first requested output         65,536
 -------------------------------------
-requested total               197,007
+maximum first total           213,391
 server context                262,144
-remaining structural margin    65,137
 ```
 
-The refinement request is the pipeline's structural maximum. Its requested
-input plus output remains below the configured server context without a client
-clamp, truncation, prompt-size preflight, or reduced completion budget. SGLang
-remains the sole context enforcement point.
-
-## Why four rounds do not increase the structural bound
-
-The refinement output for round `r + 1` is capped again:
+If that segment reaches `length` without complete XML, the continuation also
+contains the first generated prefix and force-close suffix:
 
 ```text
-tokens(B_{r+1}) <= O
+continuation_input <= F_{r,1} + L + O + O + F_c
+continuation_total <= F_{r,1} + L + O + O + F_c + R
 ```
 
-Its new verifier responses are independently capped:
+For Problem 1:
+
+```text
+parent proof and self-eval     81,920
+one verifier response          65,536
+fixed refinement wrapper          399
+first generated prefix         65,536
+force-close steering               51
+--------------------------------------
+maximum continuation input    213,442
+continuation output            16,384
+--------------------------------------
+maximum continuation total    229,826
+server context                262,144
+remaining structural margin    32,318
+```
+
+The conservative `3L` check is also below context:
+
+```text
+3 * 81,920 + 399 + 51 = 246,210 < 262,144
+```
+
+Neither calculation is enforced by a client-side prompt check. SGLang remains
+the sole authority over the concrete request.
+
+## Why later rounds do not grow recursively
+
+A prover/refiner's combined output is capped again on every round:
+
+```text
+tokens(B_{r+1}) <= L
+```
+
+Its verifier responses are independently capped:
 
 ```text
 tokens(V_{r+1,i}) <= O
 ```
 
-Therefore every later refinement satisfies the same recurrence:
+The cumulative proof pool affects ranking only. Prompt construction does not
+recursively dereference `parent_id`, and hidden thinking is not propagated.
+Every later round therefore has the same structural bounds.
+
+## Physical request accounting
+
+The four-round full-width search still has at most 2,176 logical calls:
 
 ```text
-refinement_input_{r+2} <= F_{r,1} + O + O
+4 * (32 prover/refiner calls + 32 * 16 verifier calls) = 2,176
 ```
 
-By induction, the structural bound is unchanged for rounds 2, 3, and 4. A
-model may copy older material into its new proof, but all copied material must
-fit inside the new `O`-token output. The cumulative proof pool affects ranking
-only; `refinement_messages()` does not recursively dereference `parent_id`.
+There are at most 128 prover/refiner calls across four rounds. If every one
+requires its single continuation, the physical request ceiling is:
+
+```text
+2,176 + 128 = 2,304
+```
+
+Invalid candidates and early stopping reduce these counts. Artifacts retain the
+logical call ID while recording one or two physical request segments.
 
 ## External grader
 
 Each of the 64 grader requests receives only the selected proof plus the
-problem, official checkpoints, grading guidelines, and grader instructions.
-It does not receive verifier responses or ancestry. Its independent output cap
-is also 65,536 tokens.
+problem, official checkpoints, grading guidelines, and grader instructions. It
+does not receive verifier responses, ancestry, or hidden thinking.
 
-If `F_grader` is the external model's token count for that fixed material:
+If `F_grader` is the external model's token count for its fixed material:
 
 ```text
-grader_input <= O + F_grader
-grader_requested_total <= O + F_grader + 65,536
+grader_input <= L + F_grader
+grader_requested_total <= L + F_grader + 65,536
 ```
 
-The exact accepted context is controlled by the external grader model, not the
-local SGLang context setting.
+The external grader model controls its own accepted context.
 
 ## Concurrency is not one payload
 
 The local semaphore permits 32 independent requests. SGLang does not combine
-them into one chat payload. If 32 structural worst-case refinements were
-simultaneously submitted:
+them into one context window. If 32 structural worst-case refinement
+continuations were simultaneously submitted:
 
 ```text
-aggregate input <= 32 * 131,471 = 4,207,072 tokens
-aggregate requested total <= 32 * 197,007 = 6,304,224 tokens
+aggregate input <= 32 * 213,442 = 6,830,144 tokens
+aggregate requested total <= 32 * 229,826 = 7,354,432 tokens
 ```
 
-Those figures describe aggregate submitted work, not one context window. Each
-request is independently subject to SGLang's 262,144-token context.
+Those figures describe aggregate work and KV demand, not one request context.
 
 ## Tokenization caveat
 
-Generated token IDs are decoded to text and tokenized again when embedded in a
-later prompt. Decode-then-encode is not guaranteed to preserve the original
-token count exactly, and chat-template boundaries can change tokenization.
-Consequently, `2O + F_{r,1}` is structural input accounting. The authoritative
-prompt size is SGLang's tokenization of the concrete submitted messages.
+Generated token IDs are decoded into `reasoning_content` and `content`, then
+retokenized when constructing a native continuation or later prompt.
+Decode-then-encode is not guaranteed to preserve the original token count
+exactly, and chat-template boundaries can change tokenization. The authoritative
+size is SGLang's tokenization of each concrete request.
 
-The client intentionally does not use `/tokenize` inside `chat_raw()` and
-does not alter `max_completion_tokens` based on prompt size.
+The client intentionally performs no prompt-size subtraction or output-budget
+adjustment based on this retokenization.

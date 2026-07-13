@@ -25,6 +25,7 @@ SEARCH_KEYS = {
     "proofs_per_round", "verifications_per_proof", "top_proofs",
     "refinements_per_proof", "analyses_per_refinement", "max_rounds",
     "early_stop_threshold", "temperature", "top_p", "max_completion_tokens",
+    "solution_continuation_tokens",
     "concurrency", "request_timeout_seconds", "seed",
 }
 GRADER_KEYS = {
@@ -65,8 +66,8 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ValueError("evaluation config must be a YAML mapping")
     _exact_keys(config, ROOT_KEYS, "root")
-    if config["schema_version"] != 8:
-        raise ValueError("schema_version must be 8")
+    if config["schema_version"] != 9:
+        raise ValueError("schema_version must be 9")
     for section, keys in (
         ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
         ("search", SEARCH_KEYS), ("grader", GRADER_KEYS),
@@ -114,7 +115,8 @@ def load_config(path: Path) -> dict[str, Any]:
     for key in (
         "proofs_per_round", "verifications_per_proof", "top_proofs",
         "refinements_per_proof", "analyses_per_refinement", "max_rounds",
-        "max_completion_tokens", "concurrency", "request_timeout_seconds",
+        "max_completion_tokens", "solution_continuation_tokens", "concurrency",
+        "request_timeout_seconds",
     ):
         _positive_int(search[key], f"search.{key}")
     if search["top_proofs"] > search["proofs_per_round"]:

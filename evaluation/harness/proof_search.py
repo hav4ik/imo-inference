@@ -121,6 +121,7 @@ class CallStore:
         client: AsyncChatClient,
         semaphore: asyncio.Semaphore,
         max_completion_tokens: int,
+        solution_continuation_tokens: int,
         temperature: float,
         top_p: float,
         spec: CallSpec,
@@ -143,6 +144,27 @@ class CallStore:
                     seed=spec.seed,
                     request_id=spec.sample_id,
                 )
+                is_proof_generation = spec.stage.endswith("/generate")
+                if is_proof_generation and response["finish_reason"] == "length":
+                    try:
+                        parse_generation(response["message"].get("content") or "")
+                    except ValueError:
+                        response = await client.continue_solution_raw(
+                            response,
+                            spec.messages,
+                            max_new_tokens=solution_continuation_tokens,
+                            temperature=temperature,
+                            top_p=top_p,
+                            seed=spec.seed,
+                            request_id=spec.sample_id,
+                        )
+                    try:
+                        parse_generation(response["message"].get("content") or "")
+                    except ValueError:
+                        pass
+                    else:
+                        response["finish_reason"] = "stop"
+                        response["xml_complete_after_length"] = True
             message = response.pop("message")
             record = {
                 "sample_id": spec.sample_id,
@@ -222,6 +244,7 @@ class ProblemSearch:
                     self.client,
                     self.semaphore,
                     self.config["max_completion_tokens"],
+                    self.config["solution_continuation_tokens"],
                     self.config["temperature"],
                     self.config["top_p"],
                     spec,
@@ -428,6 +451,10 @@ class ProblemSearch:
             "rounds_completed": len(list(self.rounds_dir.glob("round-*.json"))),
             "proofs_in_pool": len(self.proofs),
             "calls_completed": len(self.calls.records),
+            "physical_requests_completed": sum(
+                record.get("physical_request_count", 1)
+                for record in self.calls.records.values()
+            ),
         }
         atomic_json(final_path, final)
         return final

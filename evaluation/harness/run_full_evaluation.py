@@ -75,6 +75,7 @@ def audit_generation(generation_dir: Path, problem_ids: list[str]) -> dict:
         raise RuntimeError("generation record IDs/order differ from the input manifest")
 
     call_count = 0
+    physical_request_count = 0
     proof_count = 0
     for problem_id in problem_ids:
         root = generation_dir / "problems" / problem_id
@@ -95,11 +96,15 @@ def audit_generation(generation_dir: Path, problem_ids: list[str]) -> dict:
             if not (root / "prompts" / f"{call['prompt_sha256']}.json").is_file():
                 raise RuntimeError(f"missing prompt artifact for {call['sample_id']}")
         call_count += len(calls)
+        physical_request_count += sum(
+            call.get("physical_request_count", 1) for call in calls
+        )
         proof_count += len(list((root / "proofs").glob("*.json")))
     return {
         "problem_count": len(problem_ids),
         "proof_count": proof_count,
         "call_count": call_count,
+        "physical_request_count": physical_request_count,
         "failed_call_count": 0,
     }
 

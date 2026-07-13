@@ -1,4 +1,4 @@
-schema_version: 8
+schema_version: 9
 
 models:
   bf16_target: /workspace/models/opd-32b-deploy
@@ -43,6 +43,7 @@ search:
   temperature: 1.0
   top_p: 0.95
   max_completion_tokens: 65536
+  solution_continuation_tokens: 16384
   request_timeout_seconds: 86400
   concurrency: 32
   seed: 0

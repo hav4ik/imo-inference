@@ -13,8 +13,8 @@ policy remains:
 - Humming W4A8 target quantization and DFlash as independent opt-in booleans;
 - 32 initial proof attempts, 16 verifications per admitted proof, cumulative top 8
   proofs, four lowest-rated analyses producing one refinement each, and four rounds;
-- a fixed 65,536-token local completion request, forwarded without client-side context adjustment;
-- ycchen's byte-identical deployed prover, verifier, and refiner prompts; and
+- a configurable 65,536-token first segment plus one configurable 16,384-token solution continuation after prover/refiner length truncation;
+- ycchen's byte-identical deployed prover, verifier, and refiner prompts, with hidden thinking excluded from downstream prompts; and
 - 64 GPT-5.6 Sol Responses grader attempts on the full integer 0-7 scale per
   final proof, using strict `findings`, `grade`, `reasoning` JSON and zero-veto
   aggregation.

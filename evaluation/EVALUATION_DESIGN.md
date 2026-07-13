@@ -53,45 +53,53 @@ field. No MathArena-specific generation prompt or algorithm is used.
 For each requested problem:
 
 1. Make 32 initial proof attempts using stable, distinct request seeds.
-2. Admit each natural-stop response only when it matches ycchen's complete XML
-   contract. Disqualify malformed candidates without replacement.
-3. Verify every admitted proof independently 16 times using ycchen's verifier
-   prompt, including the proof's self-evaluation.
-4. Rank the cumulative verified pool by mean verifier score, self-score, and a
+2. Give each prover/refiner a configurable first-segment budget. If it reaches
+   `length` without complete XML, issue one native continuation using the
+   independently configurable solution-continuation budget.
+3. Force `</think><solution>` when the first segment contains only hidden
+   thinking, or continue an already-started solution without duplicating its
+   tag. Admit only the combined output matching ycchen's complete XML contract.
+4. Verify every admitted proof independently 16 times using ycchen's verifier
+   prompt, including the proof's self-evaluation. Hidden thinking is never
+   included.
+5. Rank the cumulative verified pool by mean verifier score, self-score, and a
    stable seeded tie-breaker.
-5. Unless the best mean exceeds `0.99999`, take the cumulative top 8 proofs.
-6. For every selected parent, choose its four lowest-rated verifier analyses,
+6. Unless the best mean exceeds `0.99999`, take the cumulative top 8 proofs.
+7. For every selected parent, choose its four lowest-rated verifier analyses,
    with a stable seeded tie-break. Put each analysis into its own ycchen XML
    candidate bundle and generate exactly one refinement from it.
-7. Verify every admitted refinement 16 times, add it to the cumulative pool,
+8. Verify every admitted refinement 16 times, add it to the cumulative pool,
    rerank, and continue for at most four rounds.
-8. Return the highest-ranked proof. There is no selector-model call or proof
+9. Return the highest-ranked proof. There is no selector-model call or proof
    fallback.
 
-A full-width round makes 32 generation calls and 512 verifier calls. Four
-full-width rounds make at most 2,176 local calls per problem. Invalid candidate
-XML and early stopping reduce the verifier count without changing the algorithm;
-there are no replacement generation calls.
+A full-width four-round search makes at most 2,176 logical calls. Its 128
+prover/refiner calls can each add at most one native continuation, producing a
+2,304 physical-request ceiling. Invalid XML and early stopping reduce the
+verifier and continuation counts; there are no replacement generations.
 
-All independent continuations are admitted together, bounded only by the YAML
-concurrency limit. The client does not serialize a full completion or issue a
-synthetic request to prime the radix cache; prefix reuse is managed by SGLang.
+All independent logical calls are admitted together under the YAML concurrency
+limit. A native continuation retains its logical call's existing semaphore slot.
+The client does not issue synthetic prefix-priming requests; prefix reuse is
+managed by SGLang.
 
 ## Persistence
 
 Every call has a stable sample ID and seed. The runner flushes a lossless record
-containing content, reasoning, finish reason, usage, cached-prefix tokens,
-latency, prompt hash, and error before the call affects ranking. Full messages
+containing content, reasoning, logical and physical finish reasons, per-segment usage,
+cached-prefix tokens, latency, token hashes, prompt hash, and error before the call affects ranking. Full messages
 are stored once in hash-addressed prompt files. Proofs, verifier sets, round
 summaries, final selection, config, ID manifest, server validation, model hashes,
 dataset hash, prompt hashes, and source commit are persisted.
 
 Successful calls are resume checkpoints. A persisted failure is terminal. There
-are no request retries, prompt fallbacks, model fallbacks, or synthetic scores.
+are no request retries, second continuations, prompt fallbacks, model fallbacks,
+or synthetic scores.
 The YAML sets a strict 24-hour HTTP deadline for each local model response.
-Every local request sends the configured 65,536-token completion budget
-unchanged; the client performs no prompt-size subtraction, clamp, or context
-preflight, and SGLang alone enforces its 262,144-token server context.
+The checked-in YAML uses a configurable 65,536-token first segment and a
+configurable 16,384-token solution continuation. The client performs no
+prompt-size subtraction, output-budget clamp, or context preflight, and SGLang
+alone enforces its 262,144-token server context.
 
 ## Final grading
 

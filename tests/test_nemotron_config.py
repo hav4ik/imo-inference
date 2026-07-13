@@ -31,6 +31,7 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(search["concurrency"], 32)
         self.assertEqual(search["request_timeout_seconds"], 86400)
         self.assertEqual(search["max_completion_tokens"], 65536)
+        self.assertEqual(search["solution_continuation_tokens"], 16384)
         server = self.config["server"]
         self.assertEqual(server["max_running_requests"], 32)
         self.assertEqual(server["mem_fraction_static"], 0.82)
@@ -91,15 +92,22 @@ class NemotronConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.yaml"
             path.write_text(
-                self.path.read_text().replace(
+                self.path.read_text()
+                .replace(
                     "max_completion_tokens: 65536",
                     "max_completion_tokens: 32768",
+                    1,
+                )
+                .replace(
+                    "solution_continuation_tokens: 16384",
+                    "solution_continuation_tokens: 8192",
                     1,
                 )
             )
             config = load_config(path)
         self.assertEqual(config["server"]["context_length"], 262144)
         self.assertEqual(config["search"]["max_completion_tokens"], 32768)
+        self.assertEqual(config["search"]["solution_continuation_tokens"], 8192)
 
     def test_search_shape_validation_rejects_inconsistent_profiles(self):
         replacements = (

@@ -68,6 +68,91 @@ class MalformedCandidateClient(ScriptedClient):
         return response
 
 
+class LengthContinuationClient(ScriptedClient):
+    def __init__(self, *, invalid_continuation: bool = False):
+        super().__init__()
+        self.invalid_continuation = invalid_continuation
+        self.continuation_calls: list[dict] = []
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        response = await super().chat_raw(
+            messages, request_id=request_id, **kwargs
+        )
+        if "/generate/" not in request_id or not request_id.endswith("p0000"):
+            return response
+        response.update(
+            finish_reason="length",
+            completion_tokens=kwargs["max_completion_tokens"],
+            requested_max_completion_tokens=kwargs["max_completion_tokens"],
+            logical_max_completion_tokens=kwargs["max_completion_tokens"],
+            physical_request_count=1,
+            physical_prompt_tokens=10,
+            segments=[{"kind": "chat", "finish_reason": "length"}],
+        )
+        response["message"] = {
+            "content": "",
+            "reasoning_content": "private unfinished reasoning",
+        }
+        return response
+
+    async def continue_solution_raw(self, initial, messages, **kwargs):
+        self.continuation_calls.append({"messages": messages, **kwargs})
+        content = (
+            "<solution>unfinished"
+            if self.invalid_continuation
+            else (
+                "<solution>Recovered proof.</solution>\n"
+                "<self_evaluation>Recovered and checked.</self_evaluation>\n"
+                "<score>1</score>"
+            )
+        )
+        return {
+            **initial,
+            "message": {
+                "content": content,
+                "reasoning_content": initial["message"]["reasoning_content"],
+            },
+            "finish_reason": "stop",
+            "completion_tokens": (
+                initial["completion_tokens"] + kwargs["max_new_tokens"]
+            ),
+            "requested_solution_continuation_tokens": kwargs["max_new_tokens"],
+            "logical_max_completion_tokens": (
+                initial["requested_max_completion_tokens"]
+                + kwargs["max_new_tokens"]
+            ),
+            "physical_request_count": 2,
+            "physical_prompt_tokens": 150,
+            "segments": [
+                *initial["segments"],
+                {"kind": "solution_continuation", "finish_reason": "stop"},
+            ],
+            "latency_s": initial["latency_s"] + 0.02,
+        }
+
+
+class CompleteXMLAtLengthClient(ScriptedClient):
+    def __init__(self):
+        super().__init__()
+        self.continuation_calls = 0
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        response = await super().chat_raw(
+            messages, request_id=request_id, **kwargs
+        )
+        if "/generate/" in request_id and request_id.endswith("p0000"):
+            response.update(
+                finish_reason="length",
+                physical_request_count=1,
+                segments=[{"kind": "chat", "finish_reason": "length"}],
+            )
+        return response
+
+    async def continue_solution_raw(self, initial, messages, **kwargs):
+        self.continuation_calls += 1
+        raise AssertionError("complete XML must not receive a continuation")
+
+
 class MalformedVerifierClient(ScriptedClient):
     async def chat_raw(self, messages, *, request_id, **kwargs):
         response = await super().chat_raw(
@@ -115,6 +200,7 @@ def small_config() -> dict:
         "temperature": 1.0,
         "top_p": 0.95,
         "max_completion_tokens": 128,
+        "solution_continuation_tokens": 64,
         "concurrency": 4,
         "seed": 17,
     }
@@ -323,6 +409,100 @@ class ProofSearchTests(unittest.TestCase):
                     [1, 1],
                 )
                 self.assertEqual(len(set(review_prompts)), 2)
+
+        asyncio.run(run())
+
+    def test_complete_xml_at_length_is_admitted_without_continuation(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                client = CompleteXMLAtLengthClient()
+                search = ProblemSearch(
+                    problem_id="12",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+
+                final = await search.solve()
+                boundary = search.calls.records["round-01/generate/r01-p0000"]
+
+                self.assertEqual(client.continuation_calls, 0)
+                self.assertTrue(boundary["xml_complete_after_length"])
+                self.assertEqual(final["proofs_in_pool"], 2)
+                self.assertEqual(final["physical_requests_completed"], 6)
+
+        asyncio.run(run())
+
+    def test_length_truncated_thinking_gets_one_configured_continuation(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                client = LengthContinuationClient()
+                search = ProblemSearch(
+                    problem_id="10",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+
+                final = await search.solve()
+                forced = search.calls.records["round-01/generate/r01-p0000"]
+
+                self.assertEqual(len(client.continuation_calls), 1)
+                self.assertEqual(
+                    client.continuation_calls[0]["max_new_tokens"],
+                    config["solution_continuation_tokens"],
+                )
+                self.assertEqual(final["calls_completed"], 6)
+                self.assertEqual(final["physical_requests_completed"], 7)
+                self.assertEqual(forced["physical_request_count"], 2)
+                self.assertEqual(
+                    forced["logical_max_completion_tokens"],
+                    config["max_completion_tokens"]
+                    + config["solution_continuation_tokens"],
+                )
+                verifier_text = "\n".join(
+                    message["content"]
+                    for request_id, messages in client.messages.items()
+                    if "/verify/" in request_id
+                    for message in messages
+                )
+                self.assertNotIn("private unfinished reasoning", verifier_text)
+                self.assertIn("Recovered proof.", verifier_text)
+
+        asyncio.run(run())
+
+    def test_invalid_forced_xml_is_disqualified_without_retry(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                client = LengthContinuationClient(invalid_continuation=True)
+                search = ProblemSearch(
+                    problem_id="11",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+
+                final = await search.solve()
+
+                self.assertEqual(len(client.continuation_calls), 1)
+                self.assertEqual(final["proofs_in_pool"], 1)
+                self.assertEqual(final["calls_completed"], 4)
+                self.assertEqual(final["physical_requests_completed"], 5)
+                self.assertFalse(
+                    any("/verify/r01-p0000/" in request_id for request_id in client.calls)
+                )
 
         asyncio.run(run())
 
