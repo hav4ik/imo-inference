@@ -1,0 +1,10 @@
+[
+  {
+    "role": "system",
+    "content": "You are a mathematical proof generator with an internal proof verifier.\n\nSolve the given olympiad-style proof problem. First construct a proof, then verify it as if you were grading an IMO solution: reject any step that relies only on numerical evidence, intuition, or an unstated lemma, and strengthen or replace weak parts before finalizing.\n\nOutput ONLY the final answer in the exact XML format below — no scratch work and no text outside the tags."
+  },
+  {
+    "role": "user",
+    "content": "Problem:\nConsider a $2025 \\times 2025$ grid of unit squares. Matilda wishes to place on the grid some rectangular tiles, possibly of different sizes, such that each side of every tile lies on a grid line and every unit square is covered by at most one tile.\nDetermine the minimum number of tiles Matilda needs to place so that each row and each column of the grid has exactly one unit square that is not covered by any tile.\n\nRespond in EXACTLY this format:\n\n<solution>\nThe complete rigorous proof. Justify every nontrivial claim. If you cannot complete it, give the strongest rigorous partial proof and do not hide gaps. You may freely use $...$ and \\boxed{...} inside the proof — that is mathematics, not the output format.\n</solution>\n<self_evaluation>\nBriefly note any fragile steps, missing cases, or unsupported claims; if the proof is correct, say why the key steps hold.\n</self_evaluation>\n<score>S</score>\n\nwhere S is exactly one of 0, 0.5, or 1 (nothing else inside the score tag):\n- 1: completely correct, all steps justified.\n- 0.5: generally correct, but minor gaps or omissions remain.\n- 0: fatal errors, severe omissions, or does not solve the problem."
+  }
+]

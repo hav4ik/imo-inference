@@ -1,0 +1,10 @@
+[
+  {
+    "role": "system",
+    "content": "You are a mathematical proof generator with an internal proof verifier.\n\nSolve the given olympiad-style proof problem. First construct a proof, then verify it as if you were grading an IMO solution: reject any step that relies only on numerical evidence, intuition, or an unstated lemma, and strengthen or replace weak parts before finalizing.\n\nOutput ONLY the final answer in the exact XML format below — no scratch work and no text outside the tags."
+  },
+  {
+    "role": "user",
+    "content": "Problem:\nLet $\\Omega$ and $\\Gamma$ be circles with centres $M$ and $N$, respectively, such that the radius of $\\Omega$ is less than the radius of $\\Gamma$. Suppose $\\Omega$ and $\\Gamma$ intersect at two distinct points $A$ and $B$. Line $MN$ intersects $\\Omega$ at $C$ and $\\Gamma$ at $D$, so that $C, M, N, D$ lie on $MN$ in that order. Let $P$ be the circumcentre of triangle $ACD$. Line $AP$ meets $\\Omega$ again at $E\\neq A$ and meets $\\Gamma$ again at $F\\neq A$. Let $H$ be the orthocentre of triangle $PMN$.\n\nProve that the line through $H$ parallel to $AP$ is tangent to the circumcircle of triangle $BEF$.\n\nRespond in EXACTLY this format:\n\n<solution>\nThe complete rigorous proof. Justify every nontrivial claim. If you cannot complete it, give the strongest rigorous partial proof and do not hide gaps. You may freely use $...$ and \\boxed{...} inside the proof — that is mathematics, not the output format.\n</solution>\n<self_evaluation>\nBriefly note any fragile steps, missing cases, or unsupported claims; if the proof is correct, say why the key steps hold.\n</self_evaluation>\n<score>S</score>\n\nwhere S is exactly one of 0, 0.5, or 1 (nothing else inside the score tag):\n- 1: completely correct, all steps justified.\n- 0.5: generally correct, but minor gaps or omissions remain.\n- 0: fatal errors, severe omissions, or does not solve the problem."
+  }
+]

@@ -1,0 +1,195 @@
+{
+  "schema_version": 2,
+  "problem_id": "3",
+  "round": 3,
+  "generated_proof_ids": [
+    "r03-p0000",
+    "r03-p0002",
+    "r03-p0003",
+    "r03-p0004",
+    "r03-p0005",
+    "r03-p0006",
+    "r03-p0007",
+    "r03-p0008",
+    "r03-p0009",
+    "r03-p0010",
+    "r03-p0011",
+    "r03-p0012",
+    "r03-p0013",
+    "r03-p0016",
+    "r03-p0017",
+    "r03-p0018",
+    "r03-p0019",
+    "r03-p0020",
+    "r03-p0021",
+    "r03-p0022",
+    "r03-p0023",
+    "r03-p0025",
+    "r03-p0028",
+    "r03-p0030",
+    "r03-p0031"
+  ],
+  "cumulative_pool_size": 62,
+  "verified_pool_size": 62,
+  "best_proof_id": "r03-p0000",
+  "best_mean_score": 0.5,
+  "best_valid_verification_count": 16,
+  "verification_stats": {
+    "attempted": 400,
+    "valid": 400,
+    "invalid": 0,
+    "by_proof": {
+      "r03-p0000": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0002": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0003": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0004": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0005": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0006": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0007": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0008": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0009": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0010": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0011": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0012": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0013": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0016": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0017": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0018": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0019": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0020": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0021": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0022": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0023": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0025": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0028": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0030": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      },
+      "r03-p0031": {
+        "attempted": 16,
+        "valid": 16,
+        "invalid": 0,
+        "invalid_sample_ids": []
+      }
+    }
+  },
+  "early_stop": false
+}
