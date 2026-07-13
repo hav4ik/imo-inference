@@ -28,7 +28,7 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(search["refinements_per_proof"], 4)
         self.assertEqual(search["analyses_per_refinement"], 4)
         self.assertEqual(search["max_rounds"], 4)
-        self.assertEqual(search["concurrency"], 32)
+        self.assertEqual(search["concurrency"], 64)
         self.assertEqual(search["request_timeout_seconds"], 86400)
         self.assertEqual(search["max_completion_tokens"], 65536)
         self.assertEqual(search["solution_continuation_tokens"], 16384)

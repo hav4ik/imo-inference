@@ -55,10 +55,11 @@ For each requested problem:
 3. Force `</think><solution>` when the first segment contains only hidden
    thinking, or continue an already-started solution without duplicating its
    tag. Admit only the combined output matching ycchen's complete XML contract.
-4. Verify every admitted proof independently 16 times using ycchen's verifier
-   prompt, including the proof's self-evaluation. A length-truncated verifier
-   receives one verifier-specific native continuation; hidden thinking is never
-   included in the retained analysis.
+4. Submit every round's proof-generation attempts together. As soon as one
+   attempt produces admissible XML, verify it independently 16 times using
+   ycchen's verifier prompt while unfinished proof generations continue. A
+   length-truncated verifier receives one verifier-specific native continuation;
+   hidden thinking is never included in the retained analysis.
 5. Strictly parse each verifier XML response. Log and skip malformed model
    outputs without replacement. A proof becomes ranking-eligible at the
    configurable minimum of four valid votes.
@@ -68,8 +69,9 @@ For each requested problem:
 8. For every selected parent, choose its four lowest-rated verifier analyses,
    with a stable seeded tie-break. Put each analysis into its own ycchen XML
    candidate bundle and generate exactly one refinement from it.
-9. Verify every admitted refinement 16 times, add it to the cumulative pool,
-   rerank, and continue for at most four rounds.
+9. Run every refinement through the same asynchronous generate-verify
+   pipeline, add it to the cumulative pool, rerank, and continue for at most four
+   rounds.
 10. Return the highest-ranked proof. There is no selector-model call or proof
    fallback.
 
@@ -78,10 +80,14 @@ call can add at most one native continuation, producing a 4,352 physical-request
 ceiling. Invalid XML and early stopping reduce the verifier and continuation
 counts; there are no replacement calls.
 
-All independent logical calls are admitted together under the YAML concurrency
-limit. A native continuation retains its logical call's existing semaphore slot.
-The client does not issue synthetic prefix-priming requests; prefix reuse is
-managed by SGLang.
+The checked-in YAML admits at most 64 local logical calls cluster-wide. Every
+round creates all 32 generation tasks before candidate pipelines can enqueue
+verifiers. Each valid candidate immediately enqueues its 16 verifiers under the
+same shared semaphore. Ranking, early stopping, parent selection, and the next
+round wait for every candidate pipeline in the current round. There is no
+synchronous generate-then-verify mode. A native continuation retains its logical
+call's existing semaphore slot. The client does not issue synthetic
+prefix-priming requests; prefix reuse is managed by SGLang.
 
 ## Persistence
 

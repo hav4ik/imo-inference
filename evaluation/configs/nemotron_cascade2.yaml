@@ -47,7 +47,7 @@ search:
   verifier_continuation_tokens: 16384
   min_valid_verifications: 4
   request_timeout_seconds: 86400
-  concurrency: 32
+  concurrency: 64
   seed: 0
 
 grader:

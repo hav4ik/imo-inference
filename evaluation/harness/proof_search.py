@@ -42,6 +42,14 @@ class CallSpec:
 
 
 @dataclass(frozen=True)
+class Candidate:
+    proof_id: str
+    round_index: int
+    parent_id: str | None
+    generation: CallSpec
+
+
+@dataclass(frozen=True)
 class Verification:
     sample_id: str
     score: float
@@ -278,25 +286,17 @@ class ProblemSearch:
             seed=stable_seed(self.config["seed"], self.problem_id, sample_id),
         )
 
-    async def _perform(self, specs: list[CallSpec]) -> list[dict]:
-        return await asyncio.gather(
-            *[
-                self.calls.perform(
-                    self.client,
-                    self.semaphore,
-                    self.config["max_completion_tokens"],
-                    self.config["solution_continuation_tokens"],
-                    self.config["verifier_continuation_tokens"],
-                    self.config["temperature"],
-                    self.config["top_p"],
-                    spec,
-                )
-                for spec in specs
-            ]
+    async def _perform(self, spec: CallSpec) -> dict:
+        return await self.calls.perform(
+            self.client,
+            self.semaphore,
+            self.config["max_completion_tokens"],
+            self.config["solution_continuation_tokens"],
+            self.config["verifier_continuation_tokens"],
+            self.config["temperature"],
+            self.config["top_p"],
+            spec,
         )
-
-    async def _perform_prompt_groups(self, groups: list[list[CallSpec]]) -> list[dict]:
-        return await self._perform([spec for group in groups for spec in group])
 
     def _rank_key(self, proof: Proof) -> tuple[float, int, float, int]:
         tie = stable_seed(self.config["seed"], self.problem_id, "tie", proof.proof_id)
@@ -332,20 +332,29 @@ class ProblemSearch:
         )
         return ranked[:limit]
 
-    async def _generate_round(self, round_index: int) -> list[Proof]:
+    def _round_candidates(self, round_index: int) -> list[Candidate]:
         stage = f"round-{round_index:02d}/generate"
-        groups: list[list[CallSpec]] = []
-        identities: list[tuple[str, str | None]] = []
+        candidates: list[Candidate] = []
         if round_index == 1:
             messages = generation_messages(self.problem)
-            group = []
             for index in range(self.config["proofs_per_round"]):
                 proof_id = f"r{round_index:02d}-p{index:04d}"
-                group.append(self._spec(f"{stage}/{proof_id}", stage, messages))
-                identities.append((proof_id, None))
-            groups.append(group)
+                candidates.append(
+                    Candidate(
+                        proof_id=proof_id,
+                        round_index=round_index,
+                        parent_id=None,
+                        generation=self._spec(
+                            f"{stage}/{proof_id}", stage, messages
+                        ),
+                    )
+                )
         else:
-            parents = self.ranked()[: self.config["top_proofs"]]
+            parents = [
+                proof
+                for proof in self.ranked()
+                if proof.round_index < round_index
+            ][: self.config["top_proofs"]]
             if not parents:
                 raise RuntimeError(f"{self.problem_id} has no verified proof to refine")
             proof_index = 0
@@ -355,7 +364,6 @@ class ProblemSearch:
                     raise RuntimeError(
                         f"{parent.proof_id} has too few verifier analyses to refine"
                     )
-                group = []
                 for review in reviews:
                     proof_id = f"r{round_index:02d}-p{proof_index:04d}"
                     messages = refinement_messages(
@@ -366,95 +374,124 @@ class ProblemSearch:
                         review.score,
                         review.analysis,
                     )
-                    group.append(self._spec(f"{stage}/{proof_id}", stage, messages))
-                    identities.append((proof_id, parent.proof_id))
+                    candidates.append(
+                        Candidate(
+                            proof_id=proof_id,
+                            round_index=round_index,
+                            parent_id=parent.proof_id,
+                            generation=self._spec(
+                                f"{stage}/{proof_id}", stage, messages
+                            ),
+                        )
+                    )
                     proof_index += 1
-                groups.append(group)
+        return candidates
 
-        records = await self._perform_prompt_groups(groups)
-        generated: list[Proof] = []
-        for (proof_id, parent_id), record in zip(identities, records, strict=True):
-            if proof_id in self.proofs:
-                generated.append(self.proofs[proof_id])
+    def _admit_candidate(self, candidate: Candidate, record: dict) -> Proof | None:
+        if candidate.proof_id in self.proofs:
+            return self.proofs[candidate.proof_id]
+        if record["finish_reason"] != "stop":
+            return None
+        try:
+            proof_text, self_evaluation, self_score = parse_generation(
+                record["content"]
+            )
+        except ValueError:
+            return None
+        proof = Proof(
+            proof_id=candidate.proof_id,
+            round_index=candidate.round_index,
+            parent_id=candidate.parent_id,
+            proof=proof_text,
+            self_evaluation=self_evaluation,
+            self_score=self_score,
+            generation_sample_id=record["sample_id"],
+        )
+        self._save_proof(proof)
+        return proof
+
+    async def _verify_proof(self, proof: Proof) -> dict:
+        stage = f"round-{proof.round_index:02d}/verify/{proof.proof_id}"
+        messages = verification_messages(
+            self.problem,
+            proof.proof,
+            proof.self_evaluation,
+        )
+        specs = [
+            self._spec(f"{stage}/v{index:03d}", stage, messages)
+            for index in range(self.config["verifications_per_proof"])
+        ]
+        records = await asyncio.gather(
+            *(self._perform(spec) for spec in specs)
+        )
+        verifications: list[Verification] = []
+        invalid_sample_ids: list[str] = []
+        for spec, record in zip(specs, records, strict=True):
+            if record["verification_disposition"] != "accepted":
+                invalid_sample_ids.append(spec.sample_id)
                 continue
-            if record["finish_reason"] != "stop":
-                continue
-            try:
-                proof_text, self_evaluation, self_score = parse_generation(
-                    record["content"]
+            analysis, score = parse_verification(record["content"])
+            verifications.append(
+                Verification(
+                    sample_id=spec.sample_id,
+                    score=score,
+                    analysis=analysis,
                 )
-            except ValueError:
-                continue
-            proof = Proof(
-                proof_id=proof_id,
-                round_index=round_index,
-                parent_id=parent_id,
-                proof=proof_text,
-                self_evaluation=self_evaluation,
-                self_score=self_score,
-                generation_sample_id=record["sample_id"],
             )
-            self._save_proof(proof)
-            generated.append(proof)
-        if not generated:
-            raise RuntimeError(f"{self.problem_id} round {round_index} produced no valid proof")
-        return generated
-
-    async def _verify(self, proofs: list[Proof], round_index: int) -> dict:
-        groups: list[list[CallSpec]] = []
-        for proof in proofs:
-            stage = f"round-{round_index:02d}/verify/{proof.proof_id}"
-            messages = verification_messages(
-                self.problem,
-                proof.proof,
-                proof.self_evaluation,
-            )
-            groups.append(
-                [
-                    self._spec(f"{stage}/v{index:03d}", stage, messages)
-                    for index in range(self.config["verifications_per_proof"])
-                ]
-            )
-        records = await self._perform_prompt_groups(groups)
-        records_by_id = {record["sample_id"]: record for record in records}
-        by_proof: dict[str, list[Verification]] = {
-            proof.proof_id: [] for proof in proofs
+        proof.verifications = verifications
+        self._save_proof(proof)
+        return {
+            "attempted": len(specs),
+            "valid": len(verifications),
+            "invalid": len(invalid_sample_ids),
+            "invalid_sample_ids": invalid_sample_ids,
         }
+
+    async def _complete_candidate(
+        self,
+        candidate: Candidate,
+        generation_task: asyncio.Task[dict],
+    ) -> tuple[Proof | None, dict | None]:
+        record = await generation_task
+        proof = self._admit_candidate(candidate, record)
+        if proof is None:
+            return None, None
+        return proof, await self._verify_proof(proof)
+
+    async def _run_round(self, round_index: int) -> tuple[list[Proof], dict]:
+        candidates = self._round_candidates(round_index)
+        generation_tasks = [
+            asyncio.create_task(self._perform(candidate.generation))
+            for candidate in candidates
+        ]
+        results = await asyncio.gather(
+            *(
+                self._complete_candidate(candidate, generation_task)
+                for candidate, generation_task in zip(
+                    candidates, generation_tasks, strict=True
+                )
+            )
+        )
+        generated: list[Proof] = []
         stats = {
-            "attempted": len(records),
+            "attempted": 0,
             "valid": 0,
             "invalid": 0,
             "by_proof": {},
         }
-        for proof, group in zip(proofs, groups, strict=True):
-            invalid_sample_ids = []
-            for spec in group:
-                record = records_by_id[spec.sample_id]
-                if record["verification_disposition"] != "accepted":
-                    invalid_sample_ids.append(spec.sample_id)
-                    continue
-                analysis, score = parse_verification(record["content"])
-                by_proof[proof.proof_id].append(
-                    Verification(
-                        sample_id=spec.sample_id,
-                        score=score,
-                        analysis=analysis,
-                    )
-                )
-            valid_count = len(by_proof[proof.proof_id])
-            invalid_count = len(invalid_sample_ids)
-            stats["valid"] += valid_count
-            stats["invalid"] += invalid_count
-            stats["by_proof"][proof.proof_id] = {
-                "attempted": len(group),
-                "valid": valid_count,
-                "invalid": invalid_count,
-                "invalid_sample_ids": invalid_sample_ids,
-            }
-        for proof in proofs:
-            proof.verifications = by_proof[proof.proof_id]
-            self._save_proof(proof)
-        return stats
+        for proof, proof_stats in results:
+            if proof is None or proof_stats is None:
+                continue
+            generated.append(proof)
+            stats["attempted"] += proof_stats["attempted"]
+            stats["valid"] += proof_stats["valid"]
+            stats["invalid"] += proof_stats["invalid"]
+            stats["by_proof"][proof.proof_id] = proof_stats
+        if not generated:
+            raise RuntimeError(
+                f"{self.problem_id} round {round_index} produced no valid proof"
+            )
+        return generated, stats
 
     def _round_summary(
         self,
@@ -501,8 +538,7 @@ class ProblemSearch:
                 ):
                     break
                 continue
-            generated = await self._generate_round(round_index)
-            verification_stats = await self._verify(generated, round_index)
+            generated, verification_stats = await self._run_round(round_index)
             summary = self._round_summary(
                 round_index, generated, verification_stats
             )

@@ -263,29 +263,59 @@ class AllMalformedVerifierClient(ScriptedClient):
         return response
 
 
-class GatedClient(ScriptedClient):
-    def __init__(self, expected_calls: int):
+class AsyncPipelineClient(ScriptedClient):
+    def __init__(self, *, expected_generations: int, concurrency: int):
         super().__init__()
-        self.expected_calls = expected_calls
-        self.all_started = asyncio.Event()
+        self.expected_generations = expected_generations
+        self.concurrency = concurrency
+        self.generation_starts = 0
+        self.active = 0
+        self.max_active = 0
+        self.all_generations_started = asyncio.Event()
+        self.verifier_started = asyncio.Event()
+        self.saturated = asyncio.Event()
         self.release = asyncio.Event()
 
     async def chat_raw(self, messages, *, request_id, **kwargs):
-        self.calls.append(request_id)
-        self.kwargs.append(kwargs)
-        if len(self.calls) == self.expected_calls:
-            self.all_started.set()
-        await self.release.wait()
-        return {
-            "message": {"content": "unused", "reasoning_content": ""},
-            "finish_reason": "stop",
-            "prompt_tokens": 10,
-            "cached_prompt_tokens": 0,
-            "completion_tokens": 1,
-            "reasoning_tokens": 0,
-            "requested_max_completion_tokens": 100,
-            "latency_s": 0.01,
-        }
+        self.active += 1
+        self.max_active = max(self.max_active, self.active)
+        if self.active == self.concurrency:
+            self.saturated.set()
+        try:
+            response = await super().chat_raw(
+                messages, request_id=request_id, **kwargs
+            )
+            if "/generate/" in request_id:
+                self.generation_starts += 1
+                if self.generation_starts == self.expected_generations:
+                    self.all_generations_started.set()
+                if request_id.endswith(
+                    f"p{self.expected_generations - 1:04d}"
+                ):
+                    await self.release.wait()
+            else:
+                self.verifier_started.set()
+                await self.release.wait()
+            return response
+        finally:
+            self.active -= 1
+
+
+class BlockingVerifierClient(ScriptedClient):
+    def __init__(self, blocked_request_id: str):
+        super().__init__()
+        self.blocked_request_id = blocked_request_id
+        self.blocked_started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        response = await super().chat_raw(
+            messages, request_id=request_id, **kwargs
+        )
+        if request_id == self.blocked_request_id:
+            self.blocked_started.set()
+            await self.release.wait()
+        return response
 
 
 def small_config() -> dict:
@@ -309,34 +339,53 @@ def small_config() -> dict:
 
 
 class ProofSearchTests(unittest.TestCase):
-    def test_prompt_group_requests_start_concurrently(self):
+    def test_async_pipeline_overlaps_generation_and_verification_at_64(self):
         async def run():
             with tempfile.TemporaryDirectory() as directory:
-                client = GatedClient(expected_calls=3)
+                config = small_config()
+                config.update(
+                    proofs_per_round=32,
+                    verifications_per_proof=16,
+                    max_rounds=1,
+                    min_valid_verifications=4,
+                    concurrency=64,
+                )
+                client = AsyncPipelineClient(
+                    expected_generations=32, concurrency=64
+                )
                 search = ProblemSearch(
                     problem_id="1",
                     problem="Prove the claim.",
                     output_dir=Path(directory),
                     client=client,
-                    semaphore=asyncio.Semaphore(3),
-                    config=small_config(),
+                    semaphore=asyncio.Semaphore(64),
+                    config=config,
                 )
-                messages = generation_messages("Prove the claim.")
-                group = [
-                    search._spec(
-                        f"round-01/generate/r01-p{index:04d}", "generate", messages
-                    )
-                    for index in range(3)
-                ]
-                task = asyncio.create_task(search._perform_prompt_groups([group]))
-                await asyncio.wait_for(client.all_started.wait(), timeout=1)
-                self.assertEqual(client.calls, [spec.sample_id for spec in group])
-                client.release.set()
-                records = await task
+
+                task = asyncio.create_task(search.solve())
+                await asyncio.wait_for(
+                    client.all_generations_started.wait(), timeout=2
+                )
+                await asyncio.wait_for(client.verifier_started.wait(), timeout=2)
+                await asyncio.wait_for(client.saturated.wait(), timeout=2)
+
                 self.assertEqual(
-                    [record["sample_id"] for record in records],
-                    [spec.sample_id for spec in group],
+                    client.calls[:32],
+                    [
+                        f"round-01/generate/r01-p{index:04d}"
+                        for index in range(32)
+                    ],
                 )
+                self.assertEqual(client.active, 64)
+                self.assertEqual(client.max_active, 64)
+                self.assertFalse(task.done())
+
+                client.release.set()
+                final = await asyncio.wait_for(task, timeout=10)
+
+                self.assertEqual(final["proofs_in_pool"], 32)
+                self.assertEqual(final["calls_completed"], 32 + 32 * 16)
+                self.assertEqual(client.max_active, 64)
 
         asyncio.run(run())
 
@@ -488,12 +537,13 @@ class ProofSearchTests(unittest.TestCase):
                 )
                 search.proofs = {older.proof_id: older, recent.proof_id: recent}
 
-                generated = await search._generate_round(3)
+                generated, _ = await search._run_round(3)
 
                 self.assertEqual([proof.parent_id for proof in generated], [older.proof_id] * 2)
                 refinement_prompts = [
                     client.messages[request_id][1]["content"]
                     for request_id in client.calls
+                    if request_id.startswith("round-03/generate/")
                 ]
                 self.assertTrue(
                     all(
@@ -503,6 +553,54 @@ class ProofSearchTests(unittest.TestCase):
                 )
 
         asyncio.run(run())
+
+    def test_resumed_round_excludes_partial_current_round_from_parents(self):
+        with tempfile.TemporaryDirectory() as directory:
+            search = ProblemSearch(
+                problem_id="19",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=ScriptedClient(),
+                semaphore=asyncio.Semaphore(4),
+                config=small_config(),
+            )
+            previous = Proof(
+                proof_id="r01-p0000",
+                round_index=1,
+                parent_id=None,
+                proof="Completed previous-round proof.",
+                self_evaluation="Audit.",
+                self_score=1.0,
+                generation_sample_id="r01-generate",
+                verifications=[
+                    Verification(f"r01-v{index}", 0.5, f"Review {index}.")
+                    for index in range(2)
+                ],
+            )
+            partial = Proof(
+                proof_id="r02-p0000",
+                round_index=2,
+                parent_id=previous.proof_id,
+                proof="Stronger partial current-round proof.",
+                self_evaluation="Audit.",
+                self_score=1.0,
+                generation_sample_id="r02-generate",
+                verifications=[
+                    Verification(f"r02-v{index}", 1.0, f"Review {index}.")
+                    for index in range(2)
+                ],
+            )
+            search.proofs = {
+                previous.proof_id: previous,
+                partial.proof_id: partial,
+            }
+
+            candidates = search._round_candidates(2)
+
+            self.assertEqual(
+                [candidate.parent_id for candidate in candidates],
+                [previous.proof_id, previous.proof_id],
+            )
 
     def test_arbitrary_yaml_values_drive_two_round_search(self):
         async def run():
@@ -543,6 +641,84 @@ class ProofSearchTests(unittest.TestCase):
                     [1, 1],
                 )
                 self.assertEqual(len(set(review_prompts)), 2)
+
+        asyncio.run(run())
+
+    def test_next_round_waits_for_every_verifier_pipeline(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                blocked_id = "round-01/verify/r01-p0001/v001"
+                client = BlockingVerifierClient(blocked_id)
+                search = ProblemSearch(
+                    problem_id="17",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=small_config(),
+                )
+
+                task = asyncio.create_task(search.solve())
+                await asyncio.wait_for(client.blocked_started.wait(), timeout=1)
+                await asyncio.sleep(0)
+
+                self.assertFalse(
+                    any(call.startswith("round-02/") for call in client.calls)
+                )
+                client.release.set()
+                final = await asyncio.wait_for(task, timeout=2)
+
+                self.assertEqual(final["rounds_completed"], 2)
+                self.assertTrue(
+                    any(call.startswith("round-02/") for call in client.calls)
+                )
+
+        asyncio.run(run())
+
+    def test_partial_async_round_resumes_only_missing_calls(self):
+        async def run():
+            with tempfile.TemporaryDirectory() as directory:
+                config = small_config()
+                config["max_rounds"] = 1
+                blocked_id = "round-01/verify/r01-p0001/v001"
+                interrupted_client = BlockingVerifierClient(blocked_id)
+                interrupted = ProblemSearch(
+                    problem_id="18",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=interrupted_client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+
+                task = asyncio.create_task(interrupted.solve())
+                await asyncio.wait_for(
+                    interrupted_client.blocked_started.wait(), timeout=1
+                )
+                task.cancel()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+
+                resumed_client = ScriptedClient()
+                resumed = ProblemSearch(
+                    problem_id="18",
+                    problem="Prove the claim.",
+                    output_dir=Path(directory),
+                    client=resumed_client,
+                    semaphore=asyncio.Semaphore(4),
+                    config=config,
+                )
+                final = await resumed.solve()
+
+                self.assertEqual(resumed_client.calls, [blocked_id])
+                self.assertEqual(final["calls_completed"], 6)
+                self.assertEqual(final["proofs_in_pool"], 2)
+                self.assertTrue(
+                    all(
+                        len(proof.verifications) == 2
+                        for proof in resumed.proofs.values()
+                    )
+                )
 
         asyncio.run(run())
 
