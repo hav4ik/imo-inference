@@ -67,6 +67,9 @@ class FinalGradingTests(unittest.TestCase):
             system_prompt,
         )
         self.assertIn("sole scoring rubric", system_prompt)
+        self.assertIn("not a mandatory proof method", system_prompt)
+        self.assertIn("map its established steps to checkpoints with the same logical role", system_prompt)
+        self.assertIn("A complete and rigorous alternative proof earns 7 points", system_prompt)
         self.assertIn("{grading_scheme}", system_prompt)
         self.assertNotIn("General Scoring Rubric", system_prompt)
         self.assertNotIn("GROUND-TRUTH SOLUTION", system_prompt)
