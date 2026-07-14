@@ -5,68 +5,54 @@ strict GPT-5.6 Sol grader. The checked-in production configuration uses all
 eight H200 GPUs as four TP2 replicas, with BF16 target and draft weights,
 DFlash speculative decoding, and FlashAttention 3.
 
-## VastAI Docker deployment
+## Docker deployment
 
-The published image is:
+Use an immutable image tag for the repository commit you want to run. Every
+pushed commit receives a `sha-<7-character-commit>` image tag and records its
+full commit in the OCI `org.opencontainers.image.revision` label. Do not use
+`latest` for a reproducible run.
 
-```text
-ghcr.io/bogoconic1/aimo-proof-pilot-inference:latest
+```bash
+export COMMIT=c86cbc8b6c67672c3c1c0ad131d12a6006521dda
+export IMAGE=ghcr.io/bogoconic1/aimo-proof-pilot-inference:sha-${COMMIT:0:7}
+
+docker pull "$IMAGE"
+test "$(docker image inspect "$IMAGE" \
+  --format "{{ index .Config.Labels \"org.opencontainers.image.revision\" }}")" = "$COMMIT"
 ```
 
-Every image contains an immutable repository commit recorded in the OCI
-`org.opencontainers.image.revision` label. Branch builds use the sanitized
-branch name as their tag, and every build also receives a `sha-<commit>` tag.
-The target and DFlash draft are downloaded from
-`fieldsmodelorg/Olmo-3.1-32B-Think-OPD-ProofPilot` at pinned revision
-`87707b8030800b1e531b78c9823cb80a63d66e5e`.
+Replace `COMMIT` with the exact revision whose container workflow completed
+successfully. The image is public; no registry, GitHub, or Kaggle credentials
+are required. It downloads the public `threerabbits/proof-pilot-env` runtime
+and the pinned target and DFlash draft model files on first use. `HF_TOKEN` is
+optional and should only be passed privately to avoid anonymous download rate
+limits.
 
-### Vast.ai template
+The container requires eight H200 GPUs, the NVIDIA Container Toolkit, at least
+200 GB of persistent storage mounted at its internal `/workspace`, and
+`--ipc=host --shm-size=32g`. The host storage path is arbitrary. This example
+uses `$PWD/workspace`; a named volume such as `proof-pilot-data:/workspace` is
+also valid. The mount preserves model downloads, caches, resume state, and
+outputs between containers.
 
-Create a template from **Templates > New** with these values:
-
-| Field | Value |
-|---|---|
-| Template name | `AIMO Proof Pilot - 8x H200` |
-| Image path | `ghcr.io/bogoconic1/aimo-proof-pilot-inference` |
-| Image tag | `sha-786eeb8` |
-| Launch mode | `docker ENTRYPOINT` |
-| Entrypoint arguments | `serve` |
-| Docker options | `--ipc=host --shm-size=32gb` |
-| Recommended disk | `200 GB` |
-| Machine filters | `num_gpus=8 gpu_name=H200 cuda_vers>=13.0 disk_space>=200 rented=False` |
-
-Leave all Docker registry login fields empty. The image, runtime dataset, and
-model repository are public, so the template must not contain Kaggle, GitHub,
-Hugging Face, OpenAI, or other credentials. If an optional token is needed,
-provide it privately when launching the instance or through a pre-existing
-`/workspace/.env`; never save it in a shared template.
-
-Attach at least 200 GB at `/workspace` before launch. The immutable image tag
-above is the build from repository commit `786eeb8`; use a newer immutable
-`sha-<commit>` tag only after its container workflow succeeds.
-
-Configure VastAI with exactly eight H200 GPUs, at least 200 GB of persistent
-disk mounted at `/workspace`, and Docker options `--ipc=host --shm-size=32g`.
-The `threerabbits/proof-pilot-env` Kaggle dataset is public and requires no
-credentials. `HF_TOKEN` is optional; `OPENAI_API_KEY` is needed only for strict
-final grading.
-
-The default `serve` command bootstraps the persistent volume, applies the
-checked-in patches, downloads both models, launches SGLang, and validates the
-live server. To generate an ungraded CSV submission, place `test.csv` in
-`/workspace` and use the `submission` command. It writes
-`/workspace/submission.csv` and does not call OpenAI.
+Put an `id,problem` input file at `$PWD/workspace/test.csv`, then generate an
+ungraded `id,proof` submission:
 
 ```bash
 docker run --rm --gpus all --ipc=host --shm-size=32g \
   -v "$PWD/workspace:/workspace" \
   -e HF_TOKEN \
-  ghcr.io/bogoconic1/aimo-proof-pilot-inference:latest submission
+  "$IMAGE" submission
 ```
 
-Other image commands are `bootstrap`, `validate`, `shell`, and `help`. The
-SGLang API has no application-level authentication, so do not publicly map port
-30000 without a private network or authenticated reverse proxy.
+The command bootstraps the persistent storage, applies the selected commit
+configuration and patches, downloads missing model assets, starts and validates
+SGLang, and writes `$PWD/workspace/submission.csv`. It does not call OpenAI.
+
+Use `"$IMAGE" serve` to run only the production SGLang server. Other image
+commands are `bootstrap`, `validate`, `shell`, and `help`. The API has no
+application-level authentication, so do not publish port 30000 directly; use a
+private network or an authenticated reverse proxy when remote access is needed.
 
 For a manual installation, follow this document in order on a clean machine.
 Commands assume the repository is at `/workspace/aimo-proof-pilot-inference`
