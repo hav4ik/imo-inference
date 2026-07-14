@@ -31,9 +31,9 @@ Create a template from **Templates > New** with these values:
 | Image tag | `sha-786eeb8` |
 | Launch mode | `docker ENTRYPOINT` |
 | Entrypoint arguments | `serve` |
-| Docker options | `--ipc=host --shm-size=32gb -p 30000:30000` |
+| Docker options | `--ipc=host --shm-size=32gb` |
 | Recommended disk | `200 GB` |
-| Machine filters | `num_gpus=8 gpu_name=H200 cuda_vers>=13.0 disk_space>=200 direct_port_count>=1 rented=False` |
+| Machine filters | `num_gpus=8 gpu_name=H200 cuda_vers>=13.0 disk_space>=200 rented=False` |
 
 Leave all Docker registry login fields empty. The image, runtime dataset, and
 model repository are public, so the template must not contain Kaggle, GitHub,
