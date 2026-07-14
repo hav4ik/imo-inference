@@ -63,14 +63,15 @@ You need all of the following before starting:
   supports the CUDA 13 runtime in the supplied environment.
 - At least 100 GB of free local storage for the runtime, target model, draft
   model, logs, and evaluation artifacts.
-- Git, `unzip`, `tar`, and network access to GitHub, Hugging Face, and the
-  OpenAI API.
-- The private `proof-pilot-env.zip` runtime archive from the project
-  maintainers. It is not stored in this repository or in the Hugging Face model
-  bundle. There is no supported PyPI-only replacement for this patched runtime.
+- Git, `uv`, `unzip`, `tar`, the Kaggle CLI, and network access to GitHub,
+  Kaggle, and Hugging Face.
+- Access to the `threerabbits/proof-pilot-env` Kaggle dataset. There is no
+  supported PyPI-only replacement for this patched runtime.
 - A Hugging Face token with access to
   `ycchen/proof-pilot-deploy-bundle`.
-- An OpenAI API key with access and sufficient balance for `gpt-5.6-sol`.
+- For strict grading only: network access to the OpenAI API and an API key with
+  `gpt-5.6-sol` access and sufficient balance. The CSV submission workflow
+  does not need either.
 
 The supplied runtime contains Python 3.12, CUDA 13 PyTorch, the custom SGLang
 build, FlashInfer caches, and the Humming helper required by the repository
@@ -107,18 +108,22 @@ set +a
 ```
 
 Never commit this file. A new terminal must source it again before downloading
-models or running the full evaluator.
+models or running the full evaluator. The `OPENAI_API_KEY` line may be omitted
+when only generating `submission.csv`.
 
 ## 4. Install the prebuilt runtime
 
-Start with empty `/workspace/pp` and `/workspace/proof-pilot-env-x` directories.
-Replace the archive path below with the location supplied by the maintainers:
+Install the Kaggle CLI if needed, then download the runtime dataset. The
+download creates `/workspace/proof-pilot-env.zip`:
 
 ```bash
-export ENV_ARCHIVE=/path/to/proof-pilot-env.zip
+uv tool install kaggle
+kaggle datasets download threerabbits/proof-pilot-env \
+  --path /workspace
 
 mkdir -p /workspace/proof-pilot-env-x /workspace/pp
-unzip -q "$ENV_ARCHIVE" -d /workspace/proof-pilot-env-x
+unzip -q /workspace/proof-pilot-env.zip \
+  -d /workspace/proof-pilot-env-x
 tar -xzf /workspace/proof-pilot-env-x/proof-pilot-env.bin \
   -C /workspace/pp --strip-components=1
 
@@ -254,6 +259,95 @@ echo "evaluation/runs/$RUN_ID/RESULT.md"
 The final grader uses the MathArena problem-specific grading scheme from the
 pinned dataset and the strict checked-in grader prompts. It does not use a
 lenient alternate-method override.
+
+## CSV submission workflow
+
+This is the ungraded model-submission path. The runtime, dependencies, models,
+patches, and server setup are the same as steps 1-7 above. It does not call the
+OpenAI API and does not require `OPENAI_API_KEY`.
+
+### Configure search and serving
+
+The checked-in production YAML is
+`evaluation/configs/nemotron_cascade2.yaml`. To change settings, copy it and
+edit the copy:
+
+```bash
+cd /workspace/aimo-proof-pilot-inference
+cp evaluation/configs/nemotron_cascade2.yaml \
+  /workspace/submission-config.yaml
+export CONFIG=/workspace/submission-config.yaml
+```
+
+Common search controls are:
+
+| YAML key | Meaning |
+|---|---|
+| `proofs_per_round` | proofs generated in every round |
+| `verifications_per_proof` | verifier samples for each proof |
+| `top_proofs` | parent proofs selected for refinement |
+| `refinements_per_proof` | new proofs generated per selected parent |
+| `max_rounds` | maximum generate-verify-refine rounds |
+| `temperature`, `top_p` | generation sampling |
+| `max_completion_tokens` | first output segment for local model calls |
+| `concurrency` | cluster-wide proof-search request concurrency |
+
+The validator enforces:
+
+```text
+top_proofs * refinements_per_proof = proofs_per_round
+analyses_per_refinement = refinements_per_proof
+analyses_per_refinement <= min_valid_verifications <= verifications_per_proof
+```
+
+TP/DP, FA3/FA4, DFlash, context length, and server concurrency are under
+`model` and `server`. Pass the same YAML to server startup and submission
+generation. If the production defaults are unchanged, use:
+
+```bash
+export CONFIG=/workspace/aimo-proof-pilot-inference/evaluation/configs/nemotron_cascade2.yaml
+```
+
+### Overwrite test.csv
+
+The repository's `test.csv` contains the six IMO 2025 problems as a runnable
+example. Submitters must overwrite that file with their own problems. It must
+contain exactly two lowercase columns in this order:
+
+```csv
+id,problem
+0,"First complete problem statement"
+1,"Second complete problem statement"
+```
+
+IDs must be nonempty and unique. Quote CSV fields that contain commas or
+newlines. Do not add answer, rubric, reference solution, or metadata columns.
+The submission runner reads only this CSV; it does not accept a legacy JSON
+problem manifest or JSON config.
+
+### Generate submission.csv
+
+Start the server as shown in step 6, replacing its `--config` value with
+`"$CONFIG"`. After step 7 validation passes, run in a second terminal:
+
+```bash
+cd /workspace/aimo-proof-pilot-inference
+export VENV=/workspace/pp/venv
+bash run_submission.sh
+```
+
+The script processes input rows sequentially and writes one selected proof per
+row to `submission.csv`, preserving input order. The output contains exactly:
+
+```csv
+id,proof
+```
+
+Multiline proofs are correctly quoted. The file is atomically updated after
+each completed problem, and resumable search state is stored in
+`submission_artifacts/`. Re-run the same command with unchanged `test.csv`
+and YAML to resume. For a different input set, overwrite `test.csv` and set
+`ARTIFACTS_DIR` to a new empty directory.
 
 ## 9. Run all six IMO 2025 problems
 

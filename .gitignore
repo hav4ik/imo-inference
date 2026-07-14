@@ -209,6 +209,10 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# CSV submission outputs
+submission.csv
+submission_artifacts/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
