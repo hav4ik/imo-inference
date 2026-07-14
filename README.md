@@ -25,7 +25,8 @@ is the source of truth. Its current defaults are:
 | Search concurrency | 96 requests cluster-wide |
 | Search policy | 32 proofs, 16 verifications per proof, top 8, 4 refinements, up to 4 rounds |
 | Sampling | temperature 1.0, top-p 0.95 |
-| Prover/refiner segment | 65,536 tokens plus at most one 16,384-token forced solution continuation |
+| Local first segment | 128,000 tokens for prover, refiner, and verifier |
+| Solution continuation | at most one additional 16,384-token forced solution continuation |
 | Verifier continuation | at most one additional 16,384-token continuation |
 | Final grader | 64 GPT-5.6 Sol attempts per proof, strict zero-veto aggregation |
 

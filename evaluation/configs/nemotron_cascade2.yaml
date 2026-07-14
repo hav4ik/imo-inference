@@ -42,7 +42,7 @@ search:
   early_stop_threshold: 0.99999
   temperature: 1.0
   top_p: 0.95
-  max_completion_tokens: 65536
+  max_completion_tokens: 128000
   solution_continuation_tokens: 16384
   verifier_continuation_tokens: 16384
   min_valid_verifications: 4

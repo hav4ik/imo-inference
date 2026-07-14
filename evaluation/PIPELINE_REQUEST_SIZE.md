@@ -7,7 +7,7 @@ under the checked-in serving semantics:
 
 - the local SGLang server context is `C = 262,144` tokens;
 - the first segment of every local logical call uses the configurable
-  `max_completion_tokens = O = 65,536`;
+  `max_completion_tokens = O = 128,000`;
 - a length-truncated prover or refiner may use one configurable
   `solution_continuation_tokens = R_s = 16,384` native continuation; and
 - a length-truncated verifier may use one independently configurable
@@ -54,12 +54,12 @@ replacement calls or synthetic scores are used.
 
 Let:
 
-- `O` be the configured first-segment completion budget, 65,536;
+- `O` be the configured first-segment completion budget, 128,000;
 - `R_s` be the configured solution-continuation budget, 16,384;
 - `R_v` be the configured verifier-continuation budget, 16,384;
-- `L_s = O + R_s = 81,920` be the maximum logical prover/refiner output across both
+- `L_s = O + R_s = 144,384` be the maximum logical prover/refiner output across both
   physical segments;
-- `L_v = O + R_v = 81,920` be the maximum retained verifier output across both
+- `L_v = O + R_v = 144,384` be the maximum retained verifier output across both
   physical segments;
 - `B_r` be the parsed parent proof plus self-evaluation retained from round `r`;
 - `V_{r,i}` be one selected verifier response for that parent;
@@ -96,9 +96,9 @@ For Problem 1:
 
 ```text
 input                      426
-requested output        65,536
+requested output       128,000
 -------------------------------
-requested total         65,962
+requested total        128,426
 server context         262,144
 ```
 
@@ -115,20 +115,20 @@ For Problem 1:
 
 ```text
 original generation prompt       426
-first generated prefix        65,536
+first generated prefix       128,000
 force-close steering              51
 ------------------------------------
-continuation input             66,013
+continuation input            128,477
 continuation output            16,384
 ------------------------------------
-continuation total             82,397
+continuation total            144,861
 server context               262,144
 ```
 
 A partial solution can span both segments, so structurally:
 
 ```text
-tokens(B_1) <= L_s = 81,920
+tokens(B_1) <= L_s = 144,384
 ```
 
 Reasoning remains in the separate `reasoning_content` artifact and is not part
@@ -147,13 +147,14 @@ For Problem 1:
 
 ```text
 fixed verifier wrapper       377
-parent proof and self-eval 81,920
+parent proof and self-eval 144,384
 ---------------------------------
-maximum verifier input     82,297
-requested output           65,536
+maximum verifier input    144,761
+requested output          128,000
 ---------------------------------
-requested total           147,833
+requested total           272,761
 server context            262,144
+context overflow            10,617
 ```
 
 If a verifier reaches `length` without complete XML, its continuation includes
@@ -169,22 +170,22 @@ For Problem 1:
 
 ```text
 fixed verifier wrapper          377
-parent proof and self-eval   81,920
-first generated prefix       65,536
+parent proof and self-eval   144,384
+first generated prefix      128,000
 verifier force-close suffix      52
 -----------------------------------
-continuation input          147,885
+continuation input          272,813
 continuation output          16,384
 -----------------------------------
-continuation total          164,269
+continuation total          289,197
 server context             262,144
-remaining margin            97,875
+context overflow            27,053
 ```
 
 A valid combined verifier response can span both segments:
 
 ```text
-tokens(V_{r,i}) <= L_v = 81,920
+tokens(V_{r,i}) <= L_v = 144,384
 ```
 
 ## Refinement requests
@@ -200,15 +201,16 @@ refinement_input <= F_{r,1} + tokens(B_r) + tokens(V_{r,i})
 For Problem 1:
 
 ```text
-parent proof and self-eval     81,920
-one verifier response          81,920
+parent proof and self-eval     144,384
+one verifier response          144,384
 fixed refinement wrapper          399
 -------------------------------------
-maximum first input           164,239
-first requested output         65,536
+maximum first input           289,167
+first requested output        128,000
 -------------------------------------
-maximum first total           229,775
+maximum first total           417,167
 server context                262,144
+context overflow              155,023
 ```
 
 If that segment reaches `length` without complete XML, the continuation also
@@ -222,24 +224,24 @@ continuation_total <= F_{r,1} + L_s + L_v + O + F_{cs} + R_s
 For Problem 1:
 
 ```text
-parent proof and self-eval     81,920
-one verifier response          81,920
+parent proof and self-eval     144,384
+one verifier response          144,384
 fixed refinement wrapper          399
-first generated prefix         65,536
+first generated prefix        128,000
 force-close steering               51
 --------------------------------------
-maximum continuation input    229,826
+maximum continuation input    417,218
 continuation output            16,384
 --------------------------------------
-maximum continuation total    246,210
+maximum continuation total    433,602
 server context                262,144
-remaining structural margin    15,934
+context overflow              171,458
 ```
 
-The equivalent three-output check is also below context:
+The equivalent three-output check is above context:
 
 ```text
-3 * 81,920 + 399 + 51 = 246,210 < 262,144
+3 * 144,384 + 399 + 51 = 433,602 > 262,144
 ```
 
 Neither calculation is enforced by a client-side prompt check. SGLang remains
@@ -298,13 +300,14 @@ The external grader model controls its own accepted context.
 
 ## Concurrency is not one payload
 
-The local semaphore permits 32 independent requests. SGLang does not combine
-them into one context window. If 32 structural worst-case refinement
+The cluster-wide search semaphore permits 96 independent requests. Each of the four
+SGLang DP replicas permits 64 running requests, and SGLang does not combine
+them into one context window. If 96 structural worst-case refinement
 continuations were simultaneously submitted:
 
 ```text
-aggregate input <= 32 * 229,826 = 7,354,432 tokens
-aggregate requested total <= 32 * 246,210 = 7,878,720 tokens
+aggregate input <= 96 * 417,218 = 40,052,928 tokens
+aggregate requested total <= 96 * 433,602 = 41,625,792 tokens
 ```
 
 Those figures describe aggregate work and KV demand, not one request context.

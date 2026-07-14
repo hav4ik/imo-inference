@@ -8,14 +8,14 @@ IDs.
 Problem selection does not alter the inference or search policy. The checked-in
 inference policy remains:
 
-- BF16 target with DFlash TP1/DP8 inference across all eight GPUs by default;
+- BF16 target with DFlash TP2/DP4 inference across all eight GPUs by default;
 - FA3 attention by default, with explicit FA3 or FA4 selection in YAML applied identically to the target and DFlash draft and no backend fallback;
 - Humming W4A8 target quantization as an opt-in boolean, with DFlash enabled by default and independently configurable;
 - 32 initial proof attempts, 16 verifications per admitted proof, cumulative top 8
   proofs, four lowest-rated analyses producing one refinement each, and four rounds;
 - asynchronous per-candidate verification under a shared cluster-wide concurrency
-  of 64, with ranking and subsequent rounds waiting at the current-round barrier;
-- a configurable 65,536-token first segment plus one configurable 16,384-token solution continuation after prover/refiner length truncation;
+  of 96, with ranking and subsequent rounds waiting at the current-round barrier;
+- a configurable 128,000-token first segment plus one configurable 16,384-token solution continuation after prover/refiner length truncation;
 - one separately configurable 16,384-token verifier continuation, with malformed
   verifier outputs logged and skipped and at least four valid votes required;
 - ycchen's byte-identical deployed prover, verifier, and refiner prompts, with hidden thinking excluded from downstream prompts; and

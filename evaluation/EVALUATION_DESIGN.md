@@ -104,7 +104,7 @@ are no request retries, second continuations, replacement verifier calls, prompt
 fallbacks, model fallbacks, or synthetic scores. Malformed model-level verifier
 outputs are successful call artifacts but do not enter the score mean.
 The YAML sets a strict 24-hour HTTP deadline for each local model response.
-The checked-in YAML uses a configurable 65,536-token first segment and separate
+The checked-in YAML uses a configurable 128,000-token first segment and separate
 configurable 16,384-token solution and verifier continuations. The client
 performs no prompt-size subtraction, output-budget clamp, or context preflight,
 and SGLang alone enforces its 262,144-token server context.

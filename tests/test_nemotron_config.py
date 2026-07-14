@@ -28,22 +28,22 @@ class NemotronConfigTests(unittest.TestCase):
         self.assertEqual(search["refinements_per_proof"], 4)
         self.assertEqual(search["analyses_per_refinement"], 4)
         self.assertEqual(search["max_rounds"], 4)
-        self.assertEqual(search["concurrency"], 64)
+        self.assertEqual(search["concurrency"], 96)
         self.assertEqual(search["request_timeout_seconds"], 86400)
-        self.assertEqual(search["max_completion_tokens"], 65536)
+        self.assertEqual(search["max_completion_tokens"], 128000)
         self.assertEqual(search["solution_continuation_tokens"], 16384)
         self.assertEqual(search["verifier_continuation_tokens"], 16384)
         self.assertEqual(search["min_valid_verifications"], 4)
         server = self.config["server"]
-        self.assertEqual(server["max_running_requests"], 32)
+        self.assertEqual(server["max_running_requests"], 64)
         self.assertEqual(server["mem_fraction_static"], 0.82)
         self.assertNotIn("triton_attention_num_kv_splits", server)
 
-    def test_default_is_bf16_dflash_tp1_dp8(self):
+    def test_default_is_bf16_dflash_tp2_dp4(self):
         model = active_model(self.config)
         self.assertEqual(model.mode, "bf16")
-        self.assertEqual(model.tensor_parallel_size, 1)
-        self.assertEqual(model.data_parallel_size, 8)
+        self.assertEqual(model.tensor_parallel_size, 2)
+        self.assertEqual(model.data_parallel_size, 4)
         self.assertFalse(model.quantized)
         self.assertTrue(model.dflash)
         self.assertEqual(model.draft.name, "dflash-32b-draft-v2test-phaseL")
@@ -73,7 +73,7 @@ class NemotronConfigTests(unittest.TestCase):
             path = Path(directory) / "config.yaml"
             path.write_text(
                 self.path.read_text().replace(
-                    "tensor_parallel_size: 1", "tensor_parallel_size: 4"
+                    "tensor_parallel_size: 2", "tensor_parallel_size: 4"
                 )
             )
             model = active_model(load_config(path))
@@ -84,11 +84,11 @@ class NemotronConfigTests(unittest.TestCase):
             path = Path(directory) / "config.yaml"
             path.write_text(
                 self.path.read_text().replace(
-                    "data_parallel_size: 8", "data_parallel_size: 4"
+                    "data_parallel_size: 4", "data_parallel_size: 2"
                 )
             )
             model = active_model(load_config(path))
-        self.assertEqual(model.data_parallel_size, 4)
+        self.assertEqual(model.data_parallel_size, 2)
 
     def test_search_completion_budget_is_not_coupled_to_server_context(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -96,7 +96,7 @@ class NemotronConfigTests(unittest.TestCase):
             path.write_text(
                 self.path.read_text()
                 .replace(
-                    "max_completion_tokens: 65536",
+                    "max_completion_tokens: 128000",
                     "max_completion_tokens: 32768",
                     1,
                 )
@@ -140,12 +140,11 @@ class NemotronConfigTests(unittest.TestCase):
 
     def test_decode_graphs_cover_configured_ceiling(self):
         maximum = self.config["server"]["max_running_requests"]
-        self.assertEqual(maximum, 32)
+        self.assertEqual(maximum, 64)
         batches = decode_graph_batches(maximum)
         self.assertEqual(batches[:16], list(range(1, 17)))
-        self.assertEqual(batches[-1], 32)
-        self.assertNotIn(40, batches)
-        self.assertNotIn(64, batches)
+        self.assertEqual(batches[-1], 64)
+        self.assertNotIn(96, batches)
 
     def test_launcher_has_one_config_interface(self):
         launcher = (REPO / "serve_opd32b.sh").read_text()
