@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from statistics import mean
@@ -249,6 +250,7 @@ class ProblemSearch:
         client: AsyncChatClient,
         semaphore: asyncio.Semaphore,
         config: dict,
+        on_round_complete: Callable[[dict], Awaitable[None]] | None = None,
     ):
         self.problem_id = problem_id
         self.problem = problem
@@ -256,6 +258,7 @@ class ProblemSearch:
         self.client = client
         self.semaphore = semaphore
         self.config = config
+        self.on_round_complete = on_round_complete
         self.calls = CallStore(output_dir)
         self.proofs_dir = output_dir / "proofs"
         self.rounds_dir = output_dir / "rounds"
@@ -310,6 +313,24 @@ class ProblemSearch:
             if len(proof.verifications) >= required
         ]
         return sorted(verified, key=self._rank_key, reverse=True)
+
+    async def _emit_round_checkpoint(self, summary: dict) -> None:
+        if self.on_round_complete is None:
+            return
+        winner = self.proofs.get(summary["best_proof_id"])
+        if winner is None:
+            raise RuntimeError(
+                "missing checkpoint proof " + summary["best_proof_id"]
+            )
+        await self.on_round_complete(
+            {
+                "round": summary["round"],
+                "selected_proof_id": winner.proof_id,
+                "proof": winner.proof,
+                "mean_verifier_score": winner.mean_score,
+                "valid_verification_count": len(winner.verifications),
+            }
+        )
 
     def _selected_reviews(
         self,
@@ -525,17 +546,18 @@ class ProblemSearch:
         final_path = self.root / "final.json"
         if final_path.exists():
             return json.loads(final_path.read_text())
-        completed_rounds = {
-            int(path.stem.split("-")[-1])
+        completed_summaries = {
+            int(path.stem.split("-")[-1]): json.loads(path.read_text())
             for path in self.rounds_dir.glob("round-*.json")
         }
+        if completed_summaries:
+            latest_round = max(completed_summaries)
+            await self._emit_round_checkpoint(
+                completed_summaries[latest_round]
+            )
         for round_index in range(1, self.config["max_rounds"] + 1):
-            if round_index in completed_rounds:
-                ranked = self.ranked()
-                if (
-                    ranked
-                    and ranked[0].mean_score > self.config["early_stop_threshold"]
-                ):
+            if round_index in completed_summaries:
+                if completed_summaries[round_index]["early_stop"]:
                     break
                 continue
             generated, verification_stats = await self._run_round(round_index)
@@ -543,6 +565,7 @@ class ProblemSearch:
                 round_index, generated, verification_stats
             )
             atomic_json(self.rounds_dir / f"round-{round_index:02d}.json", summary)
+            await self._emit_round_checkpoint(summary)
             if summary["early_stop"]:
                 break
 

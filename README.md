@@ -79,7 +79,9 @@ id,proof
 ```
 
 The submission workflow does not call an external grader. Multiline proofs are
-CSV-quoted, and the output is atomically updated after each completed problem.
+CSV-quoted. After every completed search round, the current problem row is
+atomically replaced with the top-ranked cumulative-pool proof; the final
+selection replaces it once more when the search completes.
 
 ## Configuration
 
@@ -121,7 +123,9 @@ before increasing generation lengths or prompt fan-in.
 
 ## Resume and outputs
 
-Search state is stored in `/workspace/submission_artifacts`. Re-run the same
+Search state is stored in `/workspace/submission_artifacts`. If a run stops
+before its configured final round, `submission.csv` retains the top proof from
+the latest completed round. Re-run the same
 image, YAML, `test.csv`, and command to reuse completed work and retry missing or
 failed work. For a different input set or policy, use a new directory:
 

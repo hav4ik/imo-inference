@@ -72,6 +72,36 @@ def pin_file(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
+def load_existing_submission(path: Path, rows: list[InputRow]) -> list[str]:
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as source:
+        reader = csv.DictReader(source)
+        if reader.fieldnames != OUTPUT_COLUMNS:
+            raise RuntimeError(
+                "existing submission.csv must contain exactly id,proof"
+            )
+        proofs = []
+        for index, output_row in enumerate(reader):
+            if index >= len(rows) or None in output_row:
+                raise RuntimeError("existing submission.csv is not an input prefix")
+            if output_row["id"] != rows[index].id:
+                raise RuntimeError("existing submission.csv IDs are not an input prefix")
+            proof = output_row["proof"]
+            if proof is None or not proof.strip():
+                raise RuntimeError("existing submission.csv contains an empty proof")
+            replace_proof(proofs, index, proof)
+    return proofs
+
+
+def replace_proof(proofs: list[str], index: int, proof: str) -> None:
+    if index > len(proofs):
+        raise RuntimeError("cannot checkpoint a non-prefix submission row")
+    if index == len(proofs):
+        proofs.append(proof)
+    else:
+        proofs[index] = proof
+
 def write_submission(
     path: Path,
     rows: list[InputRow],
@@ -104,8 +134,11 @@ async def run_submission(
     model = active_model(config)
 
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    pin_file(input_path, artifacts_dir / "test.csv")
-    pin_file(config_path, artifacts_dir / "config.yaml")
+    pinned_input = artifacts_dir / "test.csv"
+    pinned_config = artifacts_dir / "config.yaml"
+    is_resume = pinned_input.exists() and pinned_config.exists()
+    pin_file(input_path, pinned_input)
+    pin_file(config_path, pinned_config)
 
     server = config["server"]
     client = AsyncChatClient(
@@ -116,10 +149,32 @@ async def run_submission(
         timeout=float(config["search"]["request_timeout_seconds"]),
     )
     semaphore = asyncio.Semaphore(config["search"]["concurrency"])
-    proofs: list[str] = []
+    proofs = load_existing_submission(output_path, rows) if is_resume else []
+    if not is_resume:
+        write_submission(output_path, rows, proofs)
     try:
         for index, row in enumerate(rows):
             internal_id = f"row-{index:04d}"
+            async def checkpoint(
+                value: dict,
+                *,
+                current_index: int = index,
+                current_row: InputRow = row,
+            ) -> None:
+                proof = value["proof"]
+                if not isinstance(proof, str) or not proof.strip():
+                    raise RuntimeError("round checkpoint contains an empty proof")
+                replace_proof(proofs, current_index, proof)
+                write_submission(output_path, rows, proofs)
+                print(
+                    "[submission] id={} round={} selected={}".format(
+                        current_row.id,
+                        value["round"],
+                        value["selected_proof_id"],
+                    ),
+                    flush=True,
+                )
+
             search = ProblemSearch(
                 problem_id=internal_id,
                 problem=row.problem,
@@ -127,6 +182,7 @@ async def run_submission(
                 client=client,
                 semaphore=semaphore,
                 config=config["search"],
+                on_round_complete=checkpoint,
             )
             result = await search.solve()
             proof = result["final_proof"]
@@ -134,10 +190,10 @@ async def run_submission(
                 raise RuntimeError(
                     f"proof search returned an empty proof for id {row.id!r}"
                 )
-            proofs.append(proof)
+            replace_proof(proofs, index, proof)
             write_submission(output_path, rows, proofs)
             print(
-                f"[submission] id={row.id} rows={len(proofs)}/{len(rows)} "
+                f"[submission] id={row.id} rows={index + 1}/{len(rows)} "
                 f"selected={result['selected_proof_id']}",
                 flush=True,
             )
@@ -163,7 +219,6 @@ def main() -> None:
             args.artifacts_dir,
         )
     )
-
 
 if __name__ == "__main__":
     main()

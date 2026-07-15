@@ -84,8 +84,61 @@ class SubmissionCsvTests(unittest.TestCase):
 
 
 class SubmissionRunnerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_runner_passes_only_problem_text_and_writes_exact_schema(self):
+    async def test_failed_search_keeps_latest_round_checkpoint(self):
+        class FakeClient:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def aclose(self):
+                pass
+
+        class FailingSearch:
+            def __init__(self, **kwargs):
+                self.on_round_complete = kwargs["on_round_complete"]
+
+            async def solve(self):
+                await self.on_round_complete(
+                    {
+                        "round": 1,
+                        "proof": "Round 1 recoverable proof",
+                        "selected_proof_id": "r01-p0001",
+                    }
+                )
+                raise RuntimeError("simulated failure before round 2")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            input_path = root / "test.csv"
+            output_path = root / "submission.csv"
+            input_path.write_text(
+                "id,problem\n0,Prove the claim.\n", encoding="utf-8"
+            )
+            with (
+                patch.object(submission_runner, "AsyncChatClient", FakeClient),
+                patch.object(submission_runner, "ProblemSearch", FailingSearch),
+                self.assertRaisesRegex(RuntimeError, "simulated failure"),
+            ):
+                await submission_runner.run_submission(
+                    REPO / "evaluation/configs/nemotron_cascade2.yaml",
+                    input_path,
+                    output_path,
+                    root / "artifacts",
+                )
+
+            with output_path.open(newline="", encoding="utf-8") as source:
+                self.assertEqual(
+                    list(csv.DictReader(source)),
+                    [{"id": "0", "proof": "Round 1 recoverable proof"}],
+                )
+
+    async def test_runner_checkpoints_each_round_and_writes_exact_schema(self):
         seen: list[tuple[str, str]] = []
+        writes: list[list[str]] = []
+        original_write = submission_runner.write_submission
+
+        def track_write(path, rows, proofs):
+            writes.append(list(proofs))
+            original_write(path, rows, proofs)
 
         class FakeClient:
             def __init__(self, *args, **kwargs):
@@ -98,8 +151,21 @@ class SubmissionRunnerTests(unittest.IsolatedAsyncioTestCase):
             def __init__(self, *, problem_id, problem, **kwargs):
                 seen.append((problem_id, problem))
                 self.problem_id = problem_id
+                self.on_round_complete = kwargs["on_round_complete"]
 
             async def solve(self):
+                for round_index in (1, 2):
+                    await self.on_round_complete(
+                        {
+                            "round": round_index,
+                            "proof": (
+                                f"Round {round_index} proof for {self.problem_id}"
+                            ),
+                            "selected_proof_id": (
+                                f"{self.problem_id}-round-{round_index}"
+                            ),
+                        }
+                    )
                 return {
                     "final_proof": f"Proof for {self.problem_id}",
                     "selected_proof_id": f"{self.problem_id}-selected",
@@ -110,12 +176,17 @@ class SubmissionRunnerTests(unittest.IsolatedAsyncioTestCase):
             input_path = root / "test.csv"
             output_path = root / "submission.csv"
             input_path.write_text(
-                'id,problem\na,"Only statement A"\nb,"Only statement B"\n',
+                "id,problem\na,\"Only statement A\"\nb,\"Only statement B\"\n",
                 encoding="utf-8",
             )
             with (
                 patch.object(submission_runner, "AsyncChatClient", FakeClient),
                 patch.object(submission_runner, "ProblemSearch", FakeSearch),
+                patch.object(
+                    submission_runner,
+                    "write_submission",
+                    side_effect=track_write,
+                ),
             ):
                 await submission_runner.run_submission(
                     REPO / "evaluation/configs/nemotron_cascade2.yaml",
@@ -124,6 +195,18 @@ class SubmissionRunnerTests(unittest.IsolatedAsyncioTestCase):
                     root / "artifacts",
                 )
 
+            self.assertEqual(
+                writes,
+                [
+                    [],
+                    ["Round 1 proof for row-0000"],
+                    ["Round 2 proof for row-0000"],
+                    ["Proof for row-0000"],
+                    ["Proof for row-0000", "Round 1 proof for row-0001"],
+                    ["Proof for row-0000", "Round 2 proof for row-0001"],
+                    ["Proof for row-0000", "Proof for row-0001"],
+                ],
+            )
             self.assertEqual(
                 seen,
                 [("row-0000", "Only statement A"), ("row-0001", "Only statement B")],
@@ -136,6 +219,27 @@ class SubmissionRunnerTests(unittest.IsolatedAsyncioTestCase):
                         {"id": "b", "proof": "Proof for row-0001"},
                     ],
                 )
+
+            writes.clear()
+            with (
+                patch.object(submission_runner, "AsyncChatClient", FakeClient),
+                patch.object(submission_runner, "ProblemSearch", FakeSearch),
+                patch.object(
+                    submission_runner,
+                    "write_submission",
+                    side_effect=track_write,
+                ),
+            ):
+                await submission_runner.run_submission(
+                    REPO / "evaluation/configs/nemotron_cascade2.yaml",
+                    input_path,
+                    output_path,
+                    root / "artifacts",
+                )
+            self.assertEqual(
+                writes[0],
+                ["Round 1 proof for row-0000", "Proof for row-0001"],
+            )
 
 
 if __name__ == "__main__":
