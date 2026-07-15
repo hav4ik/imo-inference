@@ -131,7 +131,7 @@ def main() -> None:
             command.extend(["--speculative-draft-model-quantization", "compressed-tensors"])
 
     print(
-        f"[serve_opd32b] mode={model.mode} dflash={str(model.dflash).lower()} "
+        f"[proof-pilot-server] mode={model.mode} dflash={str(model.dflash).lower()} "
         f"tp={model.tensor_parallel_size} dp={model.data_parallel_size} "
         f"model={model.target} draft={model.draft} kv={model.kv_cache_dtype} "
         f"attention={server['attention_backend']} page_size={server['page_size']} "

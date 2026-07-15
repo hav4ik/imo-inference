@@ -117,9 +117,7 @@ FA3: page_size=1 and deterministic_inference=true
 FA4: page_size=128 and deterministic_inference=false
 ```
 
-The configured server context is a total input-plus-output limit. Review
-[`evaluation/PIPELINE_REQUEST_SIZE.md`](evaluation/PIPELINE_REQUEST_SIZE.md)
-before increasing generation lengths or prompt fan-in.
+The configured server context is a total input-plus-output limit.
 
 ## Resume and outputs
 
@@ -170,13 +168,3 @@ new `ARTIFACTS_DIR`.
 **Server validation reports missing DFlash markers:** inspect the complete log at
 `/workspace/opd32b-eval.log` and confirm that the configured target, draft,
 attention backend, and DFlash settings are compatible.
-
-## Architecture
-
-- [`evaluation/EVALUATION_DESIGN.md`](evaluation/EVALUATION_DESIGN.md) defines
-  ranking, selection, asynchronous verification, refinement, and resume
-  semantics.
-- [`evaluation/PIPELINE_REQUEST_SIZE.md`](evaluation/PIPELINE_REQUEST_SIZE.md)
-  derives request payload and context sizes from first principles.
-- [`dflash-kv-cache-architecture.md`](dflash-kv-cache-architecture.md) explains
-  target KV, the draft ring, radix-prefix reuse, and DFlash verification.

@@ -1,4 +1,4 @@
-schema_version: 11
+schema_version: 12
 
 models:
   bf16_target: /workspace/models/opd-32b-deploy
@@ -49,17 +49,3 @@ search:
   request_timeout_seconds: 86400
   concurrency: 96
   seed: 0
-
-grader:
-  base_url: https://api.openai.com/v1
-  model: gpt-5.6-sol
-  api_key_env: OPENAI_API_KEY
-  reasoning: high
-  attempts_per_proof: 64
-  concurrency: 60
-  max_completion_tokens: 65536
-  zero_veto: true
-  prompt_cache_mode: implicit
-  prompt_cache_ttl: 30m
-  system_prompt_sha256: 5100cf0bcd50fdd54a413ed8f073653eecfe0da5eed46884de547f623958208b
-  user_prompt_sha256: 891fc2780e070dd0da7181a845798624e1d67ff598c96ec9f35c10dad7567c26

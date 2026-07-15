@@ -56,7 +56,7 @@ RUN uv tool install --python /usr/bin/python3 "kaggle==2.2.3" \
 WORKDIR /opt/aimo-proof-pilot-inference
 COPY . /opt/aimo-proof-pilot-inference
 
-RUN chmod 0755 docker/entrypoint.sh run_submission.sh serve_opd32b.sh
+RUN chmod 0755 docker/entrypoint.sh run_submission.sh
 
 VOLUME ["/workspace"]
 STOPSIGNAL SIGTERM

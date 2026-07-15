@@ -1,8 +1,0 @@
-{
-  "config_path": "/workspace/models/dflash-32b-draft-v2test-phaseL/config.json",
-  "declarations": {
-    "block_size": 11,
-    "dflash_config.block_size": 11
-  },
-  "expected_checkpoint_block_size": 11
-}

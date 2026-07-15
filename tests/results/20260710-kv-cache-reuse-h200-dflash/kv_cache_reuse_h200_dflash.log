@@ -1,55 +1,0 @@
-[2026-07-10 22:39:26] Failed to load generation config for /workspace/models/dflash-32b-draft-v2test-phaseL: /workspace/models/dflash-32b-draft-v2test-phaseL does not appear to have a file named generation_config.json. Checkout 'https://huggingface.co//workspace/models/dflash-32b-draft-v2test-phaseL/tree/main' for available files.. Proceeding without generation config.
-[2026-07-10 22:39:26] Warning: Target model's context_length (200000) is greater than the derived context_length (65536). This may lead to incorrect model outputs or CUDA errors. Note that the derived context_length may differ from max_position_embeddings in the model's config.
-[2026-07-10 22:39:26] Overriding the draft model's max_position_embeddings to 200000.
-Multi-thread loading shards:   0% Completed | 0/17 [00:00<?, ?it/s]Multi-thread loading shards:   6% Completed | 1/17 [00:00<00:08,  1.91it/s]Multi-thread loading shards:  12% Completed | 2/17 [00:01<00:08,  1.83it/s]Multi-thread loading shards:  18% Completed | 3/17 [00:01<00:07,  1.82it/s]Multi-thread loading shards:  24% Completed | 4/17 [00:02<00:07,  1.82it/s]Multi-thread loading shards:  29% Completed | 5/17 [00:02<00:06,  1.82it/s]Multi-thread loading shards:  35% Completed | 6/17 [00:03<00:06,  1.81it/s]Multi-thread loading shards:  41% Completed | 7/17 [00:03<00:05,  1.67it/s]Multi-thread loading shards:  47% Completed | 8/17 [00:04<00:05,  1.71it/s]Multi-thread loading shards:  53% Completed | 9/17 [00:05<00:04,  1.62it/s]Multi-thread loading shards:  59% Completed | 10/17 [00:05<00:04,  1.56it/s]Multi-thread loading shards:  65% Completed | 11/17 [00:06<00:03,  1.63it/s]Multi-thread loading shards:  71% Completed | 12/17 [00:07<00:03,  1.57it/s]Multi-thread loading shards:  76% Completed | 13/17 [00:07<00:02,  1.53it/s]Multi-thread loading shards:  82% Completed | 14/17 [00:08<00:01,  1.50it/s]Multi-thread loading shards:  88% Completed | 15/17 [00:09<00:01,  1.48it/s]Multi-thread loading shards:  94% Completed | 16/17 [00:09<00:00,  1.48it/s]Multi-thread loading shards: 100% Completed | 17/17 [00:10<00:00,  1.62it/s]Multi-thread loading shards: 100% Completed | 17/17 [00:10<00:00,  1.63it/s]
-[2026-07-10 22:39:39] Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!
-[2026-07-10 22:39:42] Warning: Target model's context_length (200000) is greater than the derived context_length (65536). This may lead to incorrect model outputs or CUDA errors. Note that the derived context_length may differ from max_position_embeddings in the model's config.
-[2026-07-10 22:39:42] Overriding the draft model's max_position_embeddings to 200000.
-Multi-thread loading shards:   0% Completed | 0/5 [00:00<?, ?it/s]Multi-thread loading shards:  20% Completed | 1/5 [00:00<00:00,  8.26it/s]Multi-thread loading shards:  40% Completed | 2/5 [00:00<00:00,  7.74it/s]Multi-thread loading shards:  60% Completed | 3/5 [00:00<00:00,  7.66it/s]Multi-thread loading shards:  80% Completed | 4/5 [00:00<00:00,  6.89it/s]Multi-thread loading shards: 100% Completed | 5/5 [00:00<00:00,  7.14it/s]Multi-thread loading shards: 100% Completed | 5/5 [00:00<00:00,  7.28it/s]
-[2026-07-10 22:39:42] Using FP8 KV cache but no scaling factors provided. Defaulting to scaling factors of 1.0. This may lead to less accurate results!
-[2026-07-10 22:39:42] DFLASH block size mismatch: using speculative_num_draft_tokens=8 but draft config block_size=11.
-  0%|          | 0/1 [00:00<?, ?it/s]Capturing batches (bs=1 avail_mem=11.76 GB):   0%|          | 0/1 [00:00<?, ?it/s]Capturing batches (bs=1 avail_mem=11.76 GB): 100%|██████████| 1/1 [00:00<00:00,  2.76it/s]Capturing batches (bs=1 avail_mem=11.76 GB): 100%|██████████| 1/1 [00:00<00:00,  2.76it/s]
-  0%|          | 0/3 [00:00<?, ?it/s]Compiling num tokens (num_tokens=2048):   0%|          | 0/3 [00:00<?, ?it/s]Compiling num tokens (num_tokens=2048):  33%|███▎      | 1/3 [00:10<00:20, 10.17s/it]Compiling num tokens (num_tokens=1024):  33%|███▎      | 1/3 [00:10<00:20, 10.17s/it]Compiling num tokens (num_tokens=1024):  67%|██████▋   | 2/3 [00:10<00:04,  4.28s/it]Compiling num tokens (num_tokens=256):  67%|██████▋   | 2/3 [00:10<00:04,  4.28s/it] Compiling num tokens (num_tokens=256): 100%|██████████| 3/3 [00:10<00:00,  3.47s/it]
-  0%|          | 0/3 [00:00<?, ?it/s]Capturing num tokens (num_tokens=2048 avail_mem=11.10 GB):   0%|          | 0/3 [00:00<?, ?it/s]Capturing num tokens (num_tokens=2048 avail_mem=11.10 GB):  33%|███▎      | 1/3 [00:00<00:00,  3.00it/s]Capturing num tokens (num_tokens=1024 avail_mem=10.83 GB):  33%|███▎      | 1/3 [00:00<00:00,  3.00it/s]Capturing num tokens (num_tokens=1024 avail_mem=10.83 GB):  67%|██████▋   | 2/3 [00:00<00:00,  4.01it/s]Capturing num tokens (num_tokens=256 avail_mem=10.92 GB):  67%|██████▋   | 2/3 [00:00<00:00,  4.01it/s] Capturing num tokens (num_tokens=256 avail_mem=10.92 GB): 100%|██████████| 3/3 [00:00<00:00,  5.15it/s]Capturing num tokens (num_tokens=256 avail_mem=10.92 GB): 100%|██████████| 3/3 [00:00<00:00,  4.60it/s]
-  0%|          | 0/1 [00:00<?, ?it/s]Capturing batches (bs=1 avail_mem=10.98 GB):   0%|          | 0/1 [00:00<?, ?it/s]Capturing batches (bs=1 avail_mem=10.98 GB): 100%|██████████| 1/1 [00:00<00:00, 22.65it/s]
-question      : solve the equations 2x+2y=6 and 3x-y=5 for x and y
-prompt tokens : 26
-model         : /workspace/models/opd-32b-deploy
-GPU           : NVIDIA H200
-DFlash draft  : /workspace/models/dflash-32b-draft-v2test-phaseL
-DFlash        : mandatory (block=8, draft window from config)
-warming prefill and decode kernels ...
-
-=== WITH_KV_REUSE ===
-prompt tokens       : 26
-completion tokens   : 244
-request count       : 1
-total elapsed       : 1.516s
-time to first token : 0.057s
-end-to-end rate     : 160.98 tok/s
-decode-only rate    : 166.64 tok/s
-token/request latency: first=57ms mid=0ms last=24ms
-finish reason       : {'type': 'stop', 'matched': 1}
-prefix cached tokens: total=0 across 1 request(s)
-output              : "We are asked to solve the system of equations:\n\n2x + 2y = 6\n3x - y = 5\n\nWe need to find x and y.\n\nWe can solve by substitution or elimination. Let's do elimination.\n\nFirst, simplify the first equation: divide both sides by 2: x + y = 3. So we have:\n\n(1) x + y = 3\n(2) 3x - y = 5\n\nNow add the two equations: (x + y) + (3x - y) = 3 + 5 => 4x = 8 => x = 2.\n\nSubstitute x = 2 into (1): 2 + y = 3 => y = 1.\n\nCheck with (2): 3(2) - 1 = 6 - 1 = 5, correct.\n\nThus solution: x = 2, y = 1.\n\nWe can present as: \\boxed{x=2,\\ y=1}.</think>The solution to the system of equations is \\(x = 2\\) and \\(y = 1\\).\n\n\\boxed{x=2,\\ y=1}"
-
-=== WITHOUT_KV_REUSE_FULL_REPREFILL ===
-prompt tokens       : 26
-completion tokens   : 244
-request count       : 244
-total elapsed       : 15.763s
-time to first token : 0.061s
-end-to-end rate     : 15.48 tok/s
-token/request latency: first=61ms mid=61ms last=122ms
-finish reason       : eos_token
-prefix cached tokens: total=0 across 244 request(s)
-output              : "We are asked to solve the system of equations:\n\n2x + 2y = 6\n3x - y = 5\n\nWe need to find x and y.\n\nWe can solve by substitution or elimination. Let's do elimination.\n\nFirst, simplify the first equation: divide both sides by 2: x + y = 3. So we have:\n\n(1) x + y = 3\n(2) 3x - y = 5\n\nNow add the two equations: (x + y) + (3x - y) = 3 + 5 => 4x = 8 => x = 2.\n\nSubstitute x = 2 into (1): 2 + y = 3 => y = 1.\n\nCheck with (2): 3(2) - 1 = 6 - 1 = 5, correct.\n\nThus solution: x = 2, y = 1.\n\nWe can present as: \\boxed{x=2, y=1}.</think>The solution to the system of equations is \\(x = 2\\) and \\(y = 1\\).\n\n\\boxed{x=2,\\ y=1}"
-
-=== COMPARISON ===
-identical output IDs : False
-first mismatch       : {'index': 205, 'with_kv_reuse': 4803, 'without_kv_reuse': 14}
-correct x=2, y=1     : cached=True reprefill=True
-prefix hits all zero : True
-full-reprefill slowdown: 10.40x
-timing caveat        : full-reprefill includes one SGLang scheduler/IPC round trip per output token
-result JSON         : eval/results/kv_cache_reuse_h200_dflash.json

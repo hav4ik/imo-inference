@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 
 
-ROOT_KEYS = {"schema_version", "models", "model", "server", "search", "grader"}
+ROOT_KEYS = {"schema_version", "models", "model", "server", "search"}
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
     "tensor_parallel_size", "data_parallel_size", "quantized", "dflash", "kv_cache_dtype",
@@ -30,12 +30,6 @@ SEARCH_KEYS = {
     "min_valid_verifications",
     "concurrency", "request_timeout_seconds", "seed",
 }
-GRADER_KEYS = {
-    "base_url", "model", "api_key_env", "reasoning", "attempts_per_proof",
-    "concurrency", "max_completion_tokens", "zero_veto", "prompt_cache_mode",
-    "prompt_cache_ttl", "system_prompt_sha256", "user_prompt_sha256",
-}
-
 
 @dataclass(frozen=True)
 class ActiveModel:
@@ -69,11 +63,11 @@ def load_config(path: Path) -> dict[str, Any]:
     if not isinstance(config, dict):
         raise ValueError("evaluation config must be a YAML mapping")
     _exact_keys(config, ROOT_KEYS, "root")
-    if config["schema_version"] != 11:
-        raise ValueError("schema_version must be 11")
+    if config["schema_version"] != 12:
+        raise ValueError("schema_version must be 12")
     for section, keys in (
         ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
-        ("search", SEARCH_KEYS), ("grader", GRADER_KEYS),
+        ("search", SEARCH_KEYS),
     ):
         value = config[section]
         if not isinstance(value, dict):
@@ -177,20 +171,6 @@ def load_config(path: Path) -> dict[str, Any]:
     if type(search["seed"]) is not int or search["seed"] < 0:
         raise ValueError("search.seed must be a non-negative integer")
 
-    grader = config["grader"]
-    for key in ("attempts_per_proof", "concurrency", "max_completion_tokens"):
-        _positive_int(grader[key], f"grader.{key}")
-    if type(grader["zero_veto"]) is not bool:
-        raise ValueError("grader.zero_veto must be a boolean")
-    for key in (
-        "base_url", "model", "api_key_env", "reasoning",
-        "prompt_cache_mode", "prompt_cache_ttl",
-    ):
-        if not isinstance(grader[key], str) or not grader[key]:
-            raise ValueError(f"grader.{key} must be a nonempty string")
-    for key in ("system_prompt_sha256", "user_prompt_sha256"):
-        if len(grader[key]) != 64:
-            raise ValueError(f"grader.{key} must be a SHA-256 hex digest")
     return config
 
 

@@ -5,11 +5,7 @@
 .env
 **/__pycache__
 **/*.pyc
-evaluation/runs
-evaluation/experiments
 submission_artifacts
 submission.csv
 models
 *.ipynb
-tests/results
-third_party

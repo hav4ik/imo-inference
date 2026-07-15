@@ -1,384 +1,0 @@
-/workspace/pp/venv/lib/python3.12/site-packages/sglang/launch_server.py:54: UserWarning: 'python -m sglang.launch_server' is still supported, but 'sglang serve' is the recommended entrypoint.
-  Example: sglang serve --model-path <model> [options]
-  warnings.warn(
-[2026-07-12 00:13:54] Hybrid swa model: self.hf_config.architectures=['Olmo3SinkForCausalLM']
-[2026-07-12 00:13:54] FlashInfer allreduce fusion is forcibly disabled via --enforce-disable-flashinfer-allreduce-fusion.
-[2026-07-12 00:13:54] Sampling backend is set to pytorch for deterministic inference.
-[2026-07-12 00:13:55] server_args=ServerArgs(model_path='/workspace/original/models/opd-32b-v33-s200-gptq-w4a16', tokenizer_path='/workspace/original/models/opd-32b-v33-s200-gptq-w4a16', tokenizer_mode='auto', tokenizer_backend='huggingface', tokenizer_worker_num=1, detokenizer_worker_num=1, skip_tokenizer_init=False, load_format='auto', model_loader_extra_config='{}', trust_remote_code=False, context_length=200000, is_embedding=False, prefill_only_disable_kv_cache=False, enable_multimodal=None, revision=None, model_impl='auto', model_config_parser='auto', host='127.0.0.1', port=32000, fastapi_root_path='', grpc_mode=False, skip_server_warmup=False, warmups=None, nccl_port=None, checkpoint_engine_wait_weights_before_ready=False, ssl_keyfile=None, ssl_certfile=None, ssl_ca_certs=None, ssl_keyfile_password=None, enable_ssl_refresh=False, enable_http2=False, dtype='auto', quantization=None, quantization_param_path=None, kv_cache_dtype='auto', enable_fp32_lm_head=False, modelopt_quant=None, modelopt_checkpoint_restore_path=None, modelopt_checkpoint_save_path=None, modelopt_export_path=None, quantize_and_serve=False, rl_quant_profile=None, mem_fraction_static=0.82, max_running_requests=48, max_queued_requests=None, max_total_tokens=None, chunked_prefill_size=2048, enable_dynamic_chunking=False, max_prefill_tokens=16384, prefill_max_requests=None, schedule_policy='fcfs', enable_priority_scheduling=False, disable_priority_preemption=False, default_priority_value=None, abort_on_priority_when_disabled=False, schedule_low_priority_values_first=False, priority_scheduling_preemption_threshold=10, schedule_conservativeness=1.0, page_size=1, swa_full_tokens_ratio=0.2, disable_hybrid_swa_memory=False, radix_eviction_policy='lru', enable_prefill_delayer=False, prefill_delayer_max_delay_passes=30, prefill_delayer_token_usage_low_watermark=None, prefill_delayer_forward_passes_buckets=None, prefill_delayer_wait_seconds_buckets=None, prefill_delayer_queue_min_ratio=None, prefill_delayer_max_delay_ms=None, device='cuda', tp_size=1, pp_size=1, pp_max_micro_batch_size=None, pp_async_batch_depth=0, stream_interval=16, batch_notify_size=16, stream_response_default_include_usage=False, incremental_streaming_output=False, enable_streaming_session=False, random_seed=0, constrained_json_whitespace_pattern=None, constrained_json_disable_any_whitespace=False, watchdog_timeout=300, soft_watchdog_timeout=None, dist_timeout=None, download_dir=None, model_checksum=None, base_gpu_id=0, gpu_id_step=1, sleep_on_idle=False, load_snapshot_publish_interval=15, use_ray=False, custom_sigquit_handler=None, log_level='info', log_level_http=None, log_requests=False, log_requests_level=2, log_requests_format='text', log_requests_target=None, uvicorn_access_log_exclude_prefixes=[], crash_dump_folder=None, show_time_cost=False, enable_metrics=True, grpc_http_sidecar_port=None, enable_mfu_metrics=False, enable_metrics_for_all_schedulers=False, tokenizer_metrics_custom_labels_header='x-custom-labels', tokenizer_metrics_allowed_custom_labels=None, extra_metric_labels=None, bucket_time_to_first_token=None, bucket_inter_token_latency=None, bucket_e2e_request_latency=None, prompt_tokens_buckets=None, generation_tokens_buckets=None, gc_warning_threshold_secs=0.0, decode_log_interval=40, enable_request_time_stats_logging=False, kv_events_config=None, enable_forward_pass_metrics=False, forward_pass_metrics_worker_id='', forward_pass_metrics_ipc_name=None, enable_trace=False, trace_modules='request', otlp_traces_endpoint='localhost:4317', export_metrics_to_file=False, export_metrics_to_file_dir=None, stat_loggers=None, api_key=None, admin_api_key=None, served_model_name='/workspace/original/models/opd-32b-v33-s200-gptq-w4a16', weight_version='default', chat_template=None, hf_chat_template_name=None, completion_template=None, file_storage_path='sglang_storage', enable_cache_report=True, reasoning_parser='deepseek-r1', strip_thinking_cache=False, enable_strict_thinking=False, tool_call_parser=None, tool_server=None, sampling_defaults='model', asr_max_buffer_seconds=60, asr_max_concurrent_sessions=32, dp_size=1, load_balance_method='round_robin', attn_cp_size=1, moe_dp_size=1, dist_init_addr=None, nnodes=1, node_rank=0, json_model_override_args='{}', preferred_sampling_params=None, enable_lora=None, enable_lora_overlap_loading=None, max_lora_rank=None, lora_target_modules=None, lora_paths=None, max_loaded_loras=None, max_loras_per_batch=8, lora_eviction_policy='lru', lora_backend='csgmv', max_lora_chunk_size=16, experts_shared_outer_loras=None, lora_use_virtual_experts=False, lora_strict_loading=False, lora_drain_wait_threshold=0.0, attention_backend='triton', decode_attention_backend=None, prefill_attention_backend=None, sampling_backend='pytorch', grammar_backend='xgrammar', radix_cache_backend=None, mm_attention_backend=None, fp8_gemm_runner_backend='auto', fp4_gemm_runner_backend='auto', dsa_prefill_backend=None, dsa_decode_backend=None, dsa_topk_backend='sgl-kernel', disable_flashinfer_autotune=False, mamba_backend='triton', speculative_algorithm=None, speculative_draft_model_path=None, speculative_draft_model_revision=None, speculative_draft_load_format=None, speculative_num_steps=None, speculative_eagle_topk=None, speculative_num_draft_tokens=None, speculative_dflash_block_size=None, speculative_accept_threshold_single=1.0, speculative_accept_threshold_acc=1.0, speculative_token_map=None, speculative_attention_mode='prefill', speculative_draft_attention_backend=None, speculative_draft_window_size=None, speculative_moe_runner_backend='auto', speculative_moe_a2a_backend=None, speculative_draft_model_quantization=None, speculative_skip_dp_mlp_sync=False, speculative_ngram_min_bfs_breadth=1, speculative_ngram_max_bfs_breadth=10, speculative_ngram_match_type='BFS', speculative_ngram_max_trie_depth=18, speculative_ngram_capacity=10000000, speculative_ngram_external_corpus_path=None, speculative_ngram_external_sam_budget=0, speculative_ngram_external_corpus_max_tokens=10000000, enable_multi_layer_eagle=False, speculative_adaptive=False, speculative_adaptive_config=None, ep_size=1, moe_a2a_backend='none', moe_runner_backend='auto', flashinfer_mxfp4_moe_precision='default', enable_flashinfer_allreduce_fusion=False, enforce_disable_flashinfer_allreduce_fusion=True, flashinfer_allreduce_fusion_backend=None, enable_aiter_allreduce_fusion=False, deepep_mode='auto', deepep_dispatcher_output_dtype='auto', ep_num_redundant_experts=0, ep_dispatch_algorithm=None, init_expert_location='trivial', enable_eplb=False, eplb_algorithm='auto', eplb_rebalance_num_iterations=1000, eplb_rebalance_layers_per_chunk=None, eplb_min_rebalancing_utilization_threshold=1.0, expert_distribution_recorder_mode=None, expert_distribution_recorder_buffer_size=1000, enable_expert_distribution_metrics=False, deepep_config=None, moe_dense_tp_size=None, elastic_ep_backend=None, enable_elastic_expert_backup=False, mooncake_ib_device=None, enable_deepep_waterfill=False, elastic_ep_rejoin=False, max_mamba_cache_size=None, mamba_ssm_dtype=None, mamba_full_memory_ratio=0.9, mamba_scheduler_strategy='no_buffer', mamba_track_interval=256, linear_attn_backend='triton', linear_attn_decode_backend=None, linear_attn_prefill_backend=None, enable_hierarchical_cache=False, hicache_ratio=2.0, hicache_size=0, hicache_write_policy='write_through', hicache_io_backend='kernel', hicache_mem_layout='page_first', hicache_storage_backend=None, hicache_storage_prefetch_policy='timeout', hicache_storage_backend_extra_config=None, enable_hisparse=False, hisparse_config=None, enable_lmcache=False, lmcache_config_file=None, kt_weight_path=None, kt_method='AMXINT4', kt_cpuinfer=None, kt_threadpool_count=2, kt_num_gpu_experts=None, kt_max_deferred_experts_per_token=None, dllm_algorithm=None, dllm_algorithm_config=None, cpu_offload_gb=0, offload_group_size=-1, offload_num_in_group=1, offload_prefetch_step=1, offload_mode='cpu', enable_mis=False, disable_radix_cache=False, disable_cuda_graph_padding=False, enable_profile_cuda_graph=False, enable_cudagraph_gc=False, debug_cuda_graph=False, cuda_graph_config=CudaGraphConfig(decode=PhaseConfig(backend='full', max_bs=48, bs=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 24, 28, 32, 40, 48], tc_compiler='eager'), prefill=PhaseConfig(backend='tc_piecewise', max_bs=2048, bs=[256, 1024, 2048], tc_compiler='eager')), cuda_graph_backend_decode=None, cuda_graph_backend_prefill='tc_piecewise', cuda_graph_max_bs_decode=48, cuda_graph_max_bs_prefill=None, cuda_graph_bs_decode=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 24, 28, 32, 40, 48], cuda_graph_bs_prefill=[256, 1024, 2048], cuda_graph_tc_compiler=None, disable_prefill_cuda_graph=False, disable_decode_cuda_graph=False, disable_cuda_graph=False, enable_layerwise_nvtx_marker=False, enable_nccl_nvls=False, enable_symm_mem=False, disable_flashinfer_cutlass_moe_fp4_allgather=False, enable_tokenizer_batch_encode=False, disable_tokenizer_batch_decode=False, disable_outlines_disk_cache=False, disable_custom_all_reduce=False, enable_mscclpp=False, enable_torch_symm_mem=False, pre_warm_nccl=False, disable_overlap_schedule=False, enable_mixed_chunk=False, enable_dp_attention=False, enable_dp_attention_local_control_broadcast=False, enable_dp_lm_head=False, enable_two_batch_overlap=False, enable_single_batch_overlap=False, tbo_token_distribution_threshold=0.48, enable_torch_compile=False, enable_torch_compile_debug_mode=False, torch_compile_max_bs=32, torchao_config='', enable_p2p_check=False, triton_attention_reduce_in_fp32=False, triton_attention_num_kv_splits=32, triton_attention_split_tile_size=None, num_continuous_decode_steps=1, delete_ckpt_after_loading=False, enable_memory_saver=False, enable_weights_cpu_backup=False, enable_draft_weights_cpu_backup=False, allow_auto_truncate=False, enable_custom_logit_processor=False, flashinfer_mla_disable_ragged=False, disable_shared_experts_fusion=False, enforce_shared_experts_fusion=False, disable_chunked_prefix_cache=False, disable_fast_image_processor=False, keep_mm_feature_on_device=False, enable_return_hidden_states=False, enable_return_routed_experts=False, enable_return_indexer_topk=False, enable_deepseek_v4_fp4_indexer=False, scheduler_recv_interval=1, numa_node=None, enable_deterministic_inference=True, rl_on_policy_target=None, enable_attn_tp_input_scattered=False, disable_attn_tp_gather=False, gc_threshold=None, kv_canary='none', kv_canary_real_data='none', kv_canary_sweep_interval=0, enable_fused_qk_norm_rope=False, enable_precise_embedding_interpolation=False, enable_fused_moe_sum_all_reduce=False, enable_prefill_cp=False, cp_strategy=None, enable_dsa_prefill_context_parallel=False, dsa_prefill_cp_mode='round-robin-split', enable_prefill_context_parallel=False, prefill_cp_mode='in-seq-split', enable_dynamic_batch_tokenizer=False, dynamic_batch_tokenizer_batch_size=32, dynamic_batch_tokenizer_batch_timeout=0.002, debug_tensor_dump_output_folder=None, debug_tensor_dump_layers=None, debug_tensor_dump_input_file=None, debug_tensor_dump_inject=False, disaggregation_mode='null', disaggregation_transfer_backend='mooncake', disaggregation_bootstrap_port=8998, disaggregation_ib_device=None, disaggregation_decode_enable_radix_cache=False, disaggregation_decode_enable_offload_kvcache=False, num_reserved_decode_tokens=512, disaggregation_decode_polling_interval=1, optimistic_prefill_retries=0, encoder_only=False, language_only=False, encoder_transfer_backend='zmq_to_scheduler', encoder_urls=[], encoder_bootstrap_port=8997, encoder_register_urls=[], enable_adaptive_dispatch_to_encoder=False, custom_weight_loader=[], weight_loader_disable_mmap=False, weight_loader_prefetch_checkpoints=False, weight_loader_prefetch_num_threads=4, weight_loader_drop_cache_after_load=False, remote_instance_weight_loader_seed_instance_ip=None, remote_instance_weight_loader_seed_instance_service_port=None, remote_instance_weight_loader_send_weights_group_ports=None, remote_instance_weight_loader_backend='nccl', remote_instance_weight_loader_start_seed_via_transfer_engine=False, engine_info_bootstrap_port=6789, modelexpress_config=None, enable_pdmux=False, pdmux_config_path=None, sm_group_num=8, enable_broadcast_mm_inputs_process=False, enable_prefix_mm_cache=False, mm_enable_dp_encoder=False, mm_process_config={}, limit_mm_data_per_request=None, enable_mm_global_cache=False, decrypted_config_file=None, decrypted_draft_config_file=None, forward_hooks=None, enable_quant_communications=False, msprobe_dump_config=None)
-[2026-07-12 00:13:55] Hybrid swa model: self.hf_config.architectures=['Olmo3SinkForCausalLM']
-[2026-07-12 00:13:58] Using default HuggingFace chat template with detected content format: string
-[2026-07-12 00:13:58] Auto-detected template features: reasoning_parser=deepseek-r1
-[2026-07-12 00:14:02] Hybrid swa model: self.hf_config.architectures=['Olmo3SinkForCausalLM']
-[2026-07-12 00:14:06] Hybrid swa model: self.hf_config.architectures=['Olmo3SinkForCausalLM']
-[2026-07-12 00:14:06] Init torch distributed begin.
-[2026-07-12 00:14:06] Init torch distributed ends. elapsed=0.22 s, mem usage=0.09 GB
-[2026-07-12 00:14:07] Load weight begin. avail mem=139.13 GB
-[2026-07-12 00:14:07] Olmo3Sink: attention sinks ENABLED (num_heads=40, dtype=torch.bfloat16)
-Multi-thread loading shards:   0% Completed | 0/4 [00:00<?, ?it/s][2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.0.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.0.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.0.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.0.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.1.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.1.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.1.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.1.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.10.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.10.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.10.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.10.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.11.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.11.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.11.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.11.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.12.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.12.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.12.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.12.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.13.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.13.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.13.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.13.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.14.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.14.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.14.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.14.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.15.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.15.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.15.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.15.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.16.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.16.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.16.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.16.self_attn.attn.v_scale). .v_scale is not loaded.
-Multi-thread loading shards:  25% Completed | 1/4 [00:00<00:02,  1.25it/s][2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.17.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.17.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.17.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.17.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.18.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.18.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.18.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.18.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:08] Found .k_scale in the checkpoint (e.g. model.layers.19.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.19.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:08] Found .v_scale in the checkpoint (e.g. model.layers.19.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.19.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.2.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.2.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.2.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.2.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.20.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.20.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.20.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.20.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.21.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.21.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.21.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.21.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.22.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.22.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.22.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.22.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.23.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.23.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.23.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.23.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.24.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.24.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.24.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.24.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.25.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.25.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.25.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.25.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.26.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.26.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.26.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.26.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.27.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.27.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.27.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.27.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.28.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.28.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.28.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.28.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.29.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.29.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.29.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.29.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.3.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.3.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.3.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.3.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.30.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.30.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.30.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.30.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.31.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.31.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.31.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.31.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.32.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.32.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.32.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.32.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.33.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.33.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.33.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.33.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.34.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.34.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.34.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.34.self_attn.attn.v_scale). .v_scale is not loaded.
-Multi-thread loading shards:  50% Completed | 2/4 [00:01<00:01,  1.23it/s][2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.35.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.35.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.35.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.35.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.36.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.36.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.36.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.36.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.37.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.37.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.37.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.37.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.38.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.38.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.38.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.38.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.39.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.39.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.39.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.39.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.4.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.4.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:09] Found .v_scale in the checkpoint (e.g. model.layers.4.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.4.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:09] Found .k_scale in the checkpoint (e.g. model.layers.40.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.40.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.40.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.40.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.41.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.41.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.41.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.41.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.42.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.42.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.42.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.42.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.43.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.43.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.43.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.43.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.44.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.44.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.44.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.44.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.45.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.45.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.45.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.45.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.46.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.46.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.46.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.46.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.47.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.47.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.47.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.47.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.48.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.48.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.48.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.48.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.49.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.49.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.49.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.49.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.5.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.5.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.5.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.5.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.50.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.50.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.50.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.50.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.51.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.51.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.51.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.51.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.52.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.52.self_attn.attn.k_scale). .k_scale is not loaded.
-Multi-thread loading shards:  75% Completed | 3/4 [00:02<00:00,  1.16it/s][2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.52.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.52.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.53.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.53.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.53.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.53.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.54.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.54.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.54.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.54.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.55.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.55.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.55.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.55.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.56.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.56.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.56.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.56.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.57.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.57.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.57.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.57.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.58.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.58.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.58.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.58.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.59.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.59.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.59.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.59.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:10] Found .k_scale in the checkpoint (e.g. model.layers.6.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.6.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:10] Found .v_scale in the checkpoint (e.g. model.layers.6.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.6.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.60.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.60.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.60.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.60.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.61.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.61.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.61.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.61.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.62.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.62.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.62.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.62.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.63.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.63.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.63.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.63.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.7.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.7.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.7.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.7.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.8.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.8.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.8.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.8.self_attn.attn.v_scale). .v_scale is not loaded.
-[2026-07-12 00:14:11] Found .k_scale in the checkpoint (e.g. model.layers.9.self_attn.k_scale), but not found the expected name in the model (e.g. model.layers.9.self_attn.attn.k_scale). .k_scale is not loaded.
-[2026-07-12 00:14:11] Found .v_scale in the checkpoint (e.g. model.layers.9.self_attn.v_scale), but not found the expected name in the model (e.g. model.layers.9.self_attn.attn.v_scale). .v_scale is not loaded.
-Multi-thread loading shards: 100% Completed | 4/4 [00:03<00:00,  1.25it/s]Multi-thread loading shards: 100% Completed | 4/4 [00:03<00:00,  1.23it/s]
-[2026-07-12 00:14:11] Olmo3Sink: loaded 64 attention-sink tensors
-[2026-07-12 00:14:11] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:11] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:11] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:11] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:11] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:12] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:13] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:14] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:15] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:16] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:17] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:18] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:19] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:20] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:21] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:22] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:22] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:22] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:22] HUMMING_W4A8_LAYER_READY device=cuda:0 group_size=128
-[2026-07-12 00:14:22] Load weight end. elapsed=14.50 s, type=Olmo3SinkForCausalLM, quant=compressed-tensors, avail mem=121.23 GB, mem usage=17.90 GB.
-/workspace/pp/venv/lib/python3.12/site-packages/torch/library.py:363: UserWarning: Warning only once for all operators,  other operators may also be overridden.
-  Overriding a previously registered kernel for the same operator and the same dispatch key
-  operator: aten::mm(Tensor self, Tensor mat2) -> Tensor
-    registered at /pytorch/build/aten/src/ATen/RegisterSchema.cpp:6
-  dispatch key: CUDA
-  previous kernel: registered at /pytorch/aten/src/ATen/LegacyBatchingRegistrations.cpp:1076
-       new kernel: registered at /workspace/pp/venv/lib/python3.12/site-packages/sglang/srt/batch_invariant_ops/batch_invariant_ops.py:988 (Triggered internally at /pytorch/aten/src/ATen/core/dispatch/OperatorEntry.cpp:208.)
-  self.m.impl(
-[2026-07-12 00:14:25] Use sliding window memory pool. full_layer_tokens=984797, swa_layer_tokens=196959
-[2026-07-12 00:14:25] Max concurrent requests (per dp worker) from the finalized token capacity: max_num_reqs=48.
-[2026-07-12 00:14:25] KV Cache is allocated. dtype: torch.bfloat16, #tokens: 196959, K size: 18.03 GB, V size: 18.03 GB
-[2026-07-12 00:14:25] KV Cache is allocated. dtype: torch.bfloat16, #tokens: 984797, K size: 30.05 GB, V size: 30.05 GB
-[2026-07-12 00:14:25] SWAKVPool mem usage: 96.17 GB, swa size: 196959, full size: 984797
-[2026-07-12 00:14:25] Memory pool end. avail mem=25.02 GB
-[2026-07-12 00:14:26] Capture cuda graph begin. This can take up to several minutes. avail mem=25.02 GB
-[2026-07-12 00:14:26] Capture cuda graph bs [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20, 24, 28, 32, 40, 48]
-  0%|          | 0/22 [00:00<?, ?it/s]Capturing batches (bs=48 avail_mem=24.18 GB):   0%|          | 0/22 [00:00<?, ?it/s]Capturing batches (bs=48 avail_mem=24.18 GB):   5%|▍         | 1/22 [00:00<00:09,  2.21it/s]Capturing batches (bs=40 avail_mem=24.09 GB):   5%|▍         | 1/22 [00:00<00:09,  2.21it/s]Capturing batches (bs=40 avail_mem=24.09 GB):   9%|▉         | 2/22 [00:00<00:06,  3.16it/s]Capturing batches (bs=32 avail_mem=24.08 GB):   9%|▉         | 2/22 [00:00<00:06,  3.16it/s]Capturing batches (bs=32 avail_mem=24.08 GB):  14%|█▎        | 3/22 [00:00<00:05,  3.67it/s]Capturing batches (bs=28 avail_mem=24.08 GB):  14%|█▎        | 3/22 [00:00<00:05,  3.67it/s]Capturing batches (bs=28 avail_mem=24.08 GB):  18%|█▊        | 4/22 [00:01<00:04,  3.97it/s]Capturing batches (bs=24 avail_mem=24.07 GB):  18%|█▊        | 4/22 [00:01<00:04,  3.97it/s]Capturing batches (bs=24 avail_mem=24.07 GB):  23%|██▎       | 5/22 [00:01<00:04,  4.14it/s]Capturing batches (bs=20 avail_mem=24.07 GB):  23%|██▎       | 5/22 [00:01<00:04,  4.14it/s]Capturing batches (bs=20 avail_mem=24.07 GB):  27%|██▋       | 6/22 [00:01<00:03,  4.25it/s]Capturing batches (bs=16 avail_mem=24.06 GB):  27%|██▋       | 6/22 [00:01<00:03,  4.25it/s]Capturing batches (bs=16 avail_mem=24.06 GB):  32%|███▏      | 7/22 [00:01<00:03,  4.05it/s]Capturing batches (bs=15 avail_mem=24.06 GB):  32%|███▏      | 7/22 [00:01<00:03,  4.05it/s]Capturing batches (bs=15 avail_mem=24.06 GB):  36%|███▋      | 8/22 [00:02<00:03,  4.20it/s]Capturing batches (bs=14 avail_mem=24.05 GB):  36%|███▋      | 8/22 [00:02<00:03,  4.20it/s]Capturing batches (bs=14 avail_mem=24.05 GB):  41%|████      | 9/22 [00:02<00:03,  4.33it/s]Capturing batches (bs=13 avail_mem=24.05 GB):  41%|████      | 9/22 [00:02<00:03,  4.33it/s]Capturing batches (bs=13 avail_mem=24.05 GB):  45%|████▌     | 10/22 [00:02<00:02,  4.41it/s]Capturing batches (bs=12 avail_mem=24.04 GB):  45%|████▌     | 10/22 [00:02<00:02,  4.41it/s]Capturing batches (bs=12 avail_mem=24.04 GB):  50%|█████     | 11/22 [00:02<00:02,  4.48it/s]Capturing batches (bs=11 avail_mem=24.04 GB):  50%|█████     | 11/22 [00:02<00:02,  4.48it/s]Capturing batches (bs=11 avail_mem=24.04 GB):  55%|█████▍    | 12/22 [00:02<00:02,  4.51it/s]Capturing batches (bs=10 avail_mem=24.04 GB):  55%|█████▍    | 12/22 [00:02<00:02,  4.51it/s]Capturing batches (bs=10 avail_mem=24.04 GB):  59%|█████▉    | 13/22 [00:03<00:01,  4.54it/s]Capturing batches (bs=9 avail_mem=24.03 GB):  59%|█████▉    | 13/22 [00:03<00:01,  4.54it/s] Capturing batches (bs=9 avail_mem=24.03 GB):  64%|██████▎   | 14/22 [00:03<00:01,  4.56it/s]Capturing batches (bs=8 avail_mem=24.03 GB):  64%|██████▎   | 14/22 [00:03<00:01,  4.56it/s]Capturing batches (bs=8 avail_mem=24.03 GB):  68%|██████▊   | 15/22 [00:03<00:01,  4.59it/s]Capturing batches (bs=7 avail_mem=24.02 GB):  68%|██████▊   | 15/22 [00:03<00:01,  4.59it/s]Capturing batches (bs=7 avail_mem=24.02 GB):  73%|███████▎  | 16/22 [00:03<00:01,  4.60it/s]Capturing batches (bs=6 avail_mem=24.02 GB):  73%|███████▎  | 16/22 [00:03<00:01,  4.60it/s]Capturing batches (bs=6 avail_mem=24.02 GB):  77%|███████▋  | 17/22 [00:04<00:01,  4.60it/s]Capturing batches (bs=5 avail_mem=24.01 GB):  77%|███████▋  | 17/22 [00:04<00:01,  4.60it/s]Capturing batches (bs=5 avail_mem=24.01 GB):  82%|████████▏ | 18/22 [00:04<00:00,  4.61it/s]Capturing batches (bs=4 avail_mem=24.01 GB):  82%|████████▏ | 18/22 [00:04<00:00,  4.61it/s]Capturing batches (bs=4 avail_mem=24.01 GB):  86%|████████▋ | 19/22 [00:04<00:00,  4.62it/s]Capturing batches (bs=3 avail_mem=24.00 GB):  86%|████████▋ | 19/22 [00:04<00:00,  4.62it/s]Capturing batches (bs=3 avail_mem=24.00 GB):  91%|█████████ | 20/22 [00:04<00:00,  4.64it/s]Capturing batches (bs=2 avail_mem=24.00 GB):  91%|█████████ | 20/22 [00:04<00:00,  4.64it/s]Capturing batches (bs=2 avail_mem=24.00 GB):  95%|█████████▌| 21/22 [00:04<00:00,  4.65it/s]Capturing batches (bs=1 avail_mem=23.99 GB):  95%|█████████▌| 21/22 [00:04<00:00,  4.65it/s]Capturing batches (bs=1 avail_mem=23.99 GB): 100%|██████████| 22/22 [00:05<00:00,  4.71it/s]Capturing batches (bs=1 avail_mem=23.99 GB): 100%|██████████| 22/22 [00:05<00:00,  4.34it/s]
-[2026-07-12 00:14:31] Capture cuda graph end. Time elapsed: 5.70 s. mem usage=1.02 GB. avail mem=23.99 GB.
-[2026-07-12 00:14:31] Capture piecewise CUDA graph begin. avail mem=23.99 GB
-[2026-07-12 00:14:31] Capture cuda graph num tokens [256, 1024, 2048]
-  0%|          | 0/3 [00:00<?, ?it/s]Compiling num tokens (num_tokens=2048):   0%|          | 0/3 [00:00<?, ?it/s][2026-07-12 00:14:44] Compiling a graph for dynamic shape takes 2.74 s
-Compiling num tokens (num_tokens=2048):  33%|███▎      | 1/3 [00:14<00:29, 14.70s/it]Compiling num tokens (num_tokens=1024):  33%|███▎      | 1/3 [00:14<00:29, 14.70s/it]Compiling num tokens (num_tokens=1024):  67%|██████▋   | 2/3 [00:14<00:06,  6.17s/it]Compiling num tokens (num_tokens=256):  67%|██████▋   | 2/3 [00:14<00:06,  6.17s/it] Compiling num tokens (num_tokens=256): 100%|██████████| 3/3 [00:15<00:00,  3.41s/it]Compiling num tokens (num_tokens=256): 100%|██████████| 3/3 [00:15<00:00,  5.00s/it]
-  0%|          | 0/3 [00:00<?, ?it/s]Capturing num tokens (num_tokens=2048 avail_mem=23.50 GB):   0%|          | 0/3 [00:00<?, ?it/s]Capturing num tokens (num_tokens=2048 avail_mem=23.50 GB):  33%|███▎      | 1/3 [00:00<00:00,  2.21it/s]Capturing num tokens (num_tokens=1024 avail_mem=23.47 GB):  33%|███▎      | 1/3 [00:00<00:00,  2.21it/s]Capturing num tokens (num_tokens=1024 avail_mem=23.47 GB):  67%|██████▋   | 2/3 [00:00<00:00,  2.87it/s]Capturing num tokens (num_tokens=256 avail_mem=23.48 GB):  67%|██████▋   | 2/3 [00:00<00:00,  2.87it/s] Capturing num tokens (num_tokens=256 avail_mem=23.48 GB): 100%|██████████| 3/3 [00:00<00:00,  3.28it/s]Capturing num tokens (num_tokens=256 avail_mem=23.48 GB): 100%|██████████| 3/3 [00:00<00:00,  3.06it/s]
-[2026-07-12 00:14:49] Capture piecewise CUDA graph end. Time elapsed: 17.04 s. mem usage=0.51 GB. avail mem=23.48 GB.
-[2026-07-12 00:14:49] max_total_num_tokens=984797, chunked_prefill_size=2048, max_prefill_tokens=16384, max_running_requests=48, context_len=200000, available_gpu_mem=23.48 GB
-[2026-07-12 00:14:49] Tree cache initialized: source=default impl=SWARadixCache hybrid_swa=True hybrid_ssm=False hierarchical=False streaming_wrapped=False
-[2026-07-12 00:14:49] INFO:     Started server process [773639]
-[2026-07-12 00:14:49] INFO:     Waiting for application startup.
-[2026-07-12 00:14:49] Using default chat sampling params from model generation config: {'temperature': 0.6, 'top_p': 0.95}
-[2026-07-12 00:14:49] INFO:     Application startup complete.
-[2026-07-12 00:14:49] INFO:     Uvicorn running on http://127.0.0.1:32000 (Press CTRL+C to quit)
-[2026-07-12 00:14:50] INFO:     127.0.0.1:60894 - "GET /model_info HTTP/1.1" 200 OK
-[2026-07-12 00:14:50] Prefill batch, #new-seq: 1, #new-token: 6, #cached-token: 0, full token usage: 0.00, swa token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 3.95
-[2026-07-12 00:14:50] INFO:     127.0.0.1:60908 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:14:50] The server is fired up and ready to roll!
-[2026-07-12 00:14:53] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, full token usage: 0.00, swa token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 0.40
-[2026-07-12 00:14:54] INFO:     127.0.0.1:54440 - "GET /health_generate HTTP/1.1" 200 OK
-[2026-07-12 00:14:54] INFO:     127.0.0.1:54450 - "GET /server_info HTTP/1.1" 200 OK
-[2026-07-12 00:14:54] INFO:     127.0.0.1:54454 - "GET /model_info HTTP/1.1" 200 OK
-[2026-07-12 00:14:54] Prefill batch, #new-seq: 1, #new-token: 78, #cached-token: 1, full token usage: 0.00, swa token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 56.90
-[2026-07-12 00:14:54] Decode batch, #running-req: 1, #full token: 111, full token usage: 0.00, #swa token: 111, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 6.71, #queue-req: 0
-[2026-07-12 00:14:55] Decode batch, #running-req: 1, #full token: 151, full token usage: 0.00, #swa token: 151, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.62, #queue-req: 0
-[2026-07-12 00:14:56] Decode batch, #running-req: 1, #full token: 191, full token usage: 0.00, #swa token: 191, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.32, #queue-req: 0
-[2026-07-12 00:14:57] Decode batch, #running-req: 1, #full token: 231, full token usage: 0.00, #swa token: 231, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.98, #queue-req: 0
-[2026-07-12 00:14:57] Decode batch, #running-req: 1, #full token: 271, full token usage: 0.00, #swa token: 271, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.98, #queue-req: 0
-[2026-07-12 00:14:58] Decode batch, #running-req: 1, #full token: 311, full token usage: 0.00, #swa token: 311, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.49, #queue-req: 0
-[2026-07-12 00:14:59] Decode batch, #running-req: 1, #full token: 351, full token usage: 0.00, #swa token: 351, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.11, #queue-req: 0
-[2026-07-12 00:15:00] Decode batch, #running-req: 1, #full token: 391, full token usage: 0.00, #swa token: 391, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.18, #queue-req: 0
-[2026-07-12 00:15:00] Decode batch, #running-req: 1, #full token: 431, full token usage: 0.00, #swa token: 431, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.95, #queue-req: 0
-[2026-07-12 00:15:01] Decode batch, #running-req: 1, #full token: 471, full token usage: 0.00, #swa token: 471, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.77, #queue-req: 0
-[2026-07-12 00:15:02] Decode batch, #running-req: 1, #full token: 511, full token usage: 0.00, #swa token: 511, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.65, #queue-req: 0
-[2026-07-12 00:15:03] Decode batch, #running-req: 1, #full token: 551, full token usage: 0.00, #swa token: 551, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.03, #queue-req: 0
-[2026-07-12 00:15:03] Decode batch, #running-req: 1, #full token: 591, full token usage: 0.00, #swa token: 591, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 54.01, #queue-req: 0
-[2026-07-12 00:15:04] Decode batch, #running-req: 1, #full token: 631, full token usage: 0.00, #swa token: 631, swa token usage: 0.00, cuda graph: True, gen throughput (token/s): 53.85, #queue-req: 0
-[2026-07-12 00:15:04] INFO:     127.0.0.1:54468 - "POST /v1/chat/completions HTTP/1.1" 200 OK
-/workspace/pp/venv/lib/python3.12/site-packages/fastapi/routing.py:129: FastAPIDeprecationWarning: ORJSONResponse is deprecated, FastAPI now serializes data directly to JSON bytes via Pydantic when a return type or response model is set, which is faster and doesn't need a custom response class. Read more in the FastAPI docs: https://fastapi.tiangolo.com/advanced/custom-response/#orjson-or-response-model and https://fastapi.tiangolo.com/tutorial/response-model/
-  response = await f(request)
-[2026-07-12 00:15:10] INFO:     127.0.0.1:42600 - "GET /v1/models HTTP/1.1" 200 OK
-[2026-07-12 00:15:15] INFO:     127.0.0.1:41944 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:16] Prefill batch, #new-seq: 1, #new-token: 512, #cached-token: 0, full token usage: 0.00, swa token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 23.63
-[2026-07-12 00:15:17] INFO:     127.0.0.1:41956 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] INFO:     127.0.0.1:41966 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] INFO:     127.0.0.1:41974 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] INFO:     127.0.0.1:41986 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] INFO:     127.0.0.1:41988 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] INFO:     127.0.0.1:42004 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:17] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 511, full token usage: 0.00, swa token usage: 0.01, #running-req: 0, #queue-req: 1, #pending-token: 0, cuda graph: True, input throughput (token/s): 0.54
-[2026-07-12 00:15:17] Prefill batch, #new-seq: 4, #new-token: 2046, #cached-token: 1, full token usage: 0.00, swa token usage: 0.02, #running-req: 1, #queue-req: 0, #pending-token: 512, cuda graph: True, input throughput (token/s): 77569.14
-[2026-07-12 00:15:18] Prefill batch, #new-seq: 1, #new-token: 512, #cached-token: 0, full token usage: 0.00, swa token usage: 0.02, #running-req: 5, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 5734.73
-[2026-07-12 00:15:18] Decode batch, #running-req: 6, #full token: 3083, full token usage: 0.00, #swa token: 3083, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 3.34, #queue-req: 0
-[2026-07-12 00:15:18] Decode batch, #running-req: 6, #full token: 3323, full token usage: 0.00, #swa token: 3323, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.21, #queue-req: 0
-[2026-07-12 00:15:19] Decode batch, #running-req: 6, #full token: 3563, full token usage: 0.00, #swa token: 3563, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.37, #queue-req: 0
-[2026-07-12 00:15:20] Decode batch, #running-req: 6, #full token: 3803, full token usage: 0.00, #swa token: 3803, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.23, #queue-req: 0
-[2026-07-12 00:15:21] Decode batch, #running-req: 6, #full token: 4043, full token usage: 0.00, #swa token: 4043, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.38, #queue-req: 0
-[2026-07-12 00:15:22] Decode batch, #running-req: 6, #full token: 4283, full token usage: 0.00, #swa token: 4283, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.30, #queue-req: 0
-[2026-07-12 00:15:22] Decode batch, #running-req: 6, #full token: 4523, full token usage: 0.00, #swa token: 4523, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.29, #queue-req: 0
-[2026-07-12 00:15:23] Decode batch, #running-req: 6, #full token: 4763, full token usage: 0.00, #swa token: 4763, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.04, #queue-req: 0
-[2026-07-12 00:15:24] Decode batch, #running-req: 6, #full token: 5003, full token usage: 0.01, #swa token: 5003, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 297.00, #queue-req: 0
-[2026-07-12 00:15:25] Decode batch, #running-req: 6, #full token: 5243, full token usage: 0.01, #swa token: 5243, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 297.11, #queue-req: 0
-[2026-07-12 00:15:26] Decode batch, #running-req: 6, #full token: 5483, full token usage: 0.01, #swa token: 5483, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 296.99, #queue-req: 0
-[2026-07-12 00:15:26] Decode batch, #running-req: 6, #full token: 5723, full token usage: 0.01, #swa token: 5723, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 296.99, #queue-req: 0
-[2026-07-12 00:15:27] Decode batch, #running-req: 6, #full token: 5963, full token usage: 0.01, #swa token: 5963, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 297.09, #queue-req: 0
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56308 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56316 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56318 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56328 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56336 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] INFO:     127.0.0.1:56338 - "POST /generate HTTP/1.1" 200 OK
-[2026-07-12 00:15:28] Prefill batch, #new-seq: 1, #new-token: 512, #cached-token: 0, full token usage: 0.00, swa token usage: 0.01, #running-req: 0, #queue-req: 1, #pending-token: 0, cuda graph: True, input throughput (token/s): 48.85
-[2026-07-12 00:15:28] Prefill batch, #new-seq: 4, #new-token: 2048, #cached-token: 0, full token usage: 0.00, swa token usage: 0.02, #running-req: 1, #queue-req: 0, #pending-token: 512, cuda graph: True, input throughput (token/s): 9369.07
-[2026-07-12 00:15:28] Prefill batch, #new-seq: 1, #new-token: 512, #cached-token: 0, full token usage: 0.00, swa token usage: 0.02, #running-req: 5, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 5912.40
-[2026-07-12 00:15:29] Decode batch, #running-req: 6, #full token: 3132, full token usage: 0.00, #swa token: 3132, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 191.00, #queue-req: 0
-[2026-07-12 00:15:29] Decode batch, #running-req: 6, #full token: 3372, full token usage: 0.00, #swa token: 3372, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.26, #queue-req: 0
-[2026-07-12 00:15:30] Decode batch, #running-req: 6, #full token: 3612, full token usage: 0.00, #swa token: 3612, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.04, #queue-req: 0
-[2026-07-12 00:15:31] Decode batch, #running-req: 6, #full token: 3852, full token usage: 0.00, #swa token: 3852, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.28, #queue-req: 0
-[2026-07-12 00:15:32] Decode batch, #running-req: 6, #full token: 4092, full token usage: 0.00, #swa token: 4092, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.29, #queue-req: 0
-[2026-07-12 00:15:33] Decode batch, #running-req: 6, #full token: 4332, full token usage: 0.00, #swa token: 4332, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.26, #queue-req: 0
-[2026-07-12 00:15:33] Decode batch, #running-req: 6, #full token: 4572, full token usage: 0.00, #swa token: 4572, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.21, #queue-req: 0
-[2026-07-12 00:15:34] Decode batch, #running-req: 6, #full token: 4812, full token usage: 0.00, #swa token: 4812, swa token usage: 0.02, cuda graph: True, gen throughput (token/s): 297.06, #queue-req: 0
-[2026-07-12 00:15:35] Decode batch, #running-req: 6, #full token: 5052, full token usage: 0.01, #swa token: 5052, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 296.93, #queue-req: 0
-[2026-07-12 00:15:36] Decode batch, #running-req: 6, #full token: 5292, full token usage: 0.01, #swa token: 5292, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 296.87, #queue-req: 0
-[2026-07-12 00:15:37] Decode batch, #running-req: 6, #full token: 5532, full token usage: 0.01, #swa token: 5532, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 297.05, #queue-req: 0
-[2026-07-12 00:15:37] Decode batch, #running-req: 6, #full token: 5772, full token usage: 0.01, #swa token: 5772, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 297.12, #queue-req: 0
-[2026-07-12 00:15:38] Decode batch, #running-req: 6, #full token: 6012, full token usage: 0.01, #swa token: 6012, swa token usage: 0.03, cuda graph: True, gen throughput (token/s): 296.61, #queue-req: 0
-[2026-07-12 00:15:39] INFO:     127.0.0.1:58082 - "GET /server_info HTTP/1.1" 200 OK
-[2026-07-12 00:15:39] INFO:     127.0.0.1:58092 - "GET /server_info HTTP/1.1" 200 OK
-[2026-07-12 00:15:40] SIGTERM received. signum=None frame=None. Draining requests and shutting down...
-[2026-07-12 00:15:40] Gracefully exiting... Remaining number of requests 0. Remaining requests remaining_rids=[].
-[2026-07-12 00:15:40] kill_process_tree called: parent_pid=773639, include_parent=True, pid=773639

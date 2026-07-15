@@ -1,4 +1,0 @@
-usage: dflash_correctness_harness.py [-h] [--config CONFIG] [--profile PROFILE] [--phase {production,overlap_eager,sync_eager}] [--tier {quick,full}] [--target-url TARGET_URL]
-                                     [--dflash-url DFLASH_URL] [--results RESULTS] [--suites SUITES] [--sampling-count SAMPLING_COUNT] [--permutations PERMUTATIONS]
-                                     [--request-timeout REQUEST_TIMEOUT] [--resume] [--overwrite]
-dflash_correctness_harness.py: error: argument --phase: invalid choice: 'graphs_no_radix' (choose from production, overlap_eager, sync_eager)

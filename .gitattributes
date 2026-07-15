@@ -1,3 +1,0 @@
-evaluation/runs/**/stages/*.json filter=lfs diff=lfs merge=lfs -text
-evaluation/runs/**/*.jsonl filter=lfs diff=lfs merge=lfs -text
-evaluation/runs/**/*.log filter=lfs diff=lfs merge=lfs -text
