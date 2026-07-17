@@ -22,8 +22,15 @@ test "$(docker image inspect "$IMAGE" \
   --format "{{ index .Config.Labels \"org.opencontainers.image.revision\" }}")" = "$COMMIT"
 ```
 
-The image and runtime dataset are public. No registry, GitHub, Kaggle, OpenAI,
-or other credentials are required for submission generation.
+The runtime venv (patched SGLang + kernels) is fetched at first boot from a
+revision-pinned, sha256-verified HF mirror (`chankhavu/proof-pilot-env`), so
+every deployment materializes an identical SGLang; boot fails loud if the
+archive ever differs from the pin. Because SGLang is never pip-installed -- it
+lives inside that archive -- this pin is what makes the SGLang version
+reproducible. The mirror is private, so set `HF_TOKEN` (a read token). To fetch
+from the original public Kaggle dataset instead, set
+`RUNTIME_DATASET=threerabbits/proof-pilot-env` (still sha256-verified, but not
+revision-pinned).
 
 ### Prepare persistent storage
 
