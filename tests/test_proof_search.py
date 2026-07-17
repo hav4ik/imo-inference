@@ -10,6 +10,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(HARNESS))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # for real_trace_fixtures
 
 from proof_prompts import (  # noqa: E402
     generation_messages,
@@ -571,6 +572,155 @@ class ProofSearchTests(unittest.TestCase):
         self.assertEqual(parse_verification(v, lenient=True)[1], 1.0)
         with self.assertRaises(ValueError):
             parse_verification(v, lenient=False)
+
+    def test_parsers_on_real_geremie_traces(self):
+        # Real OPD-32B outputs recorded from Geremie's runs (see fixtures module).
+        from real_trace_fixtures import (
+            REAL_CLEAN,
+            REAL_MISSING_CLOSE,
+            REAL_VERIFY,
+        )
+
+        # The real missing-</solution> quirk: lenient recovers it (proof + score),
+        # strict rejects it -- exactly the yield we gain over upstream on real data.
+        self.assertNotIn("</solution>", REAL_MISSING_CLOSE)
+        proof, _, score = parse_generation(REAL_MISSING_CLOSE, lenient=True)
+        self.assertTrue(proof.startswith("<solution>") is False and len(proof) > 100)
+        self.assertEqual(score, 1.0)
+        with self.assertRaises(ValueError):
+            parse_generation(REAL_MISSING_CLOSE, lenient=False)
+
+        # A real well-formed generation parses in both modes.
+        for mode in (True, False):
+            proof, _, score = parse_generation(REAL_CLEAN, lenient=mode)
+            self.assertTrue(len(proof) > 50 and score in (0.0, 0.5, 1.0))
+
+        # A real verifier output parses in both modes.
+        for mode in (True, False):
+            text, score = parse_verification(REAL_VERIFY, lenient=mode)
+            self.assertIn("<evaluation>", text)
+            self.assertIn(score, (0.0, 0.5, 1.0))
+
+    def _search_with_refine_pool(self, directory, **config_overrides):
+        config = small_config()
+        config.update(config_overrides)
+        search = ProblemSearch(
+            problem_id="1",
+            problem="Prove the claim.",
+            output_dir=Path(directory),
+            client=ScriptedClient(),
+            semaphore=asyncio.Semaphore(4),
+            config=config,
+        )
+        parent = Proof(
+            proof_id="r01-p0000",
+            round_index=1,
+            parent_id=None,
+            proof="Parent proof body.",
+            self_evaluation="PARENT-SELF-AUDIT",
+            self_score=1.0,
+            generation_sample_id="g",
+            verifications=[
+                Verification("v0", 0.0, "ZERO review."),
+                Verification("v1", 0.5, "HALF review."),
+                Verification("v2", 1.0, "IDEAL review."),
+            ],
+        )
+        search.proofs = {parent.proof_id: parent}
+        return search
+
+    def test_refiner_knobs_flow_from_config_to_prompt(self):
+        # refiner_sees_self_evaluation wiring: default (false) omits the parent
+        # self-eval; true includes it.
+        with tempfile.TemporaryDirectory() as directory:
+            search = self._search_with_refine_pool(directory)
+            prompt = search._round_candidates(2)[0].generation.messages[1]["content"]
+            self.assertNotIn("PARENT-SELF-AUDIT", prompt)
+        with tempfile.TemporaryDirectory() as directory:
+            search = self._search_with_refine_pool(
+                directory, refiner_sees_self_evaluation=True
+            )
+            prompt = search._round_candidates(2)[0].generation.messages[1]["content"]
+            self.assertIn("PARENT-SELF-AUDIT", prompt)
+
+    def test_refine_review_strategy_wiring(self):
+        # worst strategy -> the lowest review (score 0) is used; random_nonideal
+        # -> a score<1 review (never the ideal one).
+        with tempfile.TemporaryDirectory() as directory:
+            search = self._search_with_refine_pool(
+                directory, refine_review_strategy="worst"
+            )
+            prompt = search._round_candidates(2)[0].generation.messages[1]["content"]
+            self.assertIn("ZERO review.", prompt)
+            self.assertNotIn("IDEAL review.", prompt)  # score-1 never in worst-1
+        with tempfile.TemporaryDirectory() as directory:
+            search = self._search_with_refine_pool(
+                directory, refine_review_strategy="random_nonideal"
+            )
+            prompt = search._round_candidates(2)[0].generation.messages[1]["content"]
+            self.assertNotIn("IDEAL review.", prompt)  # ideal (score 1) excluded
+
+    def test_stratified_parents_are_distinct_and_evenly_covered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = small_config()
+            config["seed"] = 5
+            search = ProblemSearch(
+                problem_id="1",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=ScriptedClient(),
+                semaphore=asyncio.Semaphore(4),
+                config=config,
+            )
+            pool = [
+                Proof(
+                    proof_id=f"r01-p{i:04d}",
+                    round_index=1,
+                    parent_id=None,
+                    proof=f"proof{i}",
+                    self_evaluation="se",
+                    self_score=1.0,
+                    generation_sample_id=f"g{i}",
+                    verifications=[],
+                )
+                for i in range(8)
+            ]
+            groups = search._stratified_parents(pool, 4, 32, 2)
+            repeated = search._stratified_parents(pool, 4, 32, 2)
+
+        from collections import Counter
+        self.assertEqual(len(groups), 32)  # one group per refine call
+        # every call merges 4 DISTINCT parents
+        self.assertTrue(all(len({p.proof_id for p in g}) == 4 for g in groups))
+        # even coverage: 32 calls x 4 parents / 8 pool = each parent used exactly 16x
+        counts = Counter(p.proof_id for g in groups for p in g)
+        self.assertEqual(set(counts.values()), {16})
+        # deterministic
+        self.assertEqual(
+            [[p.proof_id for p in g] for g in groups],
+            [[p.proof_id for p in g] for g in repeated],
+        )
+
+    def test_verifier_self_evaluation_knob_flows_from_config(self):
+        # Wiring: drive a real verify and inspect the captured verifier prompt.
+        def run(**overrides):
+            async def _go():
+                with tempfile.TemporaryDirectory() as directory:
+                    client = ScriptedClient()
+                    search = self._search_with_refine_pool(directory, **overrides)
+                    search.client = client
+                    proof = search.proofs["r01-p0000"]
+                    await search._verify_proof(proof)
+                    verify_ids = [
+                        rid for rid in client.messages if "/verify/" in rid
+                    ]
+                    return client.messages[verify_ids[0]][1]["content"]
+            return asyncio.run(_go())
+
+        self.assertIn("PARENT-SELF-AUDIT", run())  # default true: self-eval present
+        self.assertNotIn(
+            "PARENT-SELF-AUDIT", run(verifier_sees_self_evaluation=False)
+        )
 
     def test_verifier_self_evaluation_knob(self):
         from proof_prompts import verification_messages
