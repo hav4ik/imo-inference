@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from eval_config import active_model, load_config
@@ -77,6 +78,22 @@ def main() -> None:
     cccl_link.unlink(missing_ok=True)
     cccl_link.symlink_to(cccl_include)
     _prepend(env, "LIBRARY_PATH", str(cuda_link_dir))
+
+    # The runtime ships a RELOCATED standalone CPython, so its libpython is not on
+    # the loader path and `import flashinfer.comm` dies inside cuda.tile's C
+    # extension. sglang guards that import, so today the only symptom is a warning
+    # plus a fallback for flashinfer allreduce fusion:
+    #   flashinfer.comm allreduce_fusion API is not available
+    #   (libpython3.12.so.1.0: cannot open shared object file)
+    # That fusion is off by default (server_args.enable_flashinfer_allreduce_fusion)
+    # and this config never enables it, so this is not currently a hot path --
+    # making libpython resolvable just clears the warning and keeps the flag usable.
+    # Deliberately best-effort: the fallback works, so never fail a launch over it.
+    # Kept OUTSIDE the model.quantized branch below, which was the only thing that
+    # ever set LD_LIBRARY_PATH -- bf16 runs got none.
+    python_lib_dir = Path(sys.base_prefix) / "lib"
+    if python_lib_dir.is_dir():
+        _prepend(env, "LD_LIBRARY_PATH", str(python_lib_dir))
 
     if model.quantized:
         env["SGLANG_USE_HUMMING_W4A8"] = "1"

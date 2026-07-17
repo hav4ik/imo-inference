@@ -7,7 +7,7 @@ FROM nvidia/cuda:13.0.3-devel-ubuntu24.04
 ARG DEBIAN_FRONTEND=noninteractive
 ARG VCS_REF=unknown
 
-LABEL org.opencontainers.image.source="https://github.com/bogoconic1/aimo-proof-pilot-inference"
+LABEL org.opencontainers.image.source="https://github.com/hav4ik/imo-inference"
 LABEL org.opencontainers.image.revision="$VCS_REF"
 LABEL org.opencontainers.image.title="AIMO Proof Pilot Inference"
 LABEL org.opencontainers.image.description="OPD-32B generate-verify-refine inference for 8x H200"
@@ -64,8 +64,8 @@ STOPSIGNAL SIGTERM
 HEALTHCHECK --start-period=45m --interval=30s --timeout=10s --retries=5 \
     CMD test -n "$CONFIG" \
         && test -f /workspace/.proof-pilot/server-ready \
-        && URL=$(/workspace/pp/venv/bin/python \
-            /opt/aimo-proof-pilot-inference/docker/inspect_config.py "$CONFIG" \
+        && URL=$("$VENV/bin/python" \
+            "$REPO/docker/inspect_config.py" "$CONFIG" \
             | jq -er .server_url) \
         && curl -fsS "$URL/health" >/dev/null \
         || exit 1
