@@ -46,11 +46,14 @@ search:
   solution_continuation_tokens: 16384
   verifier_continuation_tokens: 16384
   min_valid_verifications: 4
-  # Feed the prover's self_evaluation into the verifier prompt (default true =
-  # the trained input distribution; false blanks it, off-distribution).
+  # GOLD STANDARD -- keep true. Gold feeds the prover self_evaluation TEXT into
+  # the verifier prompt at BOTH training and Kaggle inference, so true is
+  # in-distribution. false blanks it (off gold, off the verifier's training).
   verifier_sees_self_evaluation: true
-  # Gold drops the prover self-eval from the refiner bundle (unreliable ~92%
-  # self-score 1); false = gold behavior (less context). true includes it.
+  # GOLD STANDARD -- keep false. Gold's Kaggle inference drops the parent
+  # self-eval from the refiner bundle (self-score is ~92% "1", unreliable noise);
+  # gold TRAINING included it, so false is a deliberate train/inference choice
+  # gold validated. true restores it (more context, off gold's inference standard).
   refiner_sees_self_evaluation: false
   request_timeout_seconds: 86400
   concurrency: 96

@@ -130,12 +130,26 @@ Separate from parsing, this is *which downstream prompts* receive the prover's
   so it is in-distribution; and gold's inference feeds it too. It is the
   self-eval *text* ("note fragile steps"), never the numeric self-score. Setting
   the knob false blanks it — an off-distribution verifier prompt.
-- **Refiner drops it** because gold does, with an explicit reason in its code:
-  *"WITHOUT prover self-eval (unreliable ~92% self-score 1)."* The prover's
-  self-grade is "1" ~92% of the time, so it is noise for synthesis and only
-  inflates refiner context. When dropped, the `<self_evaluation>` element is
+- **Refiner drops it** to match gold's *inference*, with an explicit reason in
+  gold's code: *"WITHOUT prover self-eval (unreliable ~92% self-score 1)."* The
+  prover's self-grade is "1" ~92% of the time, so it is noise for synthesis and
+  only inflates refiner context. When dropped, the `<self_evaluation>` element is
   **omitted** from the candidate bundle (not sent empty), matching gold's
   `build_refine_bundle`. Setting the knob true restores it.
+
+  Note the train/inference split *inside gold*: gold **training** feeds the
+  parent self-eval to the refiner (`opd_v2 roles.py` builds the bundle with
+  `self_eval=p.self_eval`, and `build_refine_bundle` includes it), but gold's
+  **Kaggle inference** drops it (`as_proofpkg(with_self_eval=False)`). So false
+  matches gold's inference and is a deliberate, gold-validated train/inference
+  choice — the mirror of the verifier, where gold's inference instead *keeps*
+  self-eval (= training).
+
+This knob only affects the refiner's **input** (the parent self-eval in the
+bundle). The refiner's **output** is unchanged: it is a prover-role that emits
+its own `<solution>/<self_evaluation>/<score>` (parsed by `parse_generation`), so
+each refined proof still produces its own self-eval and self-score that feed its
+verifier and its ranking.
 
 Note the refiner topology still differs from gold beyond self-eval: gold merges
 **up to 4 candidates with all their reviews**; this harness sends **one parent
