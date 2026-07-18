@@ -16,6 +16,20 @@ cd /workspace/aimo-proof-pilot-inference
 ./install.sh
 ```
 
+For a fresh interactive container, the setup helper installs GitHub CLI and the
+latest OpenAI Codex CLI, authenticates GitHub over HTTPS, and launches Codex in
+this repository:
+
+```bash
+cd /workspace/aimo-proof-pilot-inference
+./setup-container.sh
+```
+
+Set `GH_TOKEN` for non-interactive GitHub authentication. Without it, the script
+shows the GitHub device-login flow without attempting to open a browser inside
+the container. To prepare the container without launching Codex, set
+`LAUNCH_CODEX=0`.
+
 The script is idempotent and defaults to the `bootstrap` command. It derives the
 repository path automatically and uses the checked-in `config.yaml`. Override
 the config or run another entrypoint command when needed:
