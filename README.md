@@ -6,6 +6,28 @@ writes `submission.csv` without calling an external grader. The checked-in
 configuration uses eight H200 GPUs as four TP2 replicas, BF16 target and draft
 weights, DFlash speculative decoding, and FlashAttention 3.
 
+## Direct Vast.ai installation
+
+The Vast.ai base image cannot run Docker-in-Docker. To install the runtime,
+dependencies, patches, and configured models directly on an 8x H200 instance:
+
+```bash
+cd /workspace/aimo-proof-pilot-inference
+./install.sh
+```
+
+The script is idempotent and defaults to the `bootstrap` command. It derives the
+repository path automatically and uses the checked-in `config.yaml`. Override
+the config or run another entrypoint command when needed:
+
+```bash
+CONFIG=/workspace/custom-config.yaml ./install.sh bootstrap
+CONFIG=/workspace/custom-config.yaml ./install.sh serve
+```
+
+Persistent runtime and model assets are written below `/workspace`. Allow at
+least 200 GB for the checked-in model pair and runtime.
+
 ## Docker usage
 
 ### Select the harness commit
