@@ -13,8 +13,7 @@ can run the image, use that instead; this exists for bare nodes.
 git clone https://github.com/hav4ik/imo-inference /tmp/chankhavu/imo-inference
 cd /tmp/chankhavu/imo-inference
 
-# 2. the runtime  (chankhavu/proof-pilot-env is PRIVATE -> token required)
-export HF_TOKEN=hf_...          # https://huggingface.co/settings/tokens
+# 2. the runtime  (chankhavu/proof-pilot-env is PUBLIC -> no token needed)
 ./install/install_infervenv.sh
 
 # 3. use it -- in EVERY shell
@@ -156,7 +155,7 @@ it, so upstream needs no edit.
 | env | meaning |
 |---|---|
 | `PP_ENV_ARCHIVE` | local `proof-pilot-env.bin`; skips the HF download entirely |
-| `HF_TOKEN` | required while `chankhavu/proof-pilot-env` is private |
+| `HF_TOKEN` | optional; the mirror is public (only needed for a private fork) |
 | `PP_BASE` | root for scratch + defaults (default `/tmp/chankhavu`) |
 | `KEEP_ARCHIVE=1` | keep the 4.6 GiB download after extracting |
 

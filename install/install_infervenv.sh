@@ -27,9 +27,12 @@ PYBASE="$RUNTIME/pybase"
 CACHES="$RUNTIME/caches"
 REPO="${REPO:-$BASE/imo-inference}"
 
+# chankhavu/proof-pilot-env is PUBLIC -> anonymous download, no HF_TOKEN needed
+# (HF_TOKEN is still honored if set, e.g. for a private fork). Revision + sha256
+# are pinned to the exact runtime the Docker image bakes, so this venv matches it.
 HF_REPO="${HF_REPO:-chankhavu/proof-pilot-env}"
 HF_FILE="${HF_FILE:-proof-pilot-env.bin}"
-HF_REVISION="${HF_REVISION:-main}"
+HF_REVISION="${HF_REVISION:-5c0bf00bcc38c91b336f99d68aaab6b66aa93c1d}"
 ARCHIVE="${PP_ENV_ARCHIVE:-}"          # local archive path; skips download
 KEEP_ARCHIVE="${KEEP_ARCHIVE:-0}"      # 1 = keep the 4.6G download after extract
 
@@ -38,6 +41,8 @@ SKIP_PIP="${SKIP_PIP:-0}"
 
 # gzip'd tar of the runtime; ~4.6 GiB down, ~11 GiB extracted.
 EXPECTED_ARCHIVE_BYTES=4644784760
+# sha256 of proof-pilot-env.bin (same pin the Docker image verifies). Empty = skip.
+EXPECTED_ARCHIVE_SHA256="${EXPECTED_ARCHIVE_SHA256:-71190f4f2554c29ec6b99ae6bda7af64f1348876b85cfbdfa1d102f9dfa8c831}"
 
 log()  { printf '\033[1;36m[install]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[install] WARN:\033[0m %s\n' "$*" >&2; }
@@ -56,7 +61,7 @@ install_infervenv.sh — proof-pilot inference runtime installer
 
 Environment:
   PP_ENV_ARCHIVE  local proof-pilot-env.bin (skips the HF download)
-  HF_TOKEN        required if $HF_REPO is private
+  HF_TOKEN        optional; $HF_REPO is public, only needed for a private fork
   KEEP_ARCHIVE=1  keep the downloaded archive after extraction
 EOF
 }
@@ -151,7 +156,19 @@ verify_archive() {
     magic="$(od -An -tx1 -N4 "$ARCHIVE" | tr -d ' \n')"
     [[ "$magic" == 1f8b* ]] \
         || die "archive is not gzip (magic=$magic). Truncated download? Delete and retry."
-    log "archive verified: gzip, $((size / 1024 / 1024))MiB"
+
+    # Pin the content by sha256 (same pin the Docker image bakes), so this venv is
+    # byte-identical to the shipped runtime. Empty EXPECTED_ARCHIVE_SHA256 skips it.
+    if [[ -n "$EXPECTED_ARCHIVE_SHA256" ]]; then
+        local actual
+        actual="$(sha256sum "$ARCHIVE" | awk '{print $1}')"
+        [[ "$actual" == "$EXPECTED_ARCHIVE_SHA256" ]] \
+            || die "archive sha256 mismatch: got $actual, expected $EXPECTED_ARCHIVE_SHA256 "\
+"(runtime changed upstream; update HF_REVISION + EXPECTED_ARCHIVE_SHA256, or clear the sha)"
+        log "archive verified: gzip, $((size / 1024 / 1024))MiB, sha256 OK"
+    else
+        log "archive verified: gzip, $((size / 1024 / 1024))MiB (sha256 check disabled)"
+    fi
 }
 
 # --------------------------------------------------------------------- extract
