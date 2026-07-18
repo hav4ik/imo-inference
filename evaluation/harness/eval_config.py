@@ -263,8 +263,8 @@ def _validate_traces(traces: Any) -> None:
             raise ValueError(
                 "traces.dataset_repo must be 'owner/name' when traces.enabled"
             )
-        if not traces["secrets_file"].strip():
-            raise ValueError("traces.secrets_file is required when traces.enabled")
+        # secrets_file is OPTIONAL: "" means use the ambient HF token
+        # (HF_TOKEN env var or `hf auth login`), e.g. the node's built-in login.
 
 
 def active_model(config: dict[str, Any]) -> ActiveModel:

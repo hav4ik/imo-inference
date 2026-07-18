@@ -76,20 +76,20 @@ search:
   concurrency: 96
   seed: 0
 
-# Optional: periodically push the whole artifacts tree (reasoning traces --
-# calls.jsonl with <think> reasoning + answers, prompts, proofs, rounds) to a HF
-# dataset. Auth lives in secrets_file (JSON or YAML with an "hf_token" key), NOT
-# here. Upload runs every interval_seconds and once more at shutdown; upload
-# errors are logged and never abort the proof run. Remove this whole section to
-# disable (it is optional).
+# Optional: periodically push the whole artifacts tree (reasoning traces) to a HF
+# dataset. Auth: secrets_file (a JSON/YAML file with an hf_token) OR, if
+# secrets_file is "", the ambient HF token (HF_TOKEN env or `hf auth login`).
+# Upload runs every interval_seconds and once at shutdown; errors never abort the
+# run. Remove this whole section to disable.
 traces:
   enabled: true
-  dataset_repo: chankhavu/imo-reasoning-traces
-  secrets_file: /tmp/chankhavu/SECRETS.json
+  # Alias-prefixed so it doesn't collide with teammates' datasets in the org.
+  dataset_repo: imo2026-challenge/chankhavu-imo-reasoning-traces
+  # "" -> use the ambient HF token (HF_TOKEN env or `hf auth login`).
+  secrets_file: ""
   interval_seconds: 600
-  # Only applied when the dataset is first CREATED; an existing repo keeps its
-  # current visibility. chankhavu/imo-reasoning-traces already exists as public.
-  private: false
-  # "" -> derive from the active target model folder name, so each checkpoint
-  # (opd-32b-deploy, opd-32b-bf16-step-225, ...) uploads to its own subfolder.
+  # Applied only when the dataset is first CREATED (team competition traces).
+  private: true
+  # Subfolder per experiment. "" -> derive from the target model folder; set an
+  # explicit name to label each experiment.
   run_name: ""

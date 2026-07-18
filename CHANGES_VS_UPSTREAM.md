@@ -56,7 +56,7 @@ answer), plus `prompts/`, `proofs/`, `rounds/`, `final.json` and the pinned
 |---|---|
 | `enabled` | Master switch. Omit the whole section (or set false) to disable. |
 | `dataset_repo` | `owner/name` of the target HF dataset. |
-| `secrets_file` | Path to a JSON/YAML file with an `hf_token` key. The token is **never** in the config; only its path is. |
+| `secrets_file` | Path to a JSON/YAML file with an `hf_token` key, or `""` to use the ambient HF token (`HF_TOKEN` env / `hf auth login`). The token is **never** in the config. |
 | `interval_seconds` | Snapshot cadence. |
 | `private` | Applied only when the dataset is first **created**; an existing repo keeps its visibility. |
 | `run_name` | Subfolder in the dataset; `""` derives it from the active target model's folder name, so each checkpoint uploads to its own namespace. |

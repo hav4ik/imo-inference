@@ -37,7 +37,8 @@ class TracesConfigValidationTests(unittest.TestCase):
         self.assertIn("traces", self.base)
         self.assertTrue(self.base["traces"]["enabled"])
         self.assertEqual(
-            self.base["traces"]["dataset_repo"], "chankhavu/imo-reasoning-traces"
+            self.base["traces"]["dataset_repo"],
+            "imo2026-challenge/chankhavu-imo-reasoning-traces",
         )
 
     def test_traces_section_is_optional(self):
@@ -67,9 +68,10 @@ class TracesConfigValidationTests(unittest.TestCase):
             ):
                 self._load(lambda c, bad=bad: c["traces"].update(dataset_repo=bad))
 
-    def test_enabled_requires_secrets_file(self):
-        with self.assertRaisesRegex(ValueError, "secrets_file"):
-            self._load(lambda c: c["traces"].update(secrets_file="   "))
+    def test_enabled_allows_empty_secrets_file(self):
+        # "" -> use the ambient HF token; valid when enabled.
+        config = self._load(lambda c: c["traces"].update(secrets_file=""))
+        self.assertEqual(config["traces"]["secrets_file"], "")
 
     def test_disabled_skips_repo_and_secrets_checks(self):
         # A disabled section with empty fields is still valid (nothing runs).

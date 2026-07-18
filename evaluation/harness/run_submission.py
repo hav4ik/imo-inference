@@ -166,7 +166,10 @@ async def run_submission(
     stop_uploads: asyncio.Event | None = None
     upload_task: asyncio.Task | None = None
     if traces is not None:
-        token = load_hf_token(traces["secrets_file"])
+        # secrets_file "" -> None -> HfApi uses the ambient token (HF_TOKEN env
+        # or `hf auth login`); a path -> read the token from that file.
+        secrets_file = traces["secrets_file"].strip()
+        token = load_hf_token(secrets_file) if secrets_file else None
         run_name = resolve_run_name(traces["run_name"], model.target)
         uploader = TraceUploader(
             artifacts_dir=artifacts_dir,
