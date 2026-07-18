@@ -13,6 +13,14 @@ import yaml
 
 
 ROOT_KEYS = {"schema_version", "models", "model", "server", "search"}
+# Optional top-level sections: present only when the operator opts in. Kept out of
+# ROOT_KEYS so existing configs stay valid without them, but validated strictly
+# when supplied.
+OPTIONAL_ROOT_KEYS = {"traces"}
+TRACES_KEYS = {
+    "enabled", "dataset_repo", "secrets_file", "interval_seconds", "private",
+    "run_name",
+}
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
     "tensor_parallel_size", "data_parallel_size", "quantized", "dflash", "kv_cache_dtype",
@@ -109,7 +117,13 @@ def load_config(path: Path) -> dict[str, Any]:
     config = yaml.safe_load(path.read_text())
     if not isinstance(config, dict):
         raise ValueError("evaluation config must be a YAML mapping")
-    _exact_keys(config, ROOT_KEYS, "root")
+    actual = set(config)
+    missing = ROOT_KEYS - actual
+    extra = actual - ROOT_KEYS - OPTIONAL_ROOT_KEYS
+    if missing or extra:
+        raise ValueError(
+            f"root keys differ: missing={sorted(missing)}, extra={sorted(extra)}"
+        )
     if config["schema_version"] != 12:
         raise ValueError("schema_version must be 12")
     for section, keys in (
@@ -223,7 +237,34 @@ def load_config(path: Path) -> dict[str, Any]:
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"
         )
 
+    if "traces" in config:
+        _validate_traces(config["traces"])
+
     return config
+
+
+def _validate_traces(traces: Any) -> None:
+    """Strictly validate the optional `traces` section (periodic HF upload)."""
+    if not isinstance(traces, dict):
+        raise ValueError("traces must be a mapping")
+    _exact_keys(traces, TRACES_KEYS, "traces")
+    if type(traces["enabled"]) is not bool:
+        raise ValueError("traces.enabled must be a boolean")
+    if type(traces["private"]) is not bool:
+        raise ValueError("traces.private must be a boolean")
+    _positive_int(traces["interval_seconds"], "traces.interval_seconds")
+    for key in ("dataset_repo", "secrets_file", "run_name"):
+        if not isinstance(traces[key], str):
+            raise ValueError(f"traces.{key} must be a string")
+    # run_name may be "" (meaning: derive from the active target model name).
+    if traces["enabled"]:
+        repo = traces["dataset_repo"].strip().strip("/")
+        if repo.count("/") != 1 or not all(repo.split("/")):
+            raise ValueError(
+                "traces.dataset_repo must be 'owner/name' when traces.enabled"
+            )
+        if not traces["secrets_file"].strip():
+            raise ValueError("traces.secrets_file is required when traces.enabled")
 
 
 def active_model(config: dict[str, Any]) -> ActiveModel:

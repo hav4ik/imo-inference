@@ -13,6 +13,12 @@ from pathlib import Path
 from async_client import AsyncChatClient
 from eval_config import active_model, load_config
 from proof_search import ProblemSearch
+from trace_uploader import (
+    TraceUploader,
+    load_hf_token,
+    resolve_run_name,
+    traces_config,
+)
 
 
 EXPECTED_COLUMNS = ["id", "problem"]
@@ -152,6 +158,33 @@ async def run_submission(
     proofs = load_existing_submission(output_path, rows) if is_resume else []
     if not is_resume:
         write_submission(output_path, rows, proofs)
+
+    # Optional: periodically push the whole artifacts tree (reasoning traces) to a
+    # HF dataset. Init fails fast (bad token / missing secrets), but once running,
+    # individual upload errors are swallowed so they can't kill the proof run.
+    traces = traces_config(config)
+    stop_uploads: asyncio.Event | None = None
+    upload_task: asyncio.Task | None = None
+    if traces is not None:
+        token = load_hf_token(traces["secrets_file"])
+        run_name = resolve_run_name(traces["run_name"], model.target)
+        uploader = TraceUploader(
+            artifacts_dir=artifacts_dir,
+            dataset_repo=traces["dataset_repo"],
+            token=token,
+            run_name=run_name,
+            private=traces["private"],
+            interval_seconds=traces["interval_seconds"],
+        )
+        uploader.ensure_repo()
+        stop_uploads = asyncio.Event()
+        upload_task = asyncio.create_task(uploader.run_periodic(stop_uploads))
+        print(
+            f"[traces] uploading artifacts to {uploader.repo}:{run_name} "
+            f"every {traces['interval_seconds']}s",
+            flush=True,
+        )
+
     try:
         for index, row in enumerate(rows):
             internal_id = f"row-{index:04d}"
@@ -198,6 +231,15 @@ async def run_submission(
                 flush=True,
             )
     finally:
+        # Stop periodic uploads and do one final flush so the last rounds land,
+        # even if the search raised.
+        if upload_task is not None:
+            assert stop_uploads is not None
+            stop_uploads.set()
+            try:
+                await upload_task
+            except Exception as error:  # a broken final upload must not mask the run's result
+                print(f"[traces] final upload error: {error!r}", flush=True)
         await client.aclose()
     print(f"[submission] complete -> {output_path}", flush=True)
 

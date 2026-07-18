@@ -43,6 +43,35 @@ triton is supported by no existing code path; `config-blackwell.yaml` runs witho
 speculation. Enabling it would require a triton-capable TP-sharded ring worker
 (new work, unvalidated).
 
+## Reasoning-trace upload (optional, new `traces:` section)
+
+A new **optional** top-level `traces:` section makes `run_submission.py`
+periodically push the whole artifacts tree — `problems/<id>/calls.jsonl` (every
+model call, with `reasoning_content` = the `<think>` traces and `content` = the
+answer), plus `prompts/`, `proofs/`, `rounds/`, `final.json` and the pinned
+`test.csv`/`config.yaml` — to a HuggingFace dataset. It uploads every
+`interval_seconds` and once more at shutdown (even if the search raised).
+
+| Key | Meaning |
+|---|---|
+| `enabled` | Master switch. Omit the whole section (or set false) to disable. |
+| `dataset_repo` | `owner/name` of the target HF dataset. |
+| `secrets_file` | Path to a JSON/YAML file with an `hf_token` key. The token is **never** in the config; only its path is. |
+| `interval_seconds` | Snapshot cadence. |
+| `private` | Applied only when the dataset is first **created**; an existing repo keeps its visibility. |
+| `run_name` | Subfolder in the dataset; `""` derives it from the active target model's folder name, so each checkpoint uploads to its own namespace. |
+
+Design points: init fails fast (bad token / missing secrets) so a
+misconfiguration is caught before the run, but once running, individual upload
+errors are logged and swallowed — a flaky network can never kill a multi-hour
+proof run. Uploads run in a worker thread (search keeps serving) with only one
+in flight at a time. `SECRETS.*`, `*.tmp`, and `*.token` are never uploaded even
+if they sit under the artifacts dir. The section is validated strictly by
+`eval_config.py` like every other; being optional, existing configs without it
+stay valid. `config.yaml` ships it enabled (targeting
+`chankhavu/imo-reasoning-traces`); `config-dynamic.yaml` / `config-blackwell.yaml`
+omit it.
+
 ## Blatant bug fixes (always on, no knob)
 
 | Fix | Why it's a bug, not a policy |
