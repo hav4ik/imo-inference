@@ -146,6 +146,7 @@ class CallStore:
         top_p: float,
         spec: CallSpec,
         lenient: bool = True,
+        stream_detect: bool = False,
     ) -> dict:
         existing = self.records.get(spec.sample_id)
         if existing is not None:
@@ -155,18 +156,36 @@ class CallStore:
                 )
             return existing
         prompt_sha256 = self._save_prompt(spec.messages)
+        is_proof_generation = spec.stage.endswith("/generate")
+        is_verification = "/verify/" in spec.stage
         try:
             async with semaphore:
-                response = await client.chat_raw(
-                    spec.messages,
-                    max_completion_tokens=max_completion_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    seed=spec.seed,
-                    request_id=spec.sample_id,
-                )
-                is_proof_generation = spec.stage.endswith("/generate")
-                is_verification = "/verify/" in spec.stage
+                if stream_detect and (is_proof_generation or is_verification):
+                    # Stream the completion and abort+salvage on a live degenerate
+                    # loop (real-time detection). Same record shape as chat_raw.
+                    response = await client.chat_stream(
+                        spec.messages,
+                        max_completion_tokens=max_completion_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        seed=spec.seed,
+                        request_id=spec.sample_id,
+                        role="solution" if is_proof_generation else "verifier",
+                        salvage_max_tokens=(
+                            solution_continuation_tokens
+                            if is_proof_generation
+                            else verifier_continuation_tokens
+                        ),
+                    )
+                else:
+                    response = await client.chat_raw(
+                        spec.messages,
+                        max_completion_tokens=max_completion_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        seed=spec.seed,
+                        request_id=spec.sample_id,
+                    )
                 parser = (
                     parse_generation
                     if is_proof_generation
@@ -311,6 +330,7 @@ class ProblemSearch:
             self.config["top_p"],
             spec,
             lenient=self.config.get("lenient_parsing", True),
+            stream_detect=self.config.get("stream_detect", False),
         )
 
     def _rank_key(self, proof: Proof) -> tuple[float, int, float, int]:

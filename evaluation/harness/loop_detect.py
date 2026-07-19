@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import zlib
 from collections import deque
+from dataclasses import dataclass
 
 # --- zlib runaway detector (Yi-Chia's validated defaults) ---
 WINDOW_CHARS = 12_000
@@ -52,36 +53,104 @@ def zlib_ratio(text: str) -> float:
     return len(zlib.compress(b, 6)) / len(b)
 
 
-def zlib_runaway(
-    text: str,
-    *,
-    window_chars: int = WINDOW_CHARS,
-    step_chars: int = STEP_CHARS,
-    hard_ratio: float = HARD_RATIO,
-    soft_ratio: float = SOFT_RATIO,
-    soft_persist: int = SOFT_PERSIST,
-) -> bool:
+@dataclass
+class Verdict:
+    abort: bool
+    reason: str | None = None   # "hard" | "soft" | None
+    ratio: float | None = None  # ratio at the deciding/last check
+    position: int = 0           # total chars consumed when decided
+    soft_run: int = 0           # consecutive sub-soft_ratio checks so far
+
+
+class RunawayDetector:
+    """Streaming zlib loop detector. Feed newly-decoded text via feed(); it
+    evaluates the sliding window at every step boundary and, once it aborts, keeps
+    returning the abort verdict. This is the primitive for real-time (streaming)
+    detection; the offline zlib_runaway() below is the same logic over a whole
+    string. Ported verbatim from Yi-Chia's zlib_runaway_detector.RunawayDetector."""
+
+    def __init__(
+        self,
+        window_chars: int = WINDOW_CHARS,
+        step_chars: int = STEP_CHARS,
+        hard_ratio: float = HARD_RATIO,
+        soft_ratio: float = SOFT_RATIO,
+        soft_persist: int = SOFT_PERSIST,
+    ) -> None:
+        self.window_chars = window_chars
+        self.step_chars = step_chars
+        self.hard_ratio = hard_ratio
+        self.soft_ratio = soft_ratio
+        self.soft_persist = soft_persist
+        self.reset()
+
+    def reset(self) -> None:
+        self._win: deque[str] = deque(maxlen=self.window_chars)
+        self._since_check = 0
+        self._total = 0
+        self._soft_run = 0
+        self._aborted = False
+        self._last_ratio: float | None = None
+
+    def feed(self, text: str) -> Verdict:
+        if self._aborted:
+            return Verdict(True, "aborted", self._last_ratio, self._total, self._soft_run)
+        for ch in text or "":
+            self._win.append(ch)
+            self._total += 1
+            self._since_check += 1
+            if self._since_check >= self.step_chars and len(self._win) >= self.window_chars:
+                self._since_check = 0
+                v = self._check()
+                if v.abort:
+                    self._aborted = True
+                    return v
+        return Verdict(False, None, self._last_ratio, self._total, self._soft_run)
+
+    def _check(self) -> Verdict:
+        ratio = zlib_ratio("".join(self._win))
+        self._last_ratio = ratio
+        if ratio < self.hard_ratio:
+            return Verdict(True, "hard", ratio, self._total, self._soft_run)
+        if ratio < self.soft_ratio:
+            self._soft_run += 1
+            if self._soft_run >= self.soft_persist:
+                return Verdict(True, "soft", ratio, self._total, self._soft_run)
+        else:
+            self._soft_run = 0
+        return Verdict(False, None, ratio, self._total, self._soft_run)
+
+
+def zlib_runaway(text: str, **kwargs) -> bool:
     """True if a sliding zlib window ever trips the hard tier, or the soft tier
-    for `soft_persist` consecutive checks. Mirrors the streaming detector run
-    offline over the complete text."""
-    win: deque[str] = deque(maxlen=window_chars)
-    since_check = 0
-    soft_run = 0
-    for ch in text or "":
-        win.append(ch)
-        since_check += 1
-        if since_check >= step_chars and len(win) >= window_chars:
-            since_check = 0
-            ratio = zlib_ratio("".join(win))
-            if ratio < hard_ratio:
-                return True
-            if ratio < soft_ratio:
-                soft_run += 1
-                if soft_run >= soft_persist:
-                    return True
-            else:
-                soft_run = 0
-    return False
+    for `soft_persist` consecutive checks. Offline equivalent of RunawayDetector:
+    feed the whole string through one detector."""
+    return RunawayDetector(**kwargs).feed(text or "").abort
+
+
+def _dense_first(text: str, chunk: int, step: int, threshold: int, span: int) -> int | None:
+    """First offset of a chunk that recurs > `threshold` times within some
+    `span`-char window (a real, local loop). None if no chunk is that locally
+    dense. Ported from Yi-Chia's loopguard._dense_first."""
+    t = text or ""
+    if len(t) < chunk * 2:
+        return None
+    pos: dict[str, list[int]] = {}
+    for i in range(0, len(t) - chunk, step):
+        pos.setdefault(t[i:i + chunk], []).append(i)
+    best: int | None = None
+    for offs in pos.values():
+        if len(offs) <= threshold:
+            continue
+        j = 0
+        for k in range(len(offs)):
+            while offs[k] - offs[j] > span:
+                j += 1
+            if k - j + 1 > threshold:
+                if best is None or offs[j] < best:
+                    best = offs[j]
+                break
+    return best
 
 
 def loopguard_degenerate(
@@ -95,22 +164,43 @@ def loopguard_degenerate(
     """True only for a real local loop: one `chunk`-char segment repeated
     > `threshold` times within a `span`-char window. Scattered recurrence and
     small-case checking (spread out, or each instance differs) do NOT trip."""
+    return _dense_first(text, chunk, step, threshold, span) is not None
+
+
+def find_loop_cut(
+    text: str,
+    *,
+    chunk: int = LG_CHUNK,
+    step: int = LG_STEP,
+    threshold: int = LG_THRESHOLD,
+    span: int = LG_SPAN,
+) -> int | None:
+    """If `text` contains a verbatim local loop, return the index where the dense
+    looping cluster begins (truncate there to keep the clean pre-loop prefix).
+    Else None. Ported from Yi-Chia's loopguard.find_loop_cut."""
+    return _dense_first(text, chunk, step, threshold, span)
+
+
+def recent_window(text: str, window: int = 16_000) -> str:
+    """The tail to scan -- a loop manifests in recently generated text, so bounding
+    the scan keeps detection O(window). Ported from Yi-Chia's loopguard."""
     t = text or ""
-    if len(t) < chunk * 2:
-        return False
-    pos: dict[str, list[int]] = {}
-    for i in range(0, len(t) - chunk, step):
-        pos.setdefault(t[i:i + chunk], []).append(i)
-    for offs in pos.values():
-        if len(offs) <= threshold:
-            continue
-        j = 0
-        for k in range(len(offs)):
-            while offs[k] - offs[j] > span:
-                j += 1
-            if k - j + 1 > threshold:
-                return True
-    return False
+    return t[-window:] if len(t) > window else t
+
+
+def loop_onset(text: str, verdict: "Verdict | None") -> int:
+    """Where to truncate a looping text to keep the clean pre-loop prefix.
+    Char-precise cut for a verbatim loop; for a semantic loop (no verbatim cut)
+    fall back to the zlib detector's onset estimate -- the abort position minus the
+    window and the sustained-soft run that preceded it. Ported from Yi-Chia's
+    stream_engine._loop_onset."""
+    cut = find_loop_cut(text)
+    if cut is not None:
+        return cut
+    if verdict is not None and verdict.position:
+        onset = verdict.position - WINDOW_CHARS - verdict.soft_run * STEP_CHARS
+        return max(0, min(len(text or ""), onset))
+    return len(text or "")
 
 
 def is_degenerate(text: str) -> bool:

@@ -17,6 +17,7 @@ parser and self-eval items lives in [`evaluation/PARSING_VS_GOLD.md`](evaluation
 | `refine_review_strategy` | `random_nonideal` | Which reviews: `random_nonideal` (seeded random, score<1, varied per call) or `worst` (Geremie's deterministic lowest-scoring, may include ideal). | — (a design choice; gold uses *all* reviews) |
 | `lenient_parsing` | `true` | Gold search-based extraction (recover missing `</solution>`, tolerate surrounding text, ignore tag case, allow empty self-eval/suggestions) vs upstream's strict whole-document `fullmatch`. | `true` — gold parses leniently; the OPD model omits `</solution>`. |
 | `filter_degenerate` | `true` | Drop generations/verifications that fell into a degenerate repetition/enumeration loop (`loop_detect.is_degenerate`), so they never enter the pool, seed a refine, or score a proof. Upstream has no such check. | `true` — re-adds Yi-Chia v2's `zlib_runaway_detector` + `loopguard`, which Geremie's fork dropped. |
+| `stream_detect` | `true` | Stream generations/verifications and detect the loop **live**, aborting the request and salvaging a proof from the clean pre-loop prefix (reclaims compute + prevents the server stall). Upstream is blocking with no live detection. | `true` — Yi-Chia v2's streaming loop-detect + salvage (`stream_engine`), which Geremie's fork dropped. (Needs a live-server smoke test — see the doc.) |
 
 Each is validated as the right type by the strict schema (`eval_config.py`) and
 present in both `config.yaml` and `config-dynamic.yaml`.
@@ -123,10 +124,13 @@ and a penalty would warp the sampling distribution and corrupt legitimately
 repetitive math reasoning. Aborting/rejecting a doomed generation only truncates
 it — distribution-neutral — which is why gzip detection is the right tool.
 
-Because our harness uses the **blocking** completion API, the filter runs
-**post-hoc** on finished text (keeps degenerate proofs out of the pool / refine
-seeds / verifier scoring). Yi-Chia's *mid-generation* early-abort (which also saves
-the wasted compute) needs SSE streaming — a follow-up, tracked separately.
+`filter_degenerate` runs **post-hoc** on finished text (backstop). `stream_detect`
+adds Yi-Chia's **live** path: `async_client.chat_stream` streams the completion,
+feeds the same detector, and on a loop aborts the request and salvages a proof from
+the clean pre-loop prefix — reclaiming the wasted compute and preventing the stall,
+not just discarding output after the fact. Both default on and compose (streaming
+first, post-hoc backstop). Streaming's SSE/abort path is unit-tested against mocks
+but **needs a live-server smoke test** before it is trusted in production.
 
 Full write-up — thresholds, provenance, the post-hoc-vs-streaming limitation, and
 **measured degenerate-trace stats** (flag rates per problem, 0 false positives on
@@ -148,6 +152,7 @@ verifier_sees_self_evaluation: true    # already gold + upstream
 refiner_sees_self_evaluation: true     # upstream fed it
 lenient_parsing: false                 # upstream's strict parser
 filter_degenerate: false               # upstream has no loop filter
+stream_detect: false                   # upstream is blocking, no live detection
 refine_parents: 1                      # single-parent refine
 reviews_per_refine_parent: 1           # one review per parent
 refine_review_strategy: worst          # upstream's lowest-scoring review

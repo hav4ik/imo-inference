@@ -5,12 +5,14 @@ a repetition or runaway-enumeration loop — and why. Companion to
 [`CHANGES_VS_UPSTREAM.md`](../CHANGES_VS_UPSTREAM.md) and
 [`PARSING_VS_GOLD.md`](PARSING_VS_GOLD.md).
 
-**One-line summary:** a proof/verify generation that falls into a loop is dropped
-before it can pool, seed a refine, or score a proof — detected by the **gzip
-compression ratio** of the text (loops compress far more than real reasoning),
-using thresholds ported verbatim from Yi-Chia Chen's original solution. Fully
-switchable via `search.filter_degenerate` (default **on**). A separate
-`server.watchdog_timeout` bump keeps a long generation from crashing the server.
+**One-line summary:** a proof/verify generation that falls into a loop is detected
+by the **gzip compression ratio** of its text (loops compress far more than real
+reasoning) using thresholds ported verbatim from Yi-Chia Chen's original solution,
+and is stopped two ways: **live** while streaming (`search.stream_detect`, default
+on — abort the request and salvage a proof from the clean prefix) and **post-hoc**
+as a backstop (`search.filter_degenerate`, default on — never pool/refine/score a
+degenerate output). A separate `server.watchdog_timeout` bump keeps a long
+generation from crashing the server. All three are per-config switchable.
 
 ---
 
@@ -37,10 +39,12 @@ model **degenerates into loops on hard problems**, and nothing stopped it.
 | Fix | Knob | Effect |
 |---|---|---|
 | **Watchdog headroom** | `server.watchdog_timeout: 1200` (→ `--watchdog-timeout`) | A legitimately slow long forward no longer trips the watchdog. The same 880 s runaway would *complete* instead of killing the server. Prevents the crash directly. |
-| **Degenerate filter** | `search.filter_degenerate: true` | Detects and drops degenerate output so it never pools / seeds a refine / scores a proof. Attacks the root (the loops). |
+| **Streaming abort + salvage** | `search.stream_detect: true` | Detects the loop **live** and aborts the request, salvaging a proof from the clean prefix. Reclaims the wasted compute and prevents the stall at the source (§7). |
+| **Post-hoc filter** | `search.filter_degenerate: true` | Backstop on finished text: degenerate output never pools / seeds a refine / scores a proof (§5). |
 
-They are independent and composable: the watchdog stops the *crash*, the filter
-stops the *garbage* (and the wasted compute, once we add streaming — see §7).
+Independent and composable: the watchdog stops the *crash*; streaming stops the
+*runaway as it happens*; the post-hoc filter is the *backstop* for anything that
+slips through.
 
 ## 3. The signal: gzip, not a repetition penalty
 
@@ -107,36 +111,67 @@ at the two choke points in `proof_search.py`, both gated by
   its parsed score is discarded, so a looping verifier can't pollute a proof's
   `mean_score`.
 
-## 6. The config flag (how to disable)
+## 6. Config flags (how to disable)
 
-`search.filter_degenerate` (boolean, **default `true`**) gates the **entire**
-filtering feature — both the admit-side and verify-side checks. Set it to `false`
-to turn off *all* degenerate filtering:
+Two independent booleans under `search:`, both **default `true`**, both present and
+commented in **every** shipped config and type-validated by the strict schema
+(`eval_config.py`):
+
+| flag | default | disables |
+|---|---|---|
+| `filter_degenerate` | `true` | the **post-hoc** filter — the admit-side + verify-side checks (§5) |
+| `stream_detect` | `true` | the **streaming** live-abort + salvage (§7); calls fall back to plain blocking |
 
 ```yaml
 search:
-  filter_degenerate: false   # disables the whole gzip loop filter
+  filter_degenerate: true   # post-hoc backstop (keep on)
+  stream_detect: true       # real-time abort+salvage; false = blocking calls only
 ```
 
-It is present and commented in **every** shipped config so a human editing a
-config sees it. The strict schema (`eval_config.py`) validates it as a boolean.
-`server.watchdog_timeout` is likewise exposed and commented in every config.
+They compose: with both on, streaming aborts most loops live and the post-hoc
+filter is the backstop. Turning `stream_detect` off keeps the (validated) blocking
+path + post-hoc filter. Turning `filter_degenerate` off removes *all* degenerate
+handling. The server knob `server.watchdog_timeout` is likewise exposed and
+commented in every config.
 
 To reproduce upstream (Geremie) behavior for an A/B, also set
 `filter_degenerate: false` (upstream has no loop filter) — see the "reproduce
 upstream" recipe in `CHANGES_VS_UPSTREAM.md`.
 
-## 7. Limitation & follow-up: post-hoc vs streaming
+## 7. Real-time streaming detection + salvage (`search.stream_detect`)
 
-Our harness uses the **blocking** completion API, so the filter runs **post-hoc**
-on finished text. That keeps degenerate output out of the pool / refine seeds /
-scoring, but it does **not** stop the runaway *while it generates* — so the wasted
-~15 min of compute (and the server-stall risk, which the watchdog bump covers)
-remain. Yi-Chia's original runs the *same detector* **live during streaming** and
-aborts at the loop onset, keeping the clean pre-loop prefix and salvaging a short
-finalize. Porting that needs SSE streaming + server abort in `async_client.py`
-(and the `find_loop_cut` / salvage path) — a tracked follow-up. Thresholds and
-logic are already identical, so streaming is purely a *when it runs* change.
+The post-hoc filter (§5) keeps degenerate output out of results but can't stop a
+runaway *while it generates* — the wasted compute (and the stall risk the watchdog
+covers) remain. `search.stream_detect` (default **on**) adds Yi-Chia's live path:
+
+- **`async_client.chat_stream`** streams `/chat/completions` (`stream: true`,
+  `stream_options.include_usage`), feeds each delta to a `RunawayDetector`
+  (`loop_detect`, the same thresholds), and the moment it aborts, closes the stream
+  (SGLang aborts the request on client disconnect) and POSTs `/abort_request`
+  (belt-and-suspenders).
+- **Salvage** (`_salvage_stream_loop`): if the loop is in the *content* (a solution
+  body was being written), the proof is the clean content prefix → truncate at the
+  loop onset. If the loop is in the *reasoning*, cut the reasoning at the onset
+  (`loop_detect.loop_onset` — a verbatim `find_loop_cut`, else the zlib position
+  estimate) and **force-close** a short finalize through the existing `/generate`
+  continuation path — recovering a proof from the clean prefix instead of
+  discarding the whole call. A force-close that itself loops is cut again (guard).
+- Wired in **`CallStore.perform`**: when `stream_detect` is on, generations and
+  verifications go through `chat_stream` instead of `chat_raw`; the downstream
+  length-continuation and verifier-disposition logic is unchanged.
+
+The **post-hoc `filter_degenerate` still runs as the backstop** with streaming on
+(defense in depth: a loop that completes inside a single window, or a salvage that
+slips through, is still caught before it can score a proof).
+
+> ⚠️ **Needs a live-server smoke test before relying on it.** The SSE parsing and
+> the `/abort_request` contract are exercised here only by unit tests against mock
+> streams (no GPU/SGLang in CI — see `tests/test_stream_detect.py`). Before trusting
+> it in production, run one real problem with `stream_detect: true` and confirm:
+> streamed generations yield the same proofs as blocking; a known-looping P6
+> generation aborts early (the abort shows in the server log); salvaged proofs
+> parse. If anything is off, set `stream_detect: false` — the blocking path +
+> post-hoc `filter_degenerate` + `watchdog_timeout` are the validated fallback.
 
 ## 8. Provenance
 

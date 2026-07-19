@@ -57,6 +57,8 @@ search:
   lenient_parsing: true
   # gzip degenerate-loop filter (distribution-neutral, not a repetition penalty); false disables. See evaluation/DEGENERATE_FILTER.md
   filter_degenerate: true
+  # real-time streaming loop detection + salvage; false = plain blocking calls (post-hoc filter still applies). See evaluation/DEGENERATE_FILTER.md
+  stream_detect: true
   request_timeout_seconds: 86400
   concurrency: 96
   seed: 0

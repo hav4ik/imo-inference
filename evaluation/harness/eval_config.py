@@ -40,6 +40,7 @@ SEARCH_KEYS = {
     "solution_continuation_tokens", "verifier_continuation_tokens",
     "min_valid_verifications", "verifier_sees_self_evaluation",
     "refiner_sees_self_evaluation", "lenient_parsing", "filter_degenerate",
+    "stream_detect",
     "concurrency", "request_timeout_seconds", "seed",
 }
 
@@ -234,6 +235,8 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("search.lenient_parsing must be a boolean")
     if type(search["filter_degenerate"]) is not bool:
         raise ValueError("search.filter_degenerate must be a boolean")
+    if type(search["stream_detect"]) is not bool:
+        raise ValueError("search.stream_detect must be a boolean")
     if search["refine_review_strategy"] not in {"worst", "random_nonideal"}:
         raise ValueError(
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"
