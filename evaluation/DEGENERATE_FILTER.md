@@ -149,29 +149,37 @@ covers) remain. `search.stream_detect` (default **on**) adds Yi-Chia's live path
   (`loop_detect`, the same thresholds), and the moment it aborts, closes the stream
   (SGLang aborts the request on client disconnect) and POSTs `/abort_request`
   (belt-and-suspenders).
-- **Salvage** (`_salvage_stream_loop`): if the loop is in the *content* (a solution
-  body was being written), the proof is the clean content prefix → truncate at the
-  loop onset. If the loop is in the *reasoning*, cut the reasoning at the onset
-  (`loop_detect.loop_onset` — a verbatim `find_loop_cut`, else the zlib position
-  estimate) and **force-close** a short finalize through the existing `/generate`
-  continuation path — recovering a proof from the clean prefix instead of
-  discarding the whole call. A force-close that itself loops is cut again (guard).
+- **Salvage** (`_salvage_stream_loop`): recover a proof from the clean pre-loop
+  prefix instead of discarding the whole call. Cut at a verbatim `find_loop_cut`
+  where there is one, else `loop_onset` — a **length-relative** zlib estimate (the
+  recent window + sustained-soft run at the tail of *this* stream; it must not use
+  the global `verdict.position`, which counts reasoning+content and would over-cut).
+  Then:
+  - loop in the **content** (a `<solution>` body was already written): keep that
+    clean prefix and **force-close from it** so its closing `</solution>…<score>`
+    gets written — a bare truncation has no `<score>` and would fail to parse.
+  - loop in the **reasoning**: drop the looping tail and force-close a *fresh*
+    solution.
+  Both reuse the existing `/generate` continuation; a force-close that itself loops
+  is cut again (guard). (The content path was hardened per the audit — §10.)
 - Wired in **`CallStore.perform`**: when `stream_detect` is on, generations and
-  verifications go through `chat_stream` instead of `chat_raw`; the downstream
-  length-continuation and verifier-disposition logic is unchanged.
+  verifications go through `chat_stream` instead of `chat_raw`; the length-
+  continuation logic is unchanged. A **degenerate verifier** is folded into the
+  disposition here (`skipped_degenerate`, not `accepted`) so `mean_score`, the
+  `_verify_proof` filter, and the `final.json` valid/invalid tally read one
+  consistent source.
 
 The **post-hoc `filter_degenerate` still runs as the backstop** with streaming on
 (defense in depth: a loop that completes inside a single window, or a salvage that
 slips through, is still caught before it can score a proof).
 
-> ⚠️ **Needs a live-server smoke test before relying on it.** The SSE parsing and
-> the `/abort_request` contract are exercised here only by unit tests against mock
-> streams (no GPU/SGLang in CI — see `tests/test_stream_detect.py`). Before trusting
-> it in production, run one real problem with `stream_detect: true` and confirm:
-> streamed generations yield the same proofs as blocking; a known-looping P6
-> generation aborts early (the abort shows in the server log); salvaged proofs
-> parse. If anything is off, set `stream_detect: false` — the blocking path +
-> post-hoc `filter_degenerate` + `watchdog_timeout` are the validated fallback.
+> ✅ **Live-server smoke-tested (P1 + P6, both determinism modes).** Validated with
+> `stream_detect: true` on node0 (deterministic) and node1 (nondeterministic):
+> **P1 solves (self=1.0)** — byte-identical to blocking under deterministic inference,
+> same outcome nondeterministic; **P6 aborts + salvages 40+ loops with zero server
+> crashes** (the exact problem that crashed the blocking run); streamed proofs parse.
+> Fallback if ever needed: `stream_detect: false` → the blocking path + post-hoc
+> `filter_degenerate` + `watchdog_timeout`.
 
 ## 8. Provenance
 
@@ -252,3 +260,28 @@ this output from polluting results; a streaming early-abort (§7) would addition
 **Takeaway:** on real data the filter has **effectively zero false positives on
 normal output** and cleanly separates degenerate loops. Yi-Chia's thresholds hold
 up on our traces unchanged.
+
+## 10. Adversarial audit & fixes
+
+A 6-dimension adversarial council (loop detector, SSE client, salvage, `proof_search`
+wiring, config validation, determinism-removal safety), each finding then verified by
+a skeptic, found **no correctness or crash bug** — streaming reassembly, the abort
+path, the filter gates, and the nondeterministic-DFlash change all held up. Two real
+issues were fixed (commit `67a25c8`):
+
+- **① (medium) — salvage discarded a semantic content-loop.** When a loop tripped
+  mid-`<solution>` but was *non-verbatim* (zlib soft tier, so `find_loop_cut` returned
+  None), the old code fell through to a reasoning-only force-close — and because
+  `loop_onset` used the global `verdict.position`, it clamped to 0, force-closing from
+  *empty* reasoning and throwing the good proof away. This was the mechanism behind the
+  ~47 % P6 salvage rate. **Fix:** keep the clean `<solution>` prefix (via `loop_onset`
+  when there's no verbatim cut) and force-close *from it*; `loop_onset` is now
+  length-relative so it never clamps to 0 for a single stream (§7).
+- **③ (low) — verifier tally inconsistency.** A parseable-but-degenerate verifier was
+  dropped from `mean_score` but still counted `accepted` in `final.json`'s
+  valid/invalid tally. **Fix:** the degeneracy check moved into `perform`'s disposition
+  (`skipped_degenerate`), so all three consumers agree.
+
+Regression tests for both: `tests/test_stream_detect.py` (verbatim + semantic
+content-loop force-close), `tests/test_loop_detect.py` (`loop_onset` clamping),
+`tests/test_proof_search.py` (`skipped_degenerate` disposition).
