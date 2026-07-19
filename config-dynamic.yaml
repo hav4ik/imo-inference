@@ -41,6 +41,7 @@ server:
   swa_full_tokens_ratio: 0.2
   chunked_prefill_size: 2048
   stream_interval: 16
+  # sglang scheduler watchdog (seconds); SGLang default 300 crashed on a long P6 gen. See evaluation/DEGENERATE_FILTER.md
   watchdog_timeout: 1200
   prefill_cuda_graph_backend: tc_piecewise
   dflash_block_size: 8
@@ -84,6 +85,7 @@ search:
   # self-eval/suggestions. false = Geremie's strict whole-document XML.
   # (The float-score and empty-suggestions fixes apply in both.)
   lenient_parsing: true
+  # gzip degenerate-loop filter (distribution-neutral, not a repetition penalty); false disables. See evaluation/DEGENERATE_FILTER.md
   filter_degenerate: true
   request_timeout_seconds: 86400
   concurrency: 96

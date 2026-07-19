@@ -128,6 +128,11 @@ Because our harness uses the **blocking** completion API, the filter runs
 seeds / verifier scoring). Yi-Chia's *mid-generation* early-abort (which also saves
 the wasted compute) needs SSE streaming — a follow-up, tracked separately.
 
+Full write-up — thresholds, provenance, the post-hoc-vs-streaming limitation, and
+**measured degenerate-trace stats** (flag rates per problem, 0 false positives on
+clean output, token scale) — is in
+[`evaluation/DEGENERATE_FILTER.md`](evaluation/DEGENERATE_FILTER.md).
+
 ## Non-code / tooling additions (no behavior change)
 
 - `install/` — host-side installer for running the runtime outside the container

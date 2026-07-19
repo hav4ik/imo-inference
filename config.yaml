@@ -27,6 +27,10 @@ server:
   swa_full_tokens_ratio: 0.2
   chunked_prefill_size: 2048
   stream_interval: 16
+  # SGLang scheduler watchdog: max seconds a forward pass may make NO progress
+  # before the server SIGQUITs itself. SGLang's default (300) killed the whole
+  # server when a degenerate generation ran ~880s on IMO-2026 P6; 1200 gives a
+  # legitimately-slow long forward headroom. See evaluation/DEGENERATE_FILTER.md.
   watchdog_timeout: 1200
   prefill_cuda_graph_backend: tc_piecewise
   dflash_block_size: 8
@@ -73,6 +77,15 @@ search:
   # self-eval/suggestions. false = Geremie's strict whole-document XML.
   # (The float-score and empty-suggestions fixes apply in both.)
   lenient_parsing: true
+  # Degenerate-loop filter (gzip-based, distribution-neutral -- NOT a repetition
+  # penalty). true = drop any generation or verification whose text is a
+  # degenerate repetition/enumeration loop, so it never enters the proof pool,
+  # seeds a refine, or scores a proof. Detector (loop_detect.is_degenerate): a
+  # zlib sliding-window compression ratio (HARD abort <0.05, SOFT abort <0.18 for
+  # >=20 consecutive checks) plus a 25-char/1500-char local-density backstop --
+  # thresholds verbatim from Yi-Chia's v2, which Geremie's fork dropped. Legit
+  # long math (enumerations that recover) is spared. false = disable ALL
+  # degenerate filtering. Full write-up + measured stats: evaluation/DEGENERATE_FILTER.md.
   filter_degenerate: true
   request_timeout_seconds: 86400
   concurrency: 96

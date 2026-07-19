@@ -19,7 +19,14 @@ from proof_prompts import (  # noqa: E402
     prompt_hashes,
     refinement_messages,
 )
-from proof_search import CallStore, ProblemSearch, Proof, Verification  # noqa: E402
+from proof_search import (  # noqa: E402
+    Candidate,
+    CallSpec,
+    CallStore,
+    ProblemSearch,
+    Proof,
+    Verification,
+)
 
 
 class ScriptedClient:
@@ -1387,6 +1394,115 @@ class ProofSearchTests(unittest.TestCase):
                 self.assertEqual(final["calls_completed"], 6)
 
         asyncio.run(run())
+
+
+VALID_SOLUTION = (
+    "<solution>A rigorous proof of the claim.</solution>\n"
+    "<self_evaluation>All stated steps are justified.</self_evaluation>\n"
+    "<score>1</score>"
+)
+HARD_LOOP = "1, " * 6000  # degenerate token loop (zlib HARD tier)
+
+
+class DegenerateVerifierClient(ScriptedClient):
+    """Verifier returns a VALID, parseable score but a degenerate (looping)
+    reasoning_content -- so verification_disposition == 'accepted' and ONLY the
+    gzip loop filter can reject it (isolates the filter from XML-validity)."""
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        record = await super().chat_raw(messages, request_id=request_id, **kwargs)
+        if "/verify/" in request_id:
+            record["message"]["reasoning_content"] = HARD_LOOP
+        return record
+
+
+class DegenerateFilterTests(unittest.TestCase):
+    def _admit(self, reasoning, *, filter_degenerate=None):
+        config = small_config()
+        if filter_degenerate is not None:
+            config["filter_degenerate"] = filter_degenerate
+        with tempfile.TemporaryDirectory() as directory:
+            search = ProblemSearch(
+                problem_id="1",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=ScriptedClient(),
+                semaphore=asyncio.Semaphore(2),
+                config=config,
+            )
+            candidate = Candidate(
+                proof_id="r01-p0000",
+                round_index=1,
+                parent_id=None,
+                generation=CallSpec(
+                    sample_id="round-01/generate/r01-p0000",
+                    stage="round-01/generate",
+                    messages=[],
+                    seed=0,
+                ),
+            )
+            record = {
+                "finish_reason": "stop",
+                "content": VALID_SOLUTION,
+                "reasoning_content": reasoning,
+                "sample_id": "round-01/generate/r01-p0000",
+                "stage": "round-01/generate",
+            }
+            return search._admit_candidate(candidate, record)
+
+    def test_degenerate_generation_is_rejected(self):
+        # A proof whose reasoning looped to the cap must NOT enter the pool, even
+        # though its <solution> parses cleanly.
+        self.assertIsNone(self._admit(HARD_LOOP))
+
+    def test_clean_generation_is_admitted(self):
+        proof = self._admit("We argue by induction; each case is checked in turn.")
+        self.assertIsNotNone(proof)
+        self.assertEqual(proof.proof_id, "r01-p0000")
+
+    def test_filter_off_admits_degenerate_generation(self):
+        # filter_degenerate=false disables the whole feature -> the loop is admitted.
+        proof = self._admit(HARD_LOOP, filter_degenerate=False)
+        self.assertIsNotNone(proof)
+
+    def _verify_stats(self, *, filter_degenerate=None):
+        config = small_config()
+        if filter_degenerate is not None:
+            config["filter_degenerate"] = filter_degenerate
+        with tempfile.TemporaryDirectory() as directory:
+            search = ProblemSearch(
+                problem_id="1",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=DegenerateVerifierClient(),
+                semaphore=asyncio.Semaphore(2),
+                config=config,
+            )
+            proof = Proof(
+                proof_id="r01-p0000",
+                round_index=1,
+                parent_id=None,
+                proof="Proof.",
+                self_evaluation="Audit.",
+                self_score=1.0,
+                generation_sample_id="round-01/generate/r01-p0000",
+            )
+            search.proofs[proof.proof_id] = proof
+            return asyncio.run(search._verify_proof(proof)), proof
+
+    def test_degenerate_verifications_are_dropped(self):
+        # Every verifier score parses (disposition 'accepted') but every verifier
+        # reasoning is a loop -> all dropped as invalid, so the proof has no score.
+        stats, proof = self._verify_stats()
+        self.assertEqual(stats["valid"], 0)
+        self.assertEqual(stats["invalid"], small_config()["verifications_per_proof"])
+        self.assertEqual(proof.verifications, [])
+
+    def test_filter_off_keeps_degenerate_verifications(self):
+        stats, proof = self._verify_stats(filter_degenerate=False)
+        self.assertEqual(stats["valid"], small_config()["verifications_per_proof"])
+        self.assertEqual(stats["invalid"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
