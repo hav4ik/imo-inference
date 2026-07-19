@@ -169,8 +169,13 @@ def load_config(path: Path) -> dict[str, Any]:
     elif server["attention_backend"] == "fa3":
         if server["page_size"] != 1:
             raise ValueError("FA3 requires server.page_size=1")
-        if not server["deterministic_inference"]:
-            raise ValueError("FA3 requires deterministic inference")
+        # deterministic_inference is OPTIONAL on FA3. Yi-Chia's DFlash rollouts run
+        # FA3 nondeterministic (deploy/dflash/run_dflash_server.sh: no
+        # --enable-deterministic-inference); deterministic only adds batch-invariant
+        # reproducibility at a throughput cost. DFlash stays distribution-preserving
+        # either way (patch_dflash_sampling.py: the verifier is distribution-
+        # preserving for temp + top-p/top-k; determinism only fixes verifier coins to
+        # seed+position so batch order can't perturb output).
     else:
         # triton: the only sink-correct backend on Blackwell sm120. Supports both
         # deterministic and non-deterministic (it is in sglang's radix-deterministic

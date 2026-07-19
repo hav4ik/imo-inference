@@ -14,11 +14,13 @@ model:
   kv_cache_dtype: auto
 
 server:
-  # FA4 profile: fa4, page 128, nondeterministic.
-  # FA3 profile: fa3, page 1, deterministic.
+  # FA3 profile: fa3, page 1. deterministic_inference optional: false (default,
+  #   matches Yi-Chia's DFlash rollouts — faster) or true (batch-invariant
+  #   reproducibility at a throughput cost; DFlash is distribution-preserving either
+  #   way). FA4 profile: fa4, page 128, always nondeterministic.
   attention_backend: fa3
   page_size: 1
-  deterministic_inference: true
+  deterministic_inference: false
   host: 127.0.0.1
   port: 30000
   context_length: 262144

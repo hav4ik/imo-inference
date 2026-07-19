@@ -360,7 +360,6 @@ class RuntimeConfigTests(unittest.TestCase):
         invalid_values = (
             ("attention_backend", "flashinfer"),  # not one of fa3/fa4/triton
             ("page_size", 128),                    # fa3 requires page_size=1
-            ("deterministic_inference", False),    # fa3 requires deterministic
         )
         for key, value in invalid_values:
             with (
@@ -380,6 +379,19 @@ class RuntimeConfigTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     load_config(path)
+
+    def test_fa3_allows_either_determinism(self):
+        # fa3 no longer forces deterministic_inference: Yi-Chia's DFlash rollouts run
+        # fa3 nondeterministic, so both true and false are valid (page_size stays 1).
+        for det in (True, False):
+            def configure(config, det=det):
+                config["server"].update(
+                    attention_backend="fa3", page_size=1, deterministic_inference=det
+                )
+            with tempfile.TemporaryDirectory() as directory:
+                path = self.write_config(directory, configure, name="fa3.yaml")
+                server = load_config(path)["server"]
+            self.assertEqual(server["deterministic_inference"], det)
 
     def test_triton_backend_profile_is_accepted(self):
         # Blackwell: triton is valid with page_size=1; deterministic optional.

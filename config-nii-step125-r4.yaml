@@ -21,7 +21,7 @@ model:
 server:
   attention_backend: fa3
   page_size: 1
-  deterministic_inference: true
+  deterministic_inference: false
   host: 127.0.0.1
   port: 30000
   context_length: 262144
