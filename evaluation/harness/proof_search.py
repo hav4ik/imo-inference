@@ -6,6 +6,8 @@ import asyncio
 import hashlib
 import json
 import os
+import random
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -17,15 +19,36 @@ from loop_detect import is_degenerate
 from proof_prompts import (
     generation_messages,
     parse_generation,
+    parse_selected_id,
     parse_verification,
     refinement_messages,
+    selection_bundle,
+    selector_messages,
     verification_messages,
 )
+
+# The final LLM selector is a discrete pick-an-id task -> low temperature for format
+# stability (ycchen ran select/ at low temp), independent of the search temperature.
+SELECTION_TEMPERATURE = 0.3
 
 
 def stable_seed(base: int, *parts: str) -> int:
     material = "\0".join([str(base), *parts]).encode()
     return int.from_bytes(hashlib.sha256(material).digest()[:8], "big") % (2**31 - 1)
+
+
+def majority_winner(votes: list[str | None], rank_order: list[str]) -> str | None:
+    """The most-voted id; ties broken by rank_order (earliest = highest-ranked wins).
+    None if there are no non-null votes. Pure helper so it can be unit-tested."""
+    valid = [v for v in votes if v is not None]
+    if not valid:
+        return None
+    counts = Counter(valid)
+    top = max(counts.values())
+    for proof_id in rank_order:
+        if counts.get(proof_id, 0) == top:
+            return proof_id
+    return None
 
 
 def atomic_json(path: Path, value: Any) -> None:
@@ -331,14 +354,14 @@ class ProblemSearch:
             seed=stable_seed(self.config["seed"], self.problem_id, sample_id),
         )
 
-    async def _perform(self, spec: CallSpec) -> dict:
+    async def _perform(self, spec: CallSpec, temperature: float | None = None) -> dict:
         return await self.calls.perform(
             self.client,
             self.semaphore,
             self.config["max_completion_tokens"],
             self.config["solution_continuation_tokens"],
             self.config["verifier_continuation_tokens"],
-            self.config["temperature"],
+            self.config["temperature"] if temperature is None else temperature,
             self.config["top_p"],
             spec,
             lenient=self.config.get("lenient_parsing", True),
@@ -358,6 +381,57 @@ class ProblemSearch:
             if len(proof.verifications) >= required
         ]
         return sorted(verified, key=self._rank_key, reverse=True)
+
+    async def _select_final(self, ranked: list[Proof]) -> dict | None:
+        """ycchen-style LLM final selector with shuffled-ballot majority voting.
+
+        Each of ``selection_votes`` voters sees the top ``top_proofs`` candidates in an
+        INDEPENDENTLY shuffled order under fresh display IDs (P1, P2, ...), picks one via
+        ``<selected_id>`` at low temperature, and we majority-vote the CANONICAL proof_ids
+        (so position/label bias is averaged out). Returns the vote breakdown, or None when
+        there is nothing to choose or no valid ballot — in which case solve() keeps
+        ranked[0] (the current verifier-score behaviour). Selector-call failures degrade
+        to a null ballot; they never abort the run.
+        """
+        votes_n = int(self.config.get("selection_votes", 16))
+        candidates = ranked[: self.config["top_proofs"]]
+        if votes_n < 1 or len(candidates) < 2:
+            return None
+        rank_order = [p.proof_id for p in candidates]
+
+        async def _one_vote(i: int) -> str | None:
+            rng = random.Random(
+                stable_seed(self.config["seed"], self.problem_id, "select-shuffle", str(i))
+            )
+            order = list(candidates)
+            rng.shuffle(order)
+            id_map = {f"P{j + 1}": p.proof_id for j, p in enumerate(order)}
+            bundle = selection_bundle(
+                [(f"P{j + 1}", p.proof) for j, p in enumerate(order)]
+            )
+            spec = self._spec(
+                f"round-final/select/s{i:02d}",
+                "round-final/select",
+                selector_messages(self.problem, bundle),
+            )
+            try:
+                record = await self._perform(spec, temperature=SELECTION_TEMPERATURE)
+            except Exception:  # a broken selector ballot must not kill the run
+                return None
+            return id_map.get(parse_selected_id(record.get("content") or ""))
+
+        votes = list(await asyncio.gather(*(_one_vote(i) for i in range(votes_n))))
+        winner_id = majority_winner(votes, rank_order)
+        if winner_id is None:
+            return None
+        counts = Counter(v for v in votes if v is not None)
+        return {
+            "winner_id": winner_id,
+            "votes": votes,
+            "counts": dict(counts),
+            "valid_votes": sum(1 for v in votes if v is not None),
+            "total_votes": votes_n,
+        }
 
     async def _emit_round_checkpoint(self, summary: dict) -> None:
         if self.on_round_complete is None:
@@ -728,6 +802,19 @@ class ProblemSearch:
                 f"{minimum} valid verifications"
             )
         winner = ranked[0]
+        final_source = "verification_pool"
+        selection = None
+        if self.config.get("llm_selector", False):
+            selection = await self._select_final(ranked)
+            if selection is not None:
+                chosen = self.proofs.get(selection["winner_id"])
+                if chosen is not None:
+                    winner = chosen
+                    final_source = (
+                        f"llm_selector:{selection['winner_id']}("
+                        f"{selection['counts'].get(selection['winner_id'], 0)}/"
+                        f"{selection['total_votes']})"
+                    )
         verification_records = [
             record
             for record in self.calls.records.values()
@@ -736,7 +823,7 @@ class ProblemSearch:
         final = {
             "schema_version": 2,
             "problem_id": self.problem_id,
-            "final_source": "verification_pool",
+            "final_source": final_source,
             "selected_proof_id": winner.proof_id,
             "final_proof": winner.proof,
             "mean_verifier_score": winner.mean_score,
@@ -758,5 +845,7 @@ class ProblemSearch:
                 for record in verification_records
             ),
         }
+        if selection is not None:
+            final["selection"] = selection
         atomic_json(final_path, final)
         return final

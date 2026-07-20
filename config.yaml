@@ -97,6 +97,14 @@ search:
   # (filter_degenerate above still applies as the post-hoc backstop). Requires an
   # SGLang server that streams /chat/completions. See evaluation/DEGENERATE_FILTER.md.
   stream_detect: true
+  # Final LLM solution selector (ycchen gold "select-by-id" stage), OPTIONAL keys.
+  # When llm_selector is true, after the last round `selection_votes` voters each see
+  # the top `top_proofs` candidates in an independently shuffled order and pick one via
+  # <selected_id>; the majority-voted proof becomes the submission (ties -> higher rank),
+  # falling back to the top verifier-scored proof if no valid ballot. When absent/false,
+  # the final proof is the top verifier-scored one (unchanged). See evaluation/EXPERIMENTS.md.
+  llm_selector: false
+  selection_votes: 16
   request_timeout_seconds: 86400
   concurrency: 96
   seed: 0

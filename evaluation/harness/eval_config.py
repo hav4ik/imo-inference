@@ -43,6 +43,11 @@ SEARCH_KEYS = {
     "stream_detect",
     "concurrency", "request_timeout_seconds", "seed",
 }
+# Optional search knobs: present only when the operator opts in (kept out of
+# SEARCH_KEYS so existing configs stay valid without them, validated when supplied).
+# llm_selector: run ycchen's final LLM select-by-id stage (majority vote over shuffled
+# top candidates) instead of picking the top-ranked proof. selection_votes: # voters.
+OPTIONAL_SEARCH_KEYS = {"llm_selector", "selection_votes"}
 
 @dataclass(frozen=True)
 class ActiveModel:
@@ -129,12 +134,21 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("schema_version must be 12")
     for section, keys in (
         ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
-        ("search", SEARCH_KEYS),
     ):
         value = config[section]
         if not isinstance(value, dict):
             raise ValueError(f"{section} must be a mapping")
         _exact_keys(value, keys, section)
+    # search: SEARCH_KEYS required + OPTIONAL_SEARCH_KEYS allowed but not required.
+    if not isinstance(config["search"], dict):
+        raise ValueError("search must be a mapping")
+    actual = set(config["search"])
+    missing = SEARCH_KEYS - actual
+    extra = actual - SEARCH_KEYS - OPTIONAL_SEARCH_KEYS
+    if missing or extra:
+        raise ValueError(
+            f"search keys differ: missing={sorted(missing)}, extra={sorted(extra)}"
+        )
 
     for key, value in config["models"].items():
         if not isinstance(value, str) or not value.startswith("/"):
@@ -242,6 +256,10 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("search.filter_degenerate must be a boolean")
     if type(search["stream_detect"]) is not bool:
         raise ValueError("search.stream_detect must be a boolean")
+    if "llm_selector" in search and type(search["llm_selector"]) is not bool:
+        raise ValueError("search.llm_selector must be a boolean")
+    if "selection_votes" in search:
+        _positive_int(search["selection_votes"], "search.selection_votes")
     if search["refine_review_strategy"] not in {"worst", "random_nonideal"}:
         raise ValueError(
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"

@@ -34,6 +34,14 @@ _SELF_EVALUATION = re.compile(
 )
 _SCORE = re.compile(r"<score>(.*?)</score>", re.IGNORECASE | re.DOTALL)
 
+# Selector output: the model picks one candidate by ID. Same 3-tier tolerance as
+# ycchen's gold parser (proof_agent/parser.py parse_selected_id): a well-formed
+# <selected_id>P#</selected_id>, then an unclosed tag (this model's quirk), then a
+# last-resort bare P#/R# token in the answer.
+_SELECTED_ID = re.compile(r"<selected_id>\s*([PR]\d+)\s*</selected_id>", re.IGNORECASE)
+_SELECTED_ID_OPEN = re.compile(r"<selected_id>\s*([PR]\d+)", re.IGNORECASE)
+_SELECTED_ID_BARE = re.compile(r"\b([PR]\d+)\b")
+
 # Strict whole-document contract (Geremie's original), reachable via
 # lenient_parsing=false. The score group stays permissive because accepting
 # "1.0"/"0.0" is a blatant bug fix applied in both modes.
@@ -182,6 +190,49 @@ def parse_generation(text: str, lenient: bool = True) -> tuple[str, str, float]:
     if score is None:
         raise ValueError("generation has no valid <score> (0, 0.5, or 1)")
     return proof, self_evaluation, score
+
+
+def selection_bundle(candidates: list[tuple[str, str]]) -> str:
+    """XML bundle of candidate proofs for the selector (gold build_select_bundle):
+    each candidate is one ``<candidate id="..."><proof>...</proof></candidate>`` block,
+    proof only (no verifier reviews, no self-eval, no rank labels). ``candidates`` is
+    (display_id, proof_text) in the exact order to present them to the model.
+    """
+    parts: list[str] = []
+    for display_id, proof in candidates:
+        parts += [
+            f'<candidate id="{display_id}">',
+            "<proof>",
+            proof or "",
+            "</proof>",
+            "</candidate>",
+        ]
+    return "\n".join(parts)
+
+
+def selector_messages(problem: str, bundle: str) -> list[dict[str, str]]:
+    """Render the final-selection prompt (byte-faithful ycchen selector.txt)."""
+    rendered = (
+        template("selector.txt")
+        .replace("{problem}", problem)
+        .replace("{selection_bundle}", bundle)
+    )
+    return _messages(rendered)
+
+
+def parse_selected_id(text: str) -> str | None:
+    """The candidate ID the selector chose (upper-cased), or None.
+
+    3-tier tolerance matching ycchen's gold parser: prefer a well-formed
+    ``<selected_id>P#</selected_id>``, then an unclosed tag, then the last bare
+    P#/R# token. Always returns the LAST match (the model's final answer).
+    """
+    text = text or ""
+    for pattern in (_SELECTED_ID, _SELECTED_ID_OPEN, _SELECTED_ID_BARE):
+        matches = pattern.findall(text)
+        if matches:
+            return matches[-1].upper()
+    return None
 
 
 def parse_verification(text: str, lenient: bool = True) -> tuple[str, float]:
