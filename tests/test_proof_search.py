@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # for real_trace_fixtu
 from proof_prompts import (  # noqa: E402
     generation_messages,
     parse_generation,
+    parse_selected_id,
     parse_verification,
     prompt_hashes,
     refinement_messages,
@@ -1516,41 +1517,57 @@ class DegenerateFilterTests(unittest.TestCase):
 
 
 class SelectStageLengthClient(ScriptedClient):
-    """A select-stage ballot that rambled past the token cap: finish_reason=='length'.
+    """A select-stage ballot that rambled to its token budget (finish_reason=='length').
 
-    `content` is whatever text is passed in (default empty -> no parseable tag).
+    On the length-recovery force-close, ``continue_selection_raw`` returns ``forced`` as the
+    recovered ``<selected_id>`` pick (finish 'stop'); if ``forced`` is None it returns
+    another length with no tag (force-close itself failed to decide).
     """
 
-    def __init__(self, content: str = ""):
+    def __init__(self, content: str = "", forced: str | None = None):
         super().__init__()
         self._content = content
+        self._forced = forced
+        self.continued = 0
+
+    def _resp(self, content, finish):
+        return {
+            "message": {"content": content, "reasoning_content": "still deliberating"},
+            "finish_reason": finish,
+            "prompt_tokens": 10,
+            "cached_prompt_tokens": 9,
+            "completion_tokens": 56000,
+            "reasoning_tokens": 56000,
+            "requested_max_completion_tokens": 56000,
+            "logical_max_completion_tokens": 56000,
+            "physical_request_count": 1,
+            "physical_prompt_tokens": 10,
+            "segments": [{"kind": "chat", "finish_reason": finish}],
+            "latency_s": 0.01,
+        }
 
     async def chat_raw(self, messages, *, request_id, **kwargs):
         self.calls.append(request_id)
         self.kwargs.append(kwargs)
         self.messages[request_id] = messages
-        return {
-            "message": {"content": self._content, "reasoning_content": "still deliberating"},
-            "finish_reason": "length",
-            "prompt_tokens": 10,
-            "cached_prompt_tokens": 9,
-            "completion_tokens": 128000,
-            "reasoning_tokens": 128000,
-            "requested_max_completion_tokens": 128000,
-            "logical_max_completion_tokens": 128000,
-            "physical_request_count": 1,
-            "physical_prompt_tokens": 10,
-            "segments": [{"kind": "chat", "finish_reason": "length"}],
-            "latency_s": 0.01,
-        }
+        return self._resp(self._content, "length")
+
+    async def continue_selection_raw(
+        self, initial, messages, *, max_new_tokens, temperature, top_p, seed, request_id
+    ):
+        self.continued += 1
+        self.kwargs.append({"max_new_tokens": max_new_tokens})
+        if self._forced is None:
+            return self._resp("still cannot decide", "length")
+        return self._resp(f"<selected_id>{self._forced}</selected_id>", "stop")
 
 
-class SelectorLengthCrashTests(unittest.TestCase):
-    """Regression: a parserless stage (round-final/select) that finishes with
-    finish_reason=='length' must NOT crash on parser(None). Before the fix this raised
-    TypeError("'NoneType' object is not callable") at the length-recovery re-parse."""
+class SelectorForceCloseTests(unittest.TestCase):
+    """The round-final/select stage force-closes a length-truncated ballot (</think> +
+    <selected_id>) so it still votes, instead of crashing (parser is None) or nulling."""
 
-    def _perform(self, client, stage="round-final/select"):
+    def _perform(self, client, *, selection_continuation_tokens=2048,
+                 stage="round-final/select"):
         with tempfile.TemporaryDirectory() as directory:
             store = CallStore(Path(directory))
             spec = CallSpec(
@@ -1563,31 +1580,57 @@ class SelectorLengthCrashTests(unittest.TestCase):
                 store.perform(
                     client,
                     asyncio.Semaphore(4),
-                    128000,  # max_completion_tokens
+                    56000,   # max_completion_tokens
                     16384,   # solution_continuation_tokens
                     16384,   # verifier_continuation_tokens
                     0.3,     # temperature
                     0.95,    # top_p
                     spec,
+                    selection_continuation_tokens=selection_continuation_tokens,
                 )
             )
 
-    def test_select_length_does_not_crash(self):
-        record = self._perform(SelectStageLengthClient())
+    def test_length_force_closes_and_recovers_vote(self):
+        client = SelectStageLengthClient(forced="P3")
+        record = self._perform(client, selection_continuation_tokens=777)
         self.assertIsNone(record["error"])
+        self.assertEqual(client.continued, 1)  # force-close was invoked
+        self.assertEqual(parse_selected_id(record["content"]), "P3")
+        # was_length + recovered -> finish_reason normalized to stop
+        self.assertEqual(record["finish_reason"], "stop")
+        # the small continuation budget was passed through, not the full cap
+        self.assertIn(777, [k.get("max_new_tokens") for k in client.kwargs])
+
+    def test_length_force_close_fails_gracefully(self):
+        # Force-close still yields no tag -> null ballot, but NO crash and NO error record.
+        client = SelectStageLengthClient(forced=None)
+        record = self._perform(client)
+        self.assertIsNone(record["error"])
+        self.assertEqual(client.continued, 1)
         self.assertEqual(record["finish_reason"], "length")
-        self.assertFalse(record["xml_valid"])
+        self.assertIsNone(parse_selected_id(record["content"]))
 
-    def test_select_length_preserves_truncated_content_for_salvage(self):
-        # If the model DID emit a tag before hitting the cap, the content survives so
-        # parse_selected_id can still salvage the vote.
-        from proof_prompts import parse_selected_id
-
-        record = self._perform(
-            SelectStageLengthClient("<selected_id>P2</selected_id> then kept rambling")
+    def test_tag_already_present_skips_continuation(self):
+        # A tag emitted before truncation is salvaged without spending a force-close call.
+        client = SelectStageLengthClient(
+            content="<selected_id>P2</selected_id> then kept rambling", forced="P9"
         )
+        record = self._perform(client)
         self.assertIsNone(record["error"])
+        self.assertEqual(client.continued, 0)
         self.assertEqual(parse_selected_id(record["content"]), "P2")
+        self.assertEqual(record["finish_reason"], "stop")
+
+
+class SelectorRoleWiringTests(unittest.TestCase):
+    def test_selector_role_registered_in_client_maps(self):
+        import async_client as ac
+
+        self.assertEqual(ac._ROLE_TAG["selector"], "<selected_id>")
+        self.assertIs(ac._ROLE_STEER["selector"], ac._FORCE_SELECTION_STEER)
+        self.assertFalse(ac._ROLE_PRESERVE["selector"])
+        self.assertIn("</think>", ac._FORCE_SELECTION_STEER)
+        self.assertTrue(ac._FORCE_SELECTION_STEER.rstrip().endswith("<selected_id>"))
 
 
 if __name__ == "__main__":

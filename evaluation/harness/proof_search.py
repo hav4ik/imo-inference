@@ -171,6 +171,7 @@ class CallStore:
         lenient: bool = True,
         stream_detect: bool = False,
         filter_degenerate: bool = True,
+        selection_continuation_tokens: int = 2048,
     ) -> dict:
         existing = self.records.get(spec.sample_id)
         if existing is not None:
@@ -182,6 +183,7 @@ class CallStore:
         prompt_sha256 = self._save_prompt(spec.messages)
         is_proof_generation = spec.stage.endswith("/generate")
         is_verification = "/verify/" in spec.stage
+        is_selection = spec.stage.endswith("/select")
         try:
             async with semaphore:
                 if stream_detect and (is_proof_generation or is_verification):
@@ -226,12 +228,15 @@ class CallStore:
                         xml_error = str(error)
                     else:
                         xml_valid = True
-                # The length-recovery block below re-parses via `parser`, so it must
-                # only run when a parser exists. Stages with no parser (e.g. the
-                # round-final/select LLM selector) have nothing to continue or re-parse;
-                # skipping keeps a length-truncated call as a normal (unparseable) record
-                # instead of crashing on parser(None). See tests/test_proof_search.py.
-                if was_length and not xml_valid and parser is not None:
+                elif is_selection:
+                    # "valid" for the parserless selector = a <selected_id> is present.
+                    xml_valid = parse_selected_id(content) is not None
+                # Length-recovery: force-close the reasoning and continue so a call that
+                # rambled to the token budget can still yield its structured answer.
+                # Generate/verify re-validate via `parser`; the selector re-checks for a
+                # <selected_id>. A parserless, non-selector stage has nothing to recover,
+                # so it is skipped (keeps a normal unparseable record, never parser(None)).
+                if was_length and not xml_valid and (parser is not None or is_selection):
                     if is_proof_generation:
                         response = await client.continue_solution_raw(
                             response,
@@ -252,15 +257,29 @@ class CallStore:
                             seed=spec.seed,
                             request_id=spec.sample_id,
                         )
+                    elif is_selection:
+                        response = await client.continue_selection_raw(
+                            response,
+                            spec.messages,
+                            max_new_tokens=selection_continuation_tokens,
+                            temperature=temperature,
+                            top_p=top_p,
+                            seed=spec.seed,
+                            request_id=spec.sample_id,
+                        )
                     content = response["message"].get("content") or ""
-                    try:
-                        parser(content, lenient=lenient)
-                    except ValueError as error:
-                        xml_valid = False
-                        xml_error = str(error)
-                    else:
-                        xml_valid = True
-                        xml_error = None
+                    if parser is not None:
+                        try:
+                            parser(content, lenient=lenient)
+                        except ValueError as error:
+                            xml_valid = False
+                            xml_error = str(error)
+                        else:
+                            xml_valid = True
+                            xml_error = None
+                    elif is_selection:
+                        xml_valid = parse_selected_id(content) is not None
+                        xml_error = None if xml_valid else "no <selected_id> after force-close"
                 if was_length and xml_valid:
                     response["finish_reason"] = "stop"
                     response["xml_complete_after_length"] = True
@@ -360,10 +379,19 @@ class ProblemSearch:
         )
 
     async def _perform(self, spec: CallSpec, temperature: float | None = None) -> dict:
+        # The selector gets its own (smaller) reasoning budget; a ballot that rambles to
+        # it is force-closed (</think> + <selected_id>) and continued so it still votes,
+        # instead of burning the full max_completion_tokens and returning a null ballot.
+        is_selection = spec.stage.endswith("/select")
+        max_completion_tokens = (
+            int(self.config.get("selection_max_tokens", self.config["max_completion_tokens"]))
+            if is_selection
+            else self.config["max_completion_tokens"]
+        )
         return await self.calls.perform(
             self.client,
             self.semaphore,
-            self.config["max_completion_tokens"],
+            max_completion_tokens,
             self.config["solution_continuation_tokens"],
             self.config["verifier_continuation_tokens"],
             self.config["temperature"] if temperature is None else temperature,
@@ -372,6 +400,9 @@ class ProblemSearch:
             lenient=self.config.get("lenient_parsing", True),
             stream_detect=self.config.get("stream_detect", False),
             filter_degenerate=self.config.get("filter_degenerate", True),
+            selection_continuation_tokens=int(
+                self.config.get("selection_continuation_tokens", 2048)
+            ),
         )
 
     def _rank_key(self, proof: Proof) -> tuple[float, int, float, int]:

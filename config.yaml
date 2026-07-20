@@ -109,6 +109,13 @@ search:
   llm_selector: false
   selection_votes: 16
   selection_candidates: 4
+  # Per-ballot selector reasoning budget. A ballot that rambles to this cap is
+  # force-closed (</think> + <selected_id>) and continued for selection_continuation_tokens
+  # so it still votes, instead of burning max_completion_tokens and returning a null ballot.
+  # Set above the natural conclusion length (~32k observed) so real deliberation is untouched
+  # and only runaways are force-closed. Offline analog of gold's time-derived selector cap.
+  selection_max_tokens: 56000
+  selection_continuation_tokens: 2048
   request_timeout_seconds: 86400
   concurrency: 96
   seed: 0

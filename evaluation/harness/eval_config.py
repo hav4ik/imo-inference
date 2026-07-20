@@ -50,7 +50,17 @@ SEARCH_KEYS = {
 # selection_candidates: how many top-ranked proofs the selector re-ranks (the model was
 # only trained to choose among a small set; keep this at ycchen's trained regime, ~4 —
 # it is INTENTIONALLY decoupled from top_proofs, which sizes the refinement parent pool).
-OPTIONAL_SEARCH_KEYS = {"llm_selector", "selection_votes", "selection_candidates"}
+# selection_max_tokens: reasoning budget per selector ballot; a ballot that hits it is
+# force-closed (</think> + <selected_id>) and continued so it still casts a vote (offline
+# analog of gold's time-derived selector cap). Defaults to max_completion_tokens if absent.
+# selection_continuation_tokens: budget for that forced answer after the force-close.
+OPTIONAL_SEARCH_KEYS = {
+    "llm_selector",
+    "selection_votes",
+    "selection_candidates",
+    "selection_max_tokens",
+    "selection_continuation_tokens",
+}
 
 @dataclass(frozen=True)
 class ActiveModel:
@@ -265,6 +275,13 @@ def load_config(path: Path) -> dict[str, Any]:
         _positive_int(search["selection_votes"], "search.selection_votes")
     if "selection_candidates" in search:
         _positive_int(search["selection_candidates"], "search.selection_candidates")
+    if "selection_max_tokens" in search:
+        _positive_int(search["selection_max_tokens"], "search.selection_max_tokens")
+    if "selection_continuation_tokens" in search:
+        _positive_int(
+            search["selection_continuation_tokens"],
+            "search.selection_continuation_tokens",
+        )
     if search["refine_review_strategy"] not in {"worst", "random_nonideal"}:
         raise ValueError(
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"

@@ -26,11 +26,25 @@ _FORCE_VERIFICATION_STEER = (
     "\n</think>\n\n<evaluation>\n"
 )
 
+_FORCE_SELECTION_STEER = (
+    "\n\nI must finalize now. I will output ONLY the chosen candidate's ID in the "
+    "required tag, with no further reasoning or commentary."
+    "\n</think>\n\n<selected_id>"
+)
+
 # role -> (opening XML tag, force-close steer, whether to preserve untagged content),
 # used by the streaming salvage force-close (same mapping continue_*_raw applies).
-_ROLE_TAG = {"solution": "<solution>", "verifier": "<evaluation>"}
-_ROLE_STEER = {"solution": _FORCE_SOLUTION_STEER, "verifier": _FORCE_VERIFICATION_STEER}
-_ROLE_PRESERVE = {"solution": False, "verifier": True}
+_ROLE_TAG = {
+    "solution": "<solution>",
+    "verifier": "<evaluation>",
+    "selector": "<selected_id>",
+}
+_ROLE_STEER = {
+    "solution": _FORCE_SOLUTION_STEER,
+    "verifier": _FORCE_VERIFICATION_STEER,
+    "selector": _FORCE_SELECTION_STEER,
+}
+_ROLE_PRESERVE = {"solution": False, "verifier": True, "selector": False}
 
 
 def _usage(data: dict) -> dict:
@@ -592,4 +606,31 @@ class AsyncChatClient:
             opening_tag="<evaluation>",
             force_steer=_FORCE_VERIFICATION_STEER,
             preserve_untagged_content=True,
+        )
+
+    async def continue_selection_raw(
+        self,
+        initial: dict,
+        messages: list[dict],
+        *,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        seed: int,
+        request_id: str,
+    ) -> dict:
+        # Force-close a selector ballot that rambled to the token budget: inject
+        # </think> + <selected_id> and continue just far enough to emit the chosen id.
+        return await self._continue_xml_raw(
+            initial,
+            messages,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            seed=seed,
+            request_id=request_id,
+            role="selector",
+            opening_tag="<selected_id>",
+            force_steer=_FORCE_SELECTION_STEER,
+            preserve_untagged_content=False,
         )
