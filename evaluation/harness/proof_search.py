@@ -226,7 +226,12 @@ class CallStore:
                         xml_error = str(error)
                     else:
                         xml_valid = True
-                if was_length and not xml_valid:
+                # The length-recovery block below re-parses via `parser`, so it must
+                # only run when a parser exists. Stages with no parser (e.g. the
+                # round-final/select LLM selector) have nothing to continue or re-parse;
+                # skipping keeps a length-truncated call as a normal (unparseable) record
+                # instead of crashing on parser(None). See tests/test_proof_search.py.
+                if was_length and not xml_valid and parser is not None:
                     if is_proof_generation:
                         response = await client.continue_solution_raw(
                             response,

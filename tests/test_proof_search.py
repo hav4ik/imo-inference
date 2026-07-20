@@ -1515,5 +1515,80 @@ class DegenerateFilterTests(unittest.TestCase):
         self.assertTrue(all(d == "accepted" for d in dispositions))
 
 
+class SelectStageLengthClient(ScriptedClient):
+    """A select-stage ballot that rambled past the token cap: finish_reason=='length'.
+
+    `content` is whatever text is passed in (default empty -> no parseable tag).
+    """
+
+    def __init__(self, content: str = ""):
+        super().__init__()
+        self._content = content
+
+    async def chat_raw(self, messages, *, request_id, **kwargs):
+        self.calls.append(request_id)
+        self.kwargs.append(kwargs)
+        self.messages[request_id] = messages
+        return {
+            "message": {"content": self._content, "reasoning_content": "still deliberating"},
+            "finish_reason": "length",
+            "prompt_tokens": 10,
+            "cached_prompt_tokens": 9,
+            "completion_tokens": 128000,
+            "reasoning_tokens": 128000,
+            "requested_max_completion_tokens": 128000,
+            "logical_max_completion_tokens": 128000,
+            "physical_request_count": 1,
+            "physical_prompt_tokens": 10,
+            "segments": [{"kind": "chat", "finish_reason": "length"}],
+            "latency_s": 0.01,
+        }
+
+
+class SelectorLengthCrashTests(unittest.TestCase):
+    """Regression: a parserless stage (round-final/select) that finishes with
+    finish_reason=='length' must NOT crash on parser(None). Before the fix this raised
+    TypeError("'NoneType' object is not callable") at the length-recovery re-parse."""
+
+    def _perform(self, client, stage="round-final/select"):
+        with tempfile.TemporaryDirectory() as directory:
+            store = CallStore(Path(directory))
+            spec = CallSpec(
+                sample_id="round-final/select/s00",
+                stage=stage,
+                messages=[{"role": "user", "content": "pick one"}],
+                seed=0,
+            )
+            return asyncio.run(
+                store.perform(
+                    client,
+                    asyncio.Semaphore(4),
+                    128000,  # max_completion_tokens
+                    16384,   # solution_continuation_tokens
+                    16384,   # verifier_continuation_tokens
+                    0.3,     # temperature
+                    0.95,    # top_p
+                    spec,
+                )
+            )
+
+    def test_select_length_does_not_crash(self):
+        record = self._perform(SelectStageLengthClient())
+        self.assertIsNone(record["error"])
+        self.assertEqual(record["finish_reason"], "length")
+        self.assertFalse(record["xml_valid"])
+
+    def test_select_length_preserves_truncated_content_for_salvage(self):
+        # If the model DID emit a tag before hitting the cap, the content survives so
+        # parse_selected_id can still salvage the vote.
+        from proof_prompts import parse_selected_id
+
+        record = self._perform(
+            SelectStageLengthClient("<selected_id>P2</selected_id> then kept rambling")
+        )
+        self.assertIsNone(record["error"])
+        self.assertEqual(parse_selected_id(record["content"]), "P2")
+
+
 if __name__ == "__main__":
     unittest.main()
