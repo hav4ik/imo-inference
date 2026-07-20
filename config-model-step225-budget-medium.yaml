@@ -1,8 +1,8 @@
-# IMO-2026 budget-scaling experiment: step225 checkpoint, 1x search budget.
-# One of config-model-{deploy,step225}-budget-{1x,2x,4x}.yaml. These 6 configs
+# IMO-2026 budget-scaling experiment: step225 checkpoint, medium search budget.
+# One of config-model-{deploy,step225}-budget-{medium,high,xhigh}.yaml. These 6 configs
 # vary ONLY the search budget; refine_parents(4) x reviews_per_refine_parent(3) =
 # the training limit is held constant, as are the server topology and the selector.
-# 1x: proofs_per_round=32, verifications_per_proof=16,
+# medium: proofs_per_round=32, verifications_per_proof=16,
 #     top_proofs=8, refine_parents=4, reviews_per_refine_parent=3, max_rounds=4.
 schema_version: 12
 
@@ -95,4 +95,4 @@ traces:
   private: true
   # Name THIS experiment (its subfolder). Change per run alongside bf16_target:
   #   deploy -> imo2026-deploy-r4 ; step-225 -> imo2026-step225-r4 ; step-125 -> imo2026-step125-r4
-  run_name: imo2026-step225-budget-1x
+  run_name: imo2026-step225-budget-medium

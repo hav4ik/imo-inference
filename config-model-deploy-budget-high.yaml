@@ -1,13 +1,13 @@
-# IMO-2026 budget-scaling experiment: step225 checkpoint, 4x search budget.
-# One of config-model-{deploy,step225}-budget-{1x,2x,4x}.yaml. These 6 configs
+# IMO-2026 budget-scaling experiment: deploy checkpoint, high search budget.
+# One of config-model-{deploy,step225}-budget-{medium,high,xhigh}.yaml. These 6 configs
 # vary ONLY the search budget; refine_parents(4) x reviews_per_refine_parent(3) =
 # the training limit is held constant, as are the server topology and the selector.
-# 4x: proofs_per_round=128, verifications_per_proof=64,
-#     top_proofs=32, refine_parents=4, reviews_per_refine_parent=3, max_rounds=8.
+# high: proofs_per_round=64, verifications_per_proof=32,
+#     top_proofs=16, refine_parents=4, reviews_per_refine_parent=3, max_rounds=8.
 schema_version: 12
 
 models:
-  bf16_target: /tmp/chankhavu/models/opd-32b-bf16-step-225
+  bf16_target: /tmp/chankhavu/models/opd-32b-deploy
   # quantized_* are inactive (quantized: false); paths must be absolute per schema.
   quantized_target: /tmp/chankhavu/models/opd-32b-v33-s200-gptq-w4a16
   bf16_draft: /tmp/chankhavu/models/dflash-32b-draft-v2test-phaseL
@@ -40,16 +40,16 @@ server:
   dflash_window_size: 512
 
 search:
-  proofs_per_round: 128
-  verifications_per_proof: 64
-  top_proofs: 32
+  proofs_per_round: 64
+  verifications_per_proof: 32
+  top_proofs: 16
   # Gold-style refinement: each of proofs_per_round refine calls merges
   # refine_parents stratified-random parents from the top_proofs pool, each with
   # up to reviews_per_refine_parent random non-ideal reviews.
   refine_parents: 4
   reviews_per_refine_parent: 3
   refine_review_strategy: random_nonideal
-  # Total rounds: round 1 = initial 128-proof generation, rounds 2..N = self-
+  # Total rounds: round 1 = initial 64-proof generation, rounds 2..N = self-
   # refinement. 8 => 1 generation + up to 7 refinement rounds.
   max_rounds: 8
   early_stop_threshold: 0.99999
@@ -95,4 +95,4 @@ traces:
   private: true
   # Name THIS experiment (its subfolder). Change per run alongside bf16_target:
   #   deploy -> imo2026-deploy-r4 ; step-225 -> imo2026-step225-r4 ; step-125 -> imo2026-step125-r4
-  run_name: imo2026-step225-budget-4x
+  run_name: imo2026-deploy-budget-high
