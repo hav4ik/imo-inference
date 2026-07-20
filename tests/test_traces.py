@@ -35,12 +35,11 @@ class TracesConfigValidationTests(unittest.TestCase):
             return load_config(path)
 
     def test_base_config_has_valid_traces_section(self):
-        # config.yaml ships trace upload DISABLED with a neutral placeholder repo
-        # (self-contained default; a run uploads nowhere unless the user opts in).
         self.assertIn("traces", self.base)
-        self.assertFalse(self.base["traces"]["enabled"])
+        self.assertTrue(self.base["traces"]["enabled"])
         self.assertEqual(
-            self.base["traces"]["dataset_repo"], "your-org/proof-pilot-traces"
+            self.base["traces"]["dataset_repo"],
+            "imo2026-challenge/chankhavu-imo-reasoning-traces",
         )
 
     def test_traces_section_is_optional(self):
@@ -64,14 +63,11 @@ class TracesConfigValidationTests(unittest.TestCase):
             self._load(lambda c: c["traces"].update(interval_seconds=0))
 
     def test_enabled_requires_owner_slash_name_repo(self):
-        # The owner/name check only runs when traces are ENABLED, so enable them.
         for bad in ("", "no-slash", "a/b/c", "/leading", "trailing/"):
             with self.subTest(repo=bad), self.assertRaisesRegex(
                 ValueError, "dataset_repo"
             ):
-                self._load(
-                    lambda c, bad=bad: c["traces"].update(enabled=True, dataset_repo=bad)
-                )
+                self._load(lambda c, bad=bad: c["traces"].update(dataset_repo=bad))
 
     def test_enabled_allows_empty_secrets_file(self):
         # "" -> use the ambient HF token; valid when enabled.

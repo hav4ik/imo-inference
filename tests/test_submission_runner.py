@@ -309,21 +309,10 @@ class TracesTokenGatingTests(unittest.IsolatedAsyncioTestCase):
             input_path = root / "test.csv"
             output_path = root / "submission.csv"
             input_path.write_text("id,problem\n0,Prove the claim.\n", encoding="utf-8")
-            # config.yaml ships traces DISABLED; force an ENABLED section so the
-            # token-gating branch is what's under test (not the enabled flag).
-            enabled_traces = {
-                "enabled": True,
-                "dataset_repo": "example/traces",
-                "secrets_file": "",
-                "interval_seconds": 600,
-                "private": True,
-                "run_name": "",
-            }
             with (
                 patch.object(submission_runner, "AsyncChatClient", _FakeClient),
                 patch.object(submission_runner, "ProblemSearch", _FakeSearch),
                 patch.object(submission_runner, "TraceUploader", _RecordingUploader),
-                patch.object(submission_runner, "traces_config", lambda cfg: dict(enabled_traces)),
             ):
                 await submission_runner.run_submission(
                     REPO / "config.yaml", input_path, output_path, root / "artifacts"
