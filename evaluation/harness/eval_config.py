@@ -16,10 +16,18 @@ ROOT_KEYS = {"schema_version", "models", "model", "server", "search"}
 # Optional top-level sections: present only when the operator opts in. Kept out of
 # ROOT_KEYS so existing configs stay valid without them, but validated strictly
 # when supplied.
-OPTIONAL_ROOT_KEYS = {"traces"}
+OPTIONAL_ROOT_KEYS = {"traces", "review_dedup"}
 TRACES_KEYS = {
     "enabled", "dataset_repo", "secrets_file", "interval_seconds", "private",
     "run_name",
+}
+REVIEW_DEDUP_KEYS = {
+    "enabled",
+    "model",
+    "base_url",
+    "keep_ratio",
+    "max_concurrency",
+    "request_timeout_seconds",
 }
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
@@ -323,6 +331,16 @@ def load_config(path: Path) -> dict[str, Any]:
 
     if "traces" in config:
         _validate_traces(config["traces"])
+    if "review_dedup" in config:
+        _validate_review_dedup(config["review_dedup"])
+        if (
+            config["review_dedup"]["enabled"]
+            and search["refine_review_strategy"] != "random_nonideal"
+        ):
+            raise ValueError(
+                "review_dedup requires "
+                "search.refine_review_strategy='random_nonideal'"
+            )
 
     return config
 
@@ -349,6 +367,42 @@ def _validate_traces(traces: Any) -> None:
             )
         # secrets_file is OPTIONAL: "" means use the ambient HF token
         # (HF_TOKEN env var or `hf auth login`), e.g. the node's built-in login.
+
+
+def _validate_review_dedup(value: Any) -> None:
+    """Strictly validate the optional external Voyage deduplication endpoint."""
+    if not isinstance(value, dict):
+        raise ValueError("review_dedup must be a mapping")
+    _exact_keys(value, REVIEW_DEDUP_KEYS, "review_dedup")
+    if type(value["enabled"]) is not bool:
+        raise ValueError("review_dedup.enabled must be a boolean")
+    if not isinstance(value["model"], str) or not value["model"].strip():
+        raise ValueError("review_dedup.model must be a nonempty string")
+    if (
+        not isinstance(value["base_url"], str)
+        or not value["base_url"].startswith(("http://", "https://"))
+    ):
+        raise ValueError("review_dedup.base_url must be an HTTP(S) URL")
+    keep_ratio = value["keep_ratio"]
+    if (
+        type(keep_ratio) not in {int, float}
+        or not math.isfinite(keep_ratio)
+        or not 0 < keep_ratio <= 1
+    ):
+        raise ValueError("review_dedup.keep_ratio must be in (0, 1]")
+    _positive_int(
+        value["max_concurrency"],
+        "review_dedup.max_concurrency",
+    )
+    timeout = value["request_timeout_seconds"]
+    if (
+        type(timeout) not in {int, float}
+        or not math.isfinite(timeout)
+        or timeout <= 0
+    ):
+        raise ValueError(
+            "review_dedup.request_timeout_seconds must be positive"
+        )
 
 
 def active_model(config: dict[str, Any]) -> ActiveModel:

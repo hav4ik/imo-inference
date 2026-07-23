@@ -306,6 +306,65 @@ class RuntimeConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     load_config(path)
 
+    def test_review_dedup_config_is_optional_and_strict(self):
+        dedup = {
+            "enabled": True,
+            "model": "/workspace/models/voyage-4-nano",
+            "base_url": "http://127.0.0.1:31000/v1",
+            "keep_ratio": 0.59,
+            "max_concurrency": 32,
+            "request_timeout_seconds": 300,
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(
+                directory,
+                lambda config: config.__setitem__("review_dedup", dedup),
+            )
+            configured = load_config(path)
+        self.assertEqual(configured["review_dedup"], dedup)
+
+        invalid_values = (
+            ("keep_ratio", 0),
+            ("keep_ratio", 1.1),
+            ("base_url", "127.0.0.1:31000/v1"),
+        )
+        for key, value in invalid_values:
+            with (
+                self.subTest(key=key, value=value),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                def configure(config, key=key, value=value):
+                    config["review_dedup"] = {**dedup, key: value}
+
+                path = self.write_config(
+                    directory,
+                    configure,
+                    name="invalid.yaml",
+                )
+                with self.assertRaises(ValueError):
+                    load_config(path)
+
+    def test_review_dedup_requires_random_nonideal_strategy(self):
+        def configure(config):
+            config["search"]["refine_review_strategy"] = "worst"
+            config["review_dedup"] = {
+                "enabled": True,
+                "model": "/workspace/models/voyage-4-nano",
+                "base_url": "http://127.0.0.1:31000/v1",
+                "keep_ratio": 0.59,
+                "max_concurrency": 32,
+                "request_timeout_seconds": 300,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure, name="invalid.yaml")
+            with self.assertRaisesRegex(
+                ValueError,
+                "refine_review_strategy='random_nonideal'",
+            ):
+                load_config(path)
+
     def test_decode_graphs_cover_configured_ceiling(self):
         batches = decode_graph_batches(96)
         self.assertEqual(batches[:16], list(range(1, 17)))

@@ -13,6 +13,7 @@ from pathlib import Path
 from async_client import AsyncChatClient
 from eval_config import active_model, load_config
 from proof_search import ProblemSearch
+from review_dedup import ReviewDeduper
 from trace_uploader import (
     TraceUploader,
     load_hf_token,
@@ -202,6 +203,21 @@ async def run_submission(
         timeout=float(config["search"]["request_timeout_seconds"]),
     )
     semaphore = asyncio.Semaphore(config["search"]["concurrency"])
+    review_deduper = None
+    review_dedup_config = config.get("review_dedup")
+    if review_dedup_config and review_dedup_config["enabled"]:
+        review_deduper = ReviewDeduper(
+            review_dedup_config,
+            seed=config["search"]["seed"],
+        )
+        print(
+            "[review-dedup] enabled: model={} endpoint={} keep_ratio={}".format(
+                review_dedup_config["model"],
+                review_dedup_config["base_url"],
+                review_dedup_config["keep_ratio"],
+            ),
+            flush=True,
+        )
     proofs = load_existing_submission(output_path, rows) if is_resume else []
     if not is_resume:
         write_submission(output_path, rows, proofs)
@@ -282,6 +298,7 @@ async def run_submission(
                 client=client,
                 semaphore=semaphore,
                 config=config["search"],
+                review_deduper=review_deduper,
                 on_round_complete=checkpoint,
             )
             result = await search.solve()
@@ -308,6 +325,8 @@ async def run_submission(
             except Exception as error:  # a broken final upload must not mask the run's result
                 print(f"[traces] final upload error: {error!r}", flush=True)
         await client.aclose()
+        if review_deduper is not None:
+            await review_deduper.aclose()
     print(f"[submission] complete -> {output_path}", flush=True)
 
 

@@ -26,6 +26,7 @@ from proof_prompts import (
     selector_messages,
     verification_messages,
 )
+from review_dedup import ReviewDeduper
 
 # The final LLM selector is a discrete pick-an-id task -> low temperature for format
 # stability (ycchen ran select/ at low temp), independent of the search temperature.
@@ -91,6 +92,8 @@ class Proof:
     self_score: float
     generation_sample_id: str
     verifications: list[Verification] = field(default_factory=list)
+    refinement_review_ids: list[str] | None = None
+    review_dedup: dict[str, Any] | None = None
 
     @property
     def mean_score(self) -> float:
@@ -114,6 +117,8 @@ class Proof:
             self_score=value["self_score"],
             generation_sample_id=value["generation_sample_id"],
             verifications=[Verification(**item) for item in value["verifications"]],
+            refinement_review_ids=value.get("refinement_review_ids"),
+            review_dedup=value.get("review_dedup"),
         )
 
 
@@ -339,6 +344,7 @@ class ProblemSearch:
         client: AsyncChatClient,
         semaphore: asyncio.Semaphore,
         config: dict,
+        review_deduper: ReviewDeduper | None = None,
         on_round_complete: Callable[[dict], Awaitable[None]] | None = None,
     ):
         self.problem_id = problem_id
@@ -347,6 +353,7 @@ class ProblemSearch:
         self.client = client
         self.semaphore = semaphore
         self.config = config
+        self.review_deduper = review_deduper
         self.on_round_complete = on_round_complete
         self.calls = CallStore(output_dir)
         self.proofs_dir = output_dir / "proofs"
@@ -646,7 +653,20 @@ class ProblemSearch:
                 ),
             )
             return ranked[:limit]
-        nonideal = [v for v in proof.verifications if v.score < 1.0]
+        retained_ids = (
+            set(proof.refinement_review_ids)
+            if proof.refinement_review_ids is not None
+            else None
+        )
+        nonideal = [
+            verification
+            for verification in proof.verifications
+            if verification.score < 1.0
+            and (
+                retained_ids is None
+                or verification.sample_id in retained_ids
+            )
+        ]
         order = sorted(
             range(len(nonideal)),
             key=lambda idx: stable_seed(
@@ -659,7 +679,11 @@ class ProblemSearch:
         )
         return [nonideal[k] for k in order[:limit]]
 
-    def _round_candidates(self, round_index: int) -> list[Candidate]:
+    def _round_candidates(
+        self,
+        round_index: int,
+        refinement_pool: list[Proof] | None = None,
+    ) -> list[Candidate]:
         stage = f"round-{round_index:02d}/generate"
         candidates: list[Candidate] = []
         if round_index == 1:
@@ -681,11 +705,13 @@ class ProblemSearch:
             # earlier rounds (cumulative). Each refine call merges refine_parents
             # of them (stratified for even coverage), each contributing up to
             # reviews_per_refine_parent random non-ideal reviews.
-            pool = [
-                proof
-                for proof in self.ranked()
-                if proof.round_index < round_index
-            ][: self.config["top_proofs"]]
+            pool = refinement_pool
+            if pool is None:
+                pool = [
+                    proof
+                    for proof in self.ranked()
+                    if proof.round_index < round_index
+                ][: self.config["top_proofs"]]
             if not pool:
                 raise RuntimeError(f"{self.problem_id} has no verified proof to refine")
             # Gold drops the prover self-evaluation from the refiner bundle
@@ -733,6 +759,35 @@ class ProblemSearch:
                     )
                 )
         return candidates
+
+    async def _deduplicate_refinement_reviews(
+        self,
+        pool: list[Proof],
+    ) -> None:
+        if self.review_deduper is None:
+            return
+
+        async def deduplicate(proof: Proof) -> None:
+            if proof.refinement_review_ids is not None:
+                return
+            nonideal = [
+                verification
+                for verification in proof.verifications
+                if verification.score < 1.0
+            ]
+            result = await self.review_deduper.deduplicate(
+                nonideal,
+                namespace=f"{self.problem_id}/{proof.proof_id}",
+            )
+            proof.refinement_review_ids = result["retained_sample_ids"]
+            proof.review_dedup = {
+                key: value
+                for key, value in result.items()
+                if key != "retained_sample_ids"
+            }
+            self._save_proof(proof)
+
+        await asyncio.gather(*(deduplicate(proof) for proof in pool))
 
     def _admit_candidate(self, candidate: Candidate, record: dict) -> Proof | None:
         if candidate.proof_id in self.proofs:
@@ -834,7 +889,15 @@ class ProblemSearch:
         return proof, await self._verify_proof(proof)
 
     async def _run_round(self, round_index: int) -> tuple[list[Proof], dict]:
-        candidates = self._round_candidates(round_index)
+        refinement_pool = None
+        if round_index > 1:
+            refinement_pool = [
+                proof
+                for proof in self.ranked()
+                if proof.round_index < round_index
+            ][: self.config["top_proofs"]]
+            await self._deduplicate_refinement_reviews(refinement_pool)
+        candidates = self._round_candidates(round_index, refinement_pool)
         generation_tasks = [
             asyncio.create_task(self._perform(candidate.generation))
             for candidate in candidates
