@@ -6,10 +6,18 @@ verifications from proof scores, rankings, saved traces, or final tournament
 selection.
 
 The configured endpoint must expose OpenAI-compatible `POST /v1/embeddings`.
-The harness owns only the client and never starts or stops vLLM. Start the
-Voyage server before `run_submission.py`; a run with deduplication enabled fails
-after three connection attempts when the endpoint is unavailable. A compatible
-vLLM command is:
+When `auto_start: true`, `scheduler.sh` starts Voyage after the main SGLang
+server passes validation. It waits for `/health`, verifies a real two-document
+embedding request, and stops both servers on exit. Voyage is launched from the
+same venv as the scheduler's Python when that venv contains `bin/vllm`; otherwise
+the vLLM executable must be on `PATH`. Override its location with
+`REVIEW_DEDUP_VLLM_EXECUTABLE`.
+
+`run_submission.py` remains client-only. Calling it directly requires the
+configured endpoint to be running already. A run with deduplication enabled
+fails after three connection attempts when that endpoint is unavailable.
+
+The automatic launcher emits the equivalent of:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 vllm serve \
@@ -27,6 +35,10 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 vllm serve \
   --host 127.0.0.1 \
   --port 31000
 ```
+
+The checked-in Step-225 profiles use `TP=1`, `DP=8`, and 8% GPU-memory
+utilization, so each data-parallel Voyage replica shares one of the eight GPUs
+with the main server. Eager mode is not enabled.
 
 `keep_ratio: 0.59` retains 19 of 32 reviews and removes 13 (40.625%). With 16
 reviews it retains 10 and removes 6 (37.5%). Deduplication uses only the final

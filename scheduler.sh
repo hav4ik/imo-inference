@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # scheduler.sh -- one command to run a full proof-pilot inference.
 #
-# Starts the SGLang server, waits for it to become healthy, validates its config,
-# smoke-tests a real generation query, then runs the inference to completion as
-# the main process. When inference finishes (or on Ctrl-C / error) it tears the
-# server down cleanly. Everything for the run lands in one output directory.
+# Starts the SGLang server and optional Voyage review-dedup server, validates
+# both with real requests, then runs inference to completion as the main
+# process. When inference finishes (or on Ctrl-C / error), it tears down only
+# the servers launched for this run. Everything lands in one output directory.
 #
 # Usage:
 #   ./scheduler.sh <config> <output-dir> [input.csv]     # start a run
@@ -25,6 +25,7 @@
 #   PYTHON                           python to use (default $VENV/bin/python)
 #   SERVER_STARTUP_TIMEOUT_SECONDS   health-wait timeout (default 2700)
 #   SMOKE_MAX_TOKENS                 tokens for the smoke query (default 32)
+#   REVIEW_DEDUP_VLLM_EXECUTABLE     Voyage vLLM executable (default: venv/PATH vllm)
 #   HF_TOKEN                         for trace upload; auto-sourced from `hf auth token` if unset
 #
 # Resume: if a run crashes or the node reboots, re-launch it with
@@ -42,6 +43,8 @@ SMOKE_MAX_TOKENS="${SMOKE_MAX_TOKENS:-32}"
 
 SERVER_PID=
 SERVER_PORT=
+REVIEW_DEDUP_PID=
+REVIEW_DEDUP_PORT=
 
 log() { printf '[scheduler] %s\n' "$*"; }
 die() { printf '[scheduler] ERROR: %s\n' "$*" >&2; exit 1; }
@@ -105,32 +108,58 @@ PYTHON="$_py"; unset _py
 # --- output layout ----------------------------------------------------------
 SERVER_LOG="$OUTPUT_DIR/server.log"
 SERVER_VALIDATION="$OUTPUT_DIR/server-validation.json"
+REVIEW_DEDUP_SERVER_LOG="$OUTPUT_DIR/review-dedup-server.log"
 SUBMISSION_CSV="$OUTPUT_DIR/submission.csv"
 ARTIFACTS_DIR="$OUTPUT_DIR/artifacts"
 
 # --- inspect the config for server url/port/model (validates the YAML too) --
 INSPECT="$("$PYTHON" "$REPO/docker/inspect_config.py" "$CONFIG")" || die "config failed validation: $CONFIG"
-read_field() { "$PYTHON" -c 'import json,sys;print(json.load(sys.stdin)[sys.argv[1]])' "$1" <<<"$INSPECT"; }
+read_field() {
+    "$PYTHON" -c \
+        'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' \
+        "$1" <<<"$INSPECT"
+}
+read_optional_field() {
+    "$PYTHON" -c \
+        'import json,sys; value=json.load(sys.stdin)[sys.argv[1]]; print("" if value is None else value)' \
+        "$1" <<<"$INSPECT"
+}
 SERVER_URL="$(read_field server_url)"
 SERVER_PORT="$(read_field server_port)"
 TARGET_MODEL="$(read_field target_model)"
 GPU_COUNT="$(read_field expected_gpu_count)"
+REVIEW_DEDUP_AUTO_START="$(
+    "$PYTHON" -c \
+        'import json,sys; print(int(json.load(sys.stdin)["review_dedup_auto_start"]))' \
+        <<<"$INSPECT"
+)"
+REVIEW_DEDUP_MODEL="$(read_optional_field review_dedup_model)"
+REVIEW_DEDUP_PORT="$(read_optional_field review_dedup_port)"
+REVIEW_DEDUP_BASE_URL="$(read_optional_field review_dedup_base_url)"
+REVIEW_DEDUP_HEALTH_URL="$(read_optional_field review_dedup_health_url)"
 
 log "config       : $CONFIG"
 log "input        : $INPUT"
 log "output dir   : $OUTPUT_DIR"
 log "server       : $SERVER_URL (port $SERVER_PORT, expects $GPU_COUNT GPUs)"
 log "target model : $TARGET_MODEL"
+if [[ "$REVIEW_DEDUP_AUTO_START" == "1" ]]; then
+    log "review dedup : $REVIEW_DEDUP_BASE_URL (model $REVIEW_DEDUP_MODEL)"
+fi
 
 if [[ "$PLAN" == "1" ]]; then
     log "plan mode: resolved and validated OK; NOT launching."
-    log "would: start server -> wait for health -> validate -> smoke-test -> run inference -> teardown"
+    log "would: start SGLang -> validate generation -> start Voyage (when enabled) -> validate embeddings -> run inference -> teardown"
     exit 0
 fi
 
 # --- models present? fail early with a clear pointer to download_models.sh ---
 [[ -d "$TARGET_MODEL" && -f "$TARGET_MODEL/config.json" ]] \
     || die "target model not found at $TARGET_MODEL -- fetch the weights first with ./download_models.sh (see the README quick start)"
+if [[ "$REVIEW_DEDUP_AUTO_START" == "1" ]]; then
+    [[ -d "$REVIEW_DEDUP_MODEL" && -f "$REVIEW_DEDUP_MODEL/config.json" ]] \
+        || die "Voyage review-dedup model not found at $REVIEW_DEDUP_MODEL"
+fi
 
 # --- apply the SGLang patches (idempotent) -----------------------------------
 # The REQUIRED Olmo3Sink model patch is applied here, so a run that bypasses the
@@ -157,6 +186,13 @@ unset _helper
 if "$PYTHON" -c "import socket,sys; s=socket.socket(); rc=s.connect_ex(('127.0.0.1',$SERVER_PORT)); s.close(); sys.exit(0 if rc==0 else 1)" 2>/dev/null; then
     die "port $SERVER_PORT is already in use -- another server is running there. Free it, or change server.port in the config. (Refusing to start so teardown never touches a server we did not launch.)"
 fi
+if [[ "$REVIEW_DEDUP_AUTO_START" == "1" ]]; then
+    [[ "$REVIEW_DEDUP_PORT" != "$SERVER_PORT" ]] \
+        || die "review_dedup and SGLang cannot use the same port: $SERVER_PORT"
+    if "$PYTHON" -c "import socket,sys; s=socket.socket(); rc=s.connect_ex(('127.0.0.1',$REVIEW_DEDUP_PORT)); s.close(); sys.exit(0 if rc==0 else 1)" 2>/dev/null; then
+        die "review-dedup port $REVIEW_DEDUP_PORT is already in use -- refusing to adopt or stop a foreign server"
+    fi
+fi
 
 # --- trace-upload token: source on-box if unset, never printed --------------
 if [[ -z "${HF_TOKEN:-}" ]] && command -v hf >/dev/null 2>&1; then
@@ -171,16 +207,31 @@ fi
 # bound the port (SERVER_BOUND=1); combined with the pre-flight "port already in
 # use -> refuse to start" check above, it can never hit another job's server.
 SERVER_BOUND=0
+REVIEW_DEDUP_BOUND=0
+stop_process_group() {
+    local label="$1"
+    local pid="$2"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+        log "stopping $label (pid=$pid)"
+        kill -TERM "$pid" 2>/dev/null || true
+        kill -TERM -"$pid" 2>/dev/null || true
+        for _ in $(seq 1 15); do
+            kill -0 "$pid" 2>/dev/null || break
+            sleep 1
+        done
+        kill -KILL "$pid" 2>/dev/null || true
+        kill -KILL -"$pid" 2>/dev/null || true
+    fi
+}
+
 teardown() {
     local status=$?
     trap - EXIT INT TERM
-    if [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER_PID" 2>/dev/null; then
-        log "stopping server (pid=$SERVER_PID)"
-        kill -TERM "$SERVER_PID" 2>/dev/null || true
-        kill -TERM -"$SERVER_PID" 2>/dev/null || true   # its process group, if leader
-        for _ in $(seq 1 15); do kill -0 "$SERVER_PID" 2>/dev/null || break; sleep 1; done
-        kill -KILL "$SERVER_PID" 2>/dev/null || true
-        kill -KILL -"$SERVER_PID" 2>/dev/null || true
+    stop_process_group "Voyage review-dedup server" "$REVIEW_DEDUP_PID"
+    stop_process_group "SGLang server" "$SERVER_PID"
+    if [[ "$REVIEW_DEDUP_BOUND" == "1" && -n "$REVIEW_DEDUP_PORT" ]] \
+        && command -v fuser >/dev/null 2>&1; then
+        fuser -k -9 "${REVIEW_DEDUP_PORT}/tcp" 2>/dev/null || true
     fi
     if [[ "$SERVER_BOUND" == "1" && -n "$SERVER_PORT" ]] && command -v fuser >/dev/null 2>&1; then
         fuser -k -9 "${SERVER_PORT}/tcp" 2>/dev/null || true   # our port (we bound it) -> reap a lingering worker
@@ -244,6 +295,65 @@ print("[scheduler] smoke ok: finish_reason=%s, produced %d chars" % (choice.get(
 PY
 then
     die "generation smoke test failed -- server is up but not generating; see $SERVER_LOG"
+fi
+
+# --- start and validate optional Voyage review-dedup server -----------------
+if [[ "$REVIEW_DEDUP_AUTO_START" == "1" ]]; then
+    : > "$REVIEW_DEDUP_SERVER_LOG"
+    log "starting Voyage review-dedup server (log: $REVIEW_DEDUP_SERVER_LOG)"
+    setsid "$PYTHON" -u \
+        "$REPO/evaluation/harness/launch_review_dedup_server.py" \
+        --config "$CONFIG" >"$REVIEW_DEDUP_SERVER_LOG" 2>&1 </dev/null &
+    REVIEW_DEDUP_PID=$!
+
+    log "waiting for Voyage health (timeout ${SERVER_STARTUP_TIMEOUT_SECONDS}s)"
+    deadline=$(( SECONDS + SERVER_STARTUP_TIMEOUT_SECONDS ))
+    until "$PYTHON" -c "import urllib.request; urllib.request.urlopen('$REVIEW_DEDUP_HEALTH_URL', timeout=5)" 2>/dev/null; do
+        kill -0 "$REVIEW_DEDUP_PID" 2>/dev/null \
+            || die "Voyage server exited before becoming healthy -- see $REVIEW_DEDUP_SERVER_LOG"
+        (( SECONDS < deadline )) \
+            || die "Voyage server not healthy within ${SERVER_STARTUP_TIMEOUT_SECONDS}s -- see $REVIEW_DEDUP_SERVER_LOG"
+        sleep 5
+    done
+    kill -0 "$REVIEW_DEDUP_PID" 2>/dev/null \
+        || die "$REVIEW_DEDUP_HEALTH_URL answered but our Voyage process is gone"
+    REVIEW_DEDUP_BOUND=1
+
+    log "smoke-testing Voyage embeddings"
+    if ! REVIEW_DEDUP_BASE_URL="$REVIEW_DEDUP_BASE_URL" \
+        REVIEW_DEDUP_MODEL="$REVIEW_DEDUP_MODEL" "$PYTHON" - <<'PY'
+import json
+import os
+import sys
+import urllib.request
+
+url = os.environ["REVIEW_DEDUP_BASE_URL"].rstrip("/") + "/embeddings"
+body = json.dumps({
+    "model": os.environ["REVIEW_DEDUP_MODEL"],
+    "input": [
+        "Represent the mathematical proof verification document for retrieval: valid.",
+        "Represent the mathematical proof verification document for retrieval: flawed.",
+    ],
+}).encode()
+request = urllib.request.Request(
+    url,
+    data=body,
+    headers={"Content-Type": "application/json"},
+)
+with urllib.request.urlopen(request, timeout=180) as response:
+    payload = json.load(response)
+vectors = [item.get("embedding") for item in payload.get("data", [])]
+if len(vectors) != 2 or any(not vector for vector in vectors):
+    sys.stderr.write("invalid embedding response: " + json.dumps(payload)[:400] + "\n")
+    sys.exit(1)
+print(
+    "[scheduler] Voyage smoke ok: vectors=2 dimensions=%d"
+    % len(vectors[0])
+)
+PY
+    then
+        die "Voyage embedding smoke test failed -- see $REVIEW_DEDUP_SERVER_LOG"
+    fi
 fi
 
 # --- run the inference to completion, as the main (foreground) process ------

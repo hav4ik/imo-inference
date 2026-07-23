@@ -111,11 +111,12 @@ traces:
   # explicit name to label each experiment.
   run_name: imo2026-olmo3-opd-sft-750-budget-medium
 
-# Optional external Voyage endpoint. All verifier outputs remain in proof scoring
-# and tournament selection; this only removes semantic duplicates from the
-# random_nonideal review pool before refinement.
+# Voyage review deduplication. scheduler.sh auto-starts this vLLM pooling server.
+# All verifier outputs remain in scoring and tournament selection; only
+# refinement sampling is deduplicated.
 review_dedup:
   enabled: true
+  auto_start: true
   model: /tmp/models/voyage-4-nano
   base_url: http://127.0.0.1:31000/v1
   # ceil(16 * 0.59) = 10 retained reviews (6/16, or 37.5%, removed).
@@ -123,3 +124,7 @@ review_dedup:
   keep_ratio: 0.59
   max_concurrency: 32
   request_timeout_seconds: 300
+  tensor_parallel_size: 1
+  data_parallel_size: 8
+  gpu_memory_utilization: 0.08
+  max_model_len: 4096

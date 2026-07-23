@@ -17,6 +17,9 @@ HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(HARNESS))
 
 from eval_config import active_model, load_config  # noqa: E402
+from launch_review_dedup_server import (  # noqa: E402
+    build_command as build_review_dedup_command,
+)
 from launch_server import attention_arguments, decode_graph_batches  # noqa: E402
 
 class RuntimeConfigTests(unittest.TestCase):
@@ -110,6 +113,10 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(
             inspected["draft_model"], "/workspace/models/custom-draft"
         )
+        self.assertFalse(inspected["review_dedup_auto_start"])
+        self.assertIsNone(inspected["review_dedup_model"])
+        self.assertIsNone(inspected["review_dedup_base_url"])
+        self.assertIsNone(inspected["review_dedup_health_url"])
 
     def test_tp_width_is_not_artificially_capped(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -309,11 +316,16 @@ class RuntimeConfigTests(unittest.TestCase):
     def test_review_dedup_config_is_optional_and_strict(self):
         dedup = {
             "enabled": True,
+            "auto_start": True,
             "model": "/workspace/models/voyage-4-nano",
             "base_url": "http://127.0.0.1:31000/v1",
             "keep_ratio": 0.59,
             "max_concurrency": 32,
             "request_timeout_seconds": 300,
+            "tensor_parallel_size": 1,
+            "data_parallel_size": 8,
+            "gpu_memory_utilization": 0.08,
+            "max_model_len": 4096,
         }
 
         with tempfile.TemporaryDirectory() as directory:
@@ -328,6 +340,8 @@ class RuntimeConfigTests(unittest.TestCase):
             ("keep_ratio", 0),
             ("keep_ratio", 1.1),
             ("base_url", "127.0.0.1:31000/v1"),
+            ("gpu_memory_utilization", 1),
+            ("data_parallel_size", 0),
         )
         for key, value in invalid_values:
             with (
@@ -350,11 +364,16 @@ class RuntimeConfigTests(unittest.TestCase):
             config["search"]["refine_review_strategy"] = "worst"
             config["review_dedup"] = {
                 "enabled": True,
+                "auto_start": True,
                 "model": "/workspace/models/voyage-4-nano",
                 "base_url": "http://127.0.0.1:31000/v1",
                 "keep_ratio": 0.59,
                 "max_concurrency": 32,
                 "request_timeout_seconds": 300,
+                "tensor_parallel_size": 1,
+                "data_parallel_size": 8,
+                "gpu_memory_utilization": 0.08,
+                "max_model_len": 4096,
             }
 
         with tempfile.TemporaryDirectory() as directory:
@@ -364,6 +383,37 @@ class RuntimeConfigTests(unittest.TestCase):
                 "refine_review_strategy='random_nonideal'",
             ):
                 load_config(path)
+
+    def test_review_dedup_launcher_uses_pooling_vllm_without_eager(self):
+        config = load_config(
+            REPO / "config-model-step225-budget-high.yaml"
+        )
+        command = build_review_dedup_command(config, "/runtime/bin/vllm")
+        self.assertEqual(command[:3], [
+            "/runtime/bin/vllm",
+            "serve",
+            "/tmp/models/voyage-4-nano",
+        ])
+        for flag, value in (
+            ("--runner", "pooling"),
+            ("--convert", "embed"),
+            ("--dtype", "bfloat16"),
+            ("--max-model-len", "4096"),
+            ("--gpu-memory-utilization", "0.08"),
+            ("--tensor-parallel-size", "1"),
+            ("--data-parallel-size", "8"),
+            ("--host", "127.0.0.1"),
+            ("--port", "31000"),
+        ):
+            index = command.index(flag)
+            self.assertEqual(command[index + 1], value)
+        self.assertIn("--trust-remote-code", command)
+        self.assertNotIn("--enforce-eager", command)
+
+    def test_scheduler_owns_review_dedup_server_lifecycle(self):
+        scheduler = (REPO / "scheduler.sh").read_text()
+        self.assertIn("launch_review_dedup_server.py", scheduler)
+        self.assertIn("smoke-testing Voyage", scheduler)
 
     def test_decode_graphs_cover_configured_ceiling(self):
         batches = decode_graph_batches(96)

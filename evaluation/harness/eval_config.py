@@ -8,6 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -23,11 +24,16 @@ TRACES_KEYS = {
 }
 REVIEW_DEDUP_KEYS = {
     "enabled",
+    "auto_start",
     "model",
     "base_url",
     "keep_ratio",
     "max_concurrency",
     "request_timeout_seconds",
+    "tensor_parallel_size",
+    "data_parallel_size",
+    "gpu_memory_utilization",
+    "max_model_len",
 }
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
@@ -376,6 +382,8 @@ def _validate_review_dedup(value: Any) -> None:
     _exact_keys(value, REVIEW_DEDUP_KEYS, "review_dedup")
     if type(value["enabled"]) is not bool:
         raise ValueError("review_dedup.enabled must be a boolean")
+    if type(value["auto_start"]) is not bool:
+        raise ValueError("review_dedup.auto_start must be a boolean")
     if not isinstance(value["model"], str) or not value["model"].strip():
         raise ValueError("review_dedup.model must be a nonempty string")
     if (
@@ -394,6 +402,27 @@ def _validate_review_dedup(value: Any) -> None:
         value["max_concurrency"],
         "review_dedup.max_concurrency",
     )
+    _positive_int(
+        value["tensor_parallel_size"],
+        "review_dedup.tensor_parallel_size",
+    )
+    _positive_int(
+        value["data_parallel_size"],
+        "review_dedup.data_parallel_size",
+    )
+    _positive_int(
+        value["max_model_len"],
+        "review_dedup.max_model_len",
+    )
+    gpu_memory_utilization = value["gpu_memory_utilization"]
+    if (
+        type(gpu_memory_utilization) not in {int, float}
+        or not math.isfinite(gpu_memory_utilization)
+        or not 0 < gpu_memory_utilization < 1
+    ):
+        raise ValueError(
+            "review_dedup.gpu_memory_utilization must be between 0 and 1"
+        )
     timeout = value["request_timeout_seconds"]
     if (
         type(timeout) not in {int, float}
@@ -403,6 +432,24 @@ def _validate_review_dedup(value: Any) -> None:
         raise ValueError(
             "review_dedup.request_timeout_seconds must be positive"
         )
+    if value["auto_start"]:
+        parsed = urlparse(value["base_url"])
+        if (
+            parsed.scheme != "http"
+            or parsed.hostname is None
+            or parsed.port is None
+            or parsed.path.rstrip("/") != "/v1"
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError(
+                "auto-started review_dedup.base_url must be "
+                "http://HOST:PORT/v1"
+            )
+        if not Path(value["model"]).is_absolute():
+            raise ValueError(
+                "auto-started review_dedup.model must be an absolute path"
+            )
 
 
 def active_model(config: dict[str, Any]) -> ActiveModel:
