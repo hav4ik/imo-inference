@@ -210,14 +210,28 @@ async def run_submission(
             review_dedup_config,
             seed=config["search"]["seed"],
         )
-        print(
-            "[review-dedup] enabled: model={} endpoint={} keep_ratio={}".format(
-                review_dedup_config["model"],
-                review_dedup_config["base_url"],
-                review_dedup_config["keep_ratio"],
-            ),
-            flush=True,
-        )
+        backend = review_dedup_config.get("backend", "voyage")
+        if backend == "minhash_lsh":
+            print(
+                "[review-dedup] enabled: backend=minhash_lsh "
+                "keep_ratio={} shingle_size={} num_perm={} threshold={}".format(
+                    review_dedup_config["keep_ratio"],
+                    review_dedup_config["shingle_size"],
+                    review_dedup_config["num_perm"],
+                    review_dedup_config["lsh_threshold"],
+                ),
+                flush=True,
+            )
+        else:
+            print(
+                "[review-dedup] enabled: backend=voyage model={} "
+                "endpoint={} keep_ratio={}".format(
+                    review_dedup_config["model"],
+                    review_dedup_config["base_url"],
+                    review_dedup_config["keep_ratio"],
+                ),
+                flush=True,
+            )
     proofs = load_existing_submission(output_path, rows) if is_resume else []
     if not is_resume:
         write_submission(output_path, rows, proofs)

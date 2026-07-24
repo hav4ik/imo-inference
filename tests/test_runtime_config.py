@@ -359,6 +359,72 @@ class RuntimeConfigTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     load_config(path)
 
+    def test_minhash_review_dedup_config_is_strict(self):
+        dedup = {
+            "enabled": True,
+            "backend": "minhash_lsh",
+            "keep_ratio": 0.59,
+            "shingle_size": 1,
+            "num_perm": 128,
+            "lsh_threshold": 0.3,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(
+                directory,
+                lambda config: config.__setitem__("review_dedup", dedup),
+            )
+            configured = load_config(path)
+        self.assertEqual(configured["review_dedup"], dedup)
+
+        invalid_values = (
+            ("backend", "unknown"),
+            ("keep_ratio", 0),
+            ("shingle_size", 0),
+            ("num_perm", 8),
+            ("lsh_threshold", 0),
+            ("lsh_threshold", 1),
+        )
+        for key, value in invalid_values:
+            with (
+                self.subTest(key=key, value=value),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                def configure(config, key=key, value=value):
+                    config["review_dedup"] = {**dedup, key: value}
+
+                path = self.write_config(directory, configure)
+                with self.assertRaises(ValueError):
+                    load_config(path)
+
+    def test_minhash_review_dedup_needs_no_sidecar(self):
+        def configure(config):
+            config["review_dedup"] = {
+                "enabled": True,
+                "backend": "minhash_lsh",
+                "keep_ratio": 0.59,
+                "shingle_size": 1,
+                "num_perm": 128,
+                "lsh_threshold": 0.3,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure)
+            output = subprocess.check_output(
+                [
+                    sys.executable,
+                    str(REPO / "docker/inspect_config.py"),
+                    str(path),
+                ],
+                cwd=REPO,
+                text=True,
+            )
+
+        inspected = json.loads(output)
+        self.assertTrue(inspected["review_dedup_enabled"])
+        self.assertEqual(inspected["review_dedup_backend"], "minhash_lsh")
+        self.assertFalse(inspected["review_dedup_auto_start"])
+        self.assertIsNone(inspected["review_dedup_model"])
+
     def test_review_dedup_requires_random_nonideal_strategy(self):
         def configure(config):
             config["search"]["refine_review_strategy"] = "worst"
@@ -385,9 +451,25 @@ class RuntimeConfigTests(unittest.TestCase):
                 load_config(path)
 
     def test_review_dedup_launcher_uses_pooling_vllm_without_eager(self):
-        config = load_config(
-            REPO / "config-model-step225-budget-high.yaml"
-        )
+        def configure(config):
+            config["review_dedup"] = {
+                "enabled": True,
+                "backend": "voyage",
+                "auto_start": True,
+                "model": "/tmp/models/voyage-4-nano",
+                "base_url": "http://127.0.0.1:31000/v1",
+                "keep_ratio": 0.59,
+                "max_concurrency": 32,
+                "request_timeout_seconds": 300,
+                "tensor_parallel_size": 1,
+                "data_parallel_size": 8,
+                "gpu_memory_utilization": 0.08,
+                "max_model_len": 4096,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure)
+            config = load_config(path)
         command = build_review_dedup_command(config, "/runtime/bin/vllm")
         self.assertEqual(command[:3], [
             "/runtime/bin/vllm",
@@ -414,6 +496,7 @@ class RuntimeConfigTests(unittest.TestCase):
         scheduler = (REPO / "scheduler.sh").read_text()
         self.assertIn("launch_review_dedup_server.py", scheduler)
         self.assertIn("smoke-testing Voyage", scheduler)
+        self.assertIn("only for Voyage auto-start", scheduler)
 
     def test_decode_graphs_cover_configured_ceiling(self):
         batches = decode_graph_batches(96)

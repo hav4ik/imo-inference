@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # scheduler.sh -- one command to run a full proof-pilot inference.
 #
-# Starts the SGLang server and optional Voyage review-dedup server, validates
-# both with real requests, then runs inference to completion as the main
-# process. When inference finishes (or on Ctrl-C / error), it tears down only
-# the servers launched for this run. Everything lands in one output directory.
+# Starts the SGLang server and, for the optional Voyage dedup backend, its
+# embedding server. The default MinHash-LSH backend runs in process and needs
+# no sidecar. When inference finishes (or on Ctrl-C / error), it tears down
+# only the servers launched for this run.
 #
 # Usage:
 #   ./scheduler.sh <config> <output-dir> [input.csv]     # start a run
@@ -133,6 +133,12 @@ REVIEW_DEDUP_AUTO_START="$(
         'import json,sys; print(int(json.load(sys.stdin)["review_dedup_auto_start"]))' \
         <<<"$INSPECT"
 )"
+REVIEW_DEDUP_ENABLED="$(
+    "$PYTHON" -c \
+        'import json,sys; print(int(json.load(sys.stdin)["review_dedup_enabled"]))' \
+        <<<"$INSPECT"
+)"
+REVIEW_DEDUP_BACKEND="$(read_optional_field review_dedup_backend)"
 REVIEW_DEDUP_MODEL="$(read_optional_field review_dedup_model)"
 REVIEW_DEDUP_PORT="$(read_optional_field review_dedup_port)"
 REVIEW_DEDUP_BASE_URL="$(read_optional_field review_dedup_base_url)"
@@ -143,13 +149,16 @@ log "input        : $INPUT"
 log "output dir   : $OUTPUT_DIR"
 log "server       : $SERVER_URL (port $SERVER_PORT, expects $GPU_COUNT GPUs)"
 log "target model : $TARGET_MODEL"
+if [[ "$REVIEW_DEDUP_ENABLED" == "1" ]]; then
+    log "review dedup : $REVIEW_DEDUP_BACKEND"
+fi
 if [[ "$REVIEW_DEDUP_AUTO_START" == "1" ]]; then
     log "review dedup : $REVIEW_DEDUP_BASE_URL (model $REVIEW_DEDUP_MODEL)"
 fi
 
 if [[ "$PLAN" == "1" ]]; then
     log "plan mode: resolved and validated OK; NOT launching."
-    log "would: start SGLang -> validate generation -> start Voyage (when enabled) -> validate embeddings -> run inference -> teardown"
+    log "would: start SGLang -> validate generation -> start Voyage sidecar (only for Voyage auto-start) -> run inference -> teardown"
     exit 0
 fi
 

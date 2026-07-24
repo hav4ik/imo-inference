@@ -17,6 +17,7 @@ from review_dedup import (  # noqa: E402
     ReviewDeduper,
     critique_text,
     retain_review_ids,
+    retain_review_ids_minhash_lsh,
 )
 
 
@@ -88,8 +89,101 @@ class ReviewDedupTests(unittest.TestCase):
         self.assertEqual(len(retained), math.ceil(32 * 0.59))
         self.assertEqual(32 - len(retained), 13)
 
+    def test_minhash_lsh_hits_exact_budget_and_preserves_score_strata(self):
+        reviews = [
+            Review(
+                f"v{index:02d}",
+                float(index % 3) / 2,
+                (
+                    "<evaluation>The proof has an unsupported induction step "
+                    f"in case {index % 5} and omits the boundary argument."
+                    "</evaluation>"
+                ),
+            )
+            for index in range(32)
+        ]
+
+        retained, details = retain_review_ids_minhash_lsh(
+            reviews,
+            keep_ratio=0.59,
+            shingle_size=1,
+            num_perm=128,
+            threshold=0.3,
+            seed=17,
+        )
+
+        self.assertEqual(len(retained), 19)
+        retained_scores = {
+            review.score for review in reviews if review.sample_id in retained
+        }
+        self.assertEqual(retained_scores, {0.0, 0.5, 1.0})
+        self.assertGreater(details["candidate_pair_count"], 0)
+        self.assertEqual(
+            details["lsh_drop_count"] + details["fallback_drop_count"],
+            13,
+        )
+
+    def test_minhash_lsh_is_deterministic(self):
+        reviews = [
+            Review(
+                f"v{index}",
+                0.0,
+                f"<evaluation>Repeated objection family {index % 2}.</evaluation>",
+            )
+            for index in range(8)
+        ]
+        arguments = {
+            "keep_ratio": 0.5,
+            "shingle_size": 1,
+            "num_perm": 128,
+            "threshold": 0.3,
+            "seed": 23,
+        }
+
+        first, first_details = retain_review_ids_minhash_lsh(
+            reviews, **arguments
+        )
+        second, second_details = retain_review_ids_minhash_lsh(
+            reviews, **arguments
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(first_details, second_details)
+
 
 class ReviewDeduperClientTests(unittest.IsolatedAsyncioTestCase):
+    async def test_minhash_backend_runs_without_http_client(self):
+        deduper = ReviewDeduper(
+            {
+                "backend": "minhash_lsh",
+                "keep_ratio": 0.59,
+                "shingle_size": 1,
+                "num_perm": 128,
+                "lsh_threshold": 0.3,
+            },
+            seed=17,
+        )
+        reviews = [
+            Review(
+                f"v{index:02d}",
+                float(index % 2) / 2,
+                "<evaluation>The same missing justification appears.</evaluation>",
+            )
+            for index in range(32)
+        ]
+
+        result = await deduper.deduplicate(
+            reviews,
+            namespace="problem/proof",
+        )
+        await deduper.aclose()
+
+        self.assertIsNone(deduper._client)
+        self.assertEqual(result["backend"], "minhash_lsh")
+        self.assertEqual(result["kept_count"], 19)
+        self.assertEqual(result["dropped_count"], 13)
+        self.assertEqual(result["num_perm"], 128)
+
     async def test_embedding_request_preserves_v1_path_and_document_prefix(self):
         requests: list[httpx.Request] = []
 

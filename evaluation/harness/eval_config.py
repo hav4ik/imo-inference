@@ -22,12 +22,20 @@ TRACES_KEYS = {
     "enabled", "dataset_repo", "secrets_file", "interval_seconds", "private",
     "run_name",
 }
-REVIEW_DEDUP_KEYS = {
+REVIEW_DEDUP_COMMON_KEYS = {
     "enabled",
+    "backend",
+    "keep_ratio",
+}
+REVIEW_DEDUP_MINHASH_KEYS = REVIEW_DEDUP_COMMON_KEYS | {
+    "shingle_size",
+    "num_perm",
+    "lsh_threshold",
+}
+REVIEW_DEDUP_VOYAGE_KEYS = REVIEW_DEDUP_COMMON_KEYS | {
     "auto_start",
     "model",
     "base_url",
-    "keep_ratio",
     "max_concurrency",
     "request_timeout_seconds",
     "tensor_parallel_size",
@@ -35,6 +43,7 @@ REVIEW_DEDUP_KEYS = {
     "gpu_memory_utilization",
     "max_model_len",
 }
+REVIEW_DEDUP_VOYAGE_LEGACY_KEYS = REVIEW_DEDUP_VOYAGE_KEYS - {"backend"}
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
     "tensor_parallel_size", "data_parallel_size", "quantized", "dflash", "kv_cache_dtype",
@@ -376,12 +385,55 @@ def _validate_traces(traces: Any) -> None:
 
 
 def _validate_review_dedup(value: Any) -> None:
-    """Strictly validate the optional external Voyage deduplication endpoint."""
+    """Strictly validate the configured verifier-review dedup backend."""
     if not isinstance(value, dict):
         raise ValueError("review_dedup must be a mapping")
-    _exact_keys(value, REVIEW_DEDUP_KEYS, "review_dedup")
+    backend = value.get("backend", "voyage")
+    if backend not in {"minhash_lsh", "voyage"}:
+        raise ValueError(
+            "review_dedup.backend must be 'minhash_lsh' or 'voyage'"
+        )
+    expected = (
+        REVIEW_DEDUP_MINHASH_KEYS
+        if backend == "minhash_lsh"
+        else (
+            REVIEW_DEDUP_VOYAGE_LEGACY_KEYS
+            if "backend" not in value
+            else REVIEW_DEDUP_VOYAGE_KEYS
+        )
+    )
+    _exact_keys(value, expected, "review_dedup")
     if type(value["enabled"]) is not bool:
         raise ValueError("review_dedup.enabled must be a boolean")
+    keep_ratio = value["keep_ratio"]
+    if (
+        type(keep_ratio) not in {int, float}
+        or not math.isfinite(keep_ratio)
+        or not 0 < keep_ratio <= 1
+    ):
+        raise ValueError("review_dedup.keep_ratio must be in (0, 1]")
+    if backend == "minhash_lsh":
+        _positive_int(
+            value["shingle_size"],
+            "review_dedup.shingle_size",
+        )
+        num_perm = _positive_int(
+            value["num_perm"],
+            "review_dedup.num_perm",
+        )
+        if num_perm < 16:
+            raise ValueError("review_dedup.num_perm must be at least 16")
+        threshold = value["lsh_threshold"]
+        if (
+            type(threshold) not in {int, float}
+            or not math.isfinite(threshold)
+            or not 0 < threshold < 1
+        ):
+            raise ValueError(
+                "review_dedup.lsh_threshold must be between 0 and 1"
+            )
+        return
+
     if type(value["auto_start"]) is not bool:
         raise ValueError("review_dedup.auto_start must be a boolean")
     if not isinstance(value["model"], str) or not value["model"].strip():
@@ -391,13 +443,6 @@ def _validate_review_dedup(value: Any) -> None:
         or not value["base_url"].startswith(("http://", "https://"))
     ):
         raise ValueError("review_dedup.base_url must be an HTTP(S) URL")
-    keep_ratio = value["keep_ratio"]
-    if (
-        type(keep_ratio) not in {int, float}
-        or not math.isfinite(keep_ratio)
-        or not 0 < keep_ratio <= 1
-    ):
-        raise ValueError("review_dedup.keep_ratio must be in (0, 1]")
     _positive_int(
         value["max_concurrency"],
         "review_dedup.max_concurrency",

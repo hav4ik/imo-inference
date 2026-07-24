@@ -15,6 +15,8 @@ from eval_config import load_config
 
 def build_command(config: dict, executable: str) -> list[str]:
     review = config["review_dedup"]
+    if review.get("backend", "voyage") != "voyage":
+        raise ValueError("the review-dedup server is only used by backend='voyage'")
     parsed = urlparse(review["base_url"])
     assert parsed.hostname is not None
     assert parsed.port is not None
@@ -57,8 +59,13 @@ def main() -> None:
     args = parser.parse_args()
     config = load_config(args.config)
     review = config.get("review_dedup")
-    if not review or not review["enabled"] or not review["auto_start"]:
-        raise RuntimeError("review_dedup auto-start is not enabled")
+    if (
+        not review
+        or not review["enabled"]
+        or review.get("backend", "voyage") != "voyage"
+        or not review["auto_start"]
+    ):
+        raise RuntimeError("Voyage review_dedup auto-start is not enabled")
 
     model = Path(review["model"])
     if not model.is_dir() or not (model / "config.json").is_file():

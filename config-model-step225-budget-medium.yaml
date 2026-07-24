@@ -111,18 +111,13 @@ traces:
   # explicit name to label each experiment.
   run_name: imo2026-step225-budget-medium
 
-# Voyage review deduplication. scheduler.sh auto-starts this vLLM pooling server;
-# direct run_submission.py calls still require an already-running endpoint.
+# In-process MinHash-LSH review deduplication. It affects only refinement
+# sampling; all verifier outputs still contribute to scoring and selection.
 review_dedup:
   enabled: true
-  auto_start: true
-  model: /tmp/models/voyage-4-nano
-  base_url: http://127.0.0.1:31000/v1
+  backend: minhash_lsh
   # ceil(16 * 0.59) = 10 retained reviews (6/16, or 37.5%, removed).
   keep_ratio: 0.59
-  max_concurrency: 32
-  request_timeout_seconds: 300
-  tensor_parallel_size: 1
-  data_parallel_size: 8
-  gpu_memory_utilization: 0.08
-  max_model_len: 4096
+  shingle_size: 1
+  num_perm: 128
+  lsh_threshold: 0.3
