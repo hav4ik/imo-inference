@@ -17,6 +17,9 @@ HARNESS = REPO / "evaluation" / "harness"
 sys.path.insert(0, str(HARNESS))
 
 from eval_config import active_model, load_config  # noqa: E402
+from launch_review_dedup_server import (  # noqa: E402
+    build_command as build_review_dedup_command,
+)
 from launch_server import attention_arguments, decode_graph_batches  # noqa: E402
 
 class RuntimeConfigTests(unittest.TestCase):
@@ -110,6 +113,10 @@ class RuntimeConfigTests(unittest.TestCase):
         self.assertEqual(
             inspected["draft_model"], "/workspace/models/custom-draft"
         )
+        self.assertFalse(inspected["review_dedup_auto_start"])
+        self.assertIsNone(inspected["review_dedup_model"])
+        self.assertIsNone(inspected["review_dedup_base_url"])
+        self.assertIsNone(inspected["review_dedup_health_url"])
 
     def test_tp_width_is_not_artificially_capped(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -305,6 +312,191 @@ class RuntimeConfigTests(unittest.TestCase):
                 )
                 with self.assertRaises(ValueError):
                     load_config(path)
+
+    def test_review_dedup_config_is_optional_and_strict(self):
+        dedup = {
+            "enabled": True,
+            "auto_start": True,
+            "model": "/workspace/models/voyage-4-nano",
+            "base_url": "http://127.0.0.1:31000/v1",
+            "keep_ratio": 0.59,
+            "max_concurrency": 32,
+            "request_timeout_seconds": 300,
+            "tensor_parallel_size": 1,
+            "data_parallel_size": 8,
+            "gpu_memory_utilization": 0.08,
+            "max_model_len": 4096,
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(
+                directory,
+                lambda config: config.__setitem__("review_dedup", dedup),
+            )
+            configured = load_config(path)
+        self.assertEqual(configured["review_dedup"], dedup)
+
+        invalid_values = (
+            ("keep_ratio", 0),
+            ("keep_ratio", 1.1),
+            ("base_url", "127.0.0.1:31000/v1"),
+            ("gpu_memory_utilization", 1),
+            ("data_parallel_size", 0),
+        )
+        for key, value in invalid_values:
+            with (
+                self.subTest(key=key, value=value),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                def configure(config, key=key, value=value):
+                    config["review_dedup"] = {**dedup, key: value}
+
+                path = self.write_config(
+                    directory,
+                    configure,
+                    name="invalid.yaml",
+                )
+                with self.assertRaises(ValueError):
+                    load_config(path)
+
+    def test_minhash_review_dedup_config_is_strict(self):
+        dedup = {
+            "enabled": True,
+            "backend": "minhash_lsh",
+            "keep_ratio": 0.59,
+            "shingle_size": 1,
+            "num_perm": 128,
+            "lsh_threshold": 0.3,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(
+                directory,
+                lambda config: config.__setitem__("review_dedup", dedup),
+            )
+            configured = load_config(path)
+        self.assertEqual(configured["review_dedup"], dedup)
+
+        invalid_values = (
+            ("backend", "unknown"),
+            ("keep_ratio", 0),
+            ("shingle_size", 0),
+            ("num_perm", 8),
+            ("lsh_threshold", 0),
+            ("lsh_threshold", 1),
+        )
+        for key, value in invalid_values:
+            with (
+                self.subTest(key=key, value=value),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                def configure(config, key=key, value=value):
+                    config["review_dedup"] = {**dedup, key: value}
+
+                path = self.write_config(directory, configure)
+                with self.assertRaises(ValueError):
+                    load_config(path)
+
+    def test_minhash_review_dedup_needs_no_sidecar(self):
+        def configure(config):
+            config["review_dedup"] = {
+                "enabled": True,
+                "backend": "minhash_lsh",
+                "keep_ratio": 0.59,
+                "shingle_size": 1,
+                "num_perm": 128,
+                "lsh_threshold": 0.3,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure)
+            output = subprocess.check_output(
+                [
+                    sys.executable,
+                    str(REPO / "docker/inspect_config.py"),
+                    str(path),
+                ],
+                cwd=REPO,
+                text=True,
+            )
+
+        inspected = json.loads(output)
+        self.assertTrue(inspected["review_dedup_enabled"])
+        self.assertEqual(inspected["review_dedup_backend"], "minhash_lsh")
+        self.assertFalse(inspected["review_dedup_auto_start"])
+        self.assertIsNone(inspected["review_dedup_model"])
+
+    def test_review_dedup_requires_random_nonideal_strategy(self):
+        def configure(config):
+            config["search"]["refine_review_strategy"] = "worst"
+            config["review_dedup"] = {
+                "enabled": True,
+                "auto_start": True,
+                "model": "/workspace/models/voyage-4-nano",
+                "base_url": "http://127.0.0.1:31000/v1",
+                "keep_ratio": 0.59,
+                "max_concurrency": 32,
+                "request_timeout_seconds": 300,
+                "tensor_parallel_size": 1,
+                "data_parallel_size": 8,
+                "gpu_memory_utilization": 0.08,
+                "max_model_len": 4096,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure, name="invalid.yaml")
+            with self.assertRaisesRegex(
+                ValueError,
+                "refine_review_strategy='random_nonideal'",
+            ):
+                load_config(path)
+
+    def test_review_dedup_launcher_uses_pooling_vllm_without_eager(self):
+        def configure(config):
+            config["review_dedup"] = {
+                "enabled": True,
+                "backend": "voyage",
+                "auto_start": True,
+                "model": "/tmp/models/voyage-4-nano",
+                "base_url": "http://127.0.0.1:31000/v1",
+                "keep_ratio": 0.59,
+                "max_concurrency": 32,
+                "request_timeout_seconds": 300,
+                "tensor_parallel_size": 1,
+                "data_parallel_size": 8,
+                "gpu_memory_utilization": 0.08,
+                "max_model_len": 4096,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_config(directory, configure)
+            config = load_config(path)
+        command = build_review_dedup_command(config, "/runtime/bin/vllm")
+        self.assertEqual(command[:3], [
+            "/runtime/bin/vllm",
+            "serve",
+            "/tmp/models/voyage-4-nano",
+        ])
+        for flag, value in (
+            ("--runner", "pooling"),
+            ("--convert", "embed"),
+            ("--dtype", "bfloat16"),
+            ("--max-model-len", "4096"),
+            ("--gpu-memory-utilization", "0.08"),
+            ("--tensor-parallel-size", "1"),
+            ("--data-parallel-size", "8"),
+            ("--host", "127.0.0.1"),
+            ("--port", "31000"),
+        ):
+            index = command.index(flag)
+            self.assertEqual(command[index + 1], value)
+        self.assertIn("--trust-remote-code", command)
+        self.assertNotIn("--enforce-eager", command)
+
+    def test_scheduler_owns_review_dedup_server_lifecycle(self):
+        scheduler = (REPO / "scheduler.sh").read_text()
+        self.assertIn("launch_review_dedup_server.py", scheduler)
+        self.assertIn("smoke-testing Voyage", scheduler)
+        self.assertIn("only for Voyage auto-start", scheduler)
 
     def test_decode_graphs_cover_configured_ceiling(self):
         batches = decode_graph_batches(96)

@@ -110,3 +110,15 @@ traces:
   # Subfolder per experiment. "" -> derive from the target model folder; set an
   # explicit name to label each experiment.
   run_name: imo2026-olmo3-opd-sft-750-budget-medium
+
+# In-process MinHash-LSH review deduplication. All verifier outputs remain in
+# scoring and tournament selection; only refinement sampling is deduplicated.
+review_dedup:
+  enabled: true
+  backend: minhash_lsh
+  # ceil(16 * 0.59) = 10 retained reviews (6/16, or 37.5%, removed).
+  # At 32 verifiers this retains 19 and removes 13/32, or 40.625%.
+  keep_ratio: 0.59
+  shingle_size: 1
+  num_perm: 128
+  lsh_threshold: 0.3

@@ -110,3 +110,14 @@ traces:
   # Subfolder per experiment. "" -> derive from the target model folder; set an
   # explicit name to label each experiment.
   run_name: imo2026-step225-budget-high
+
+# In-process MinHash-LSH review deduplication. It affects only refinement
+# sampling; all verifier outputs still contribute to scoring and selection.
+review_dedup:
+  enabled: true
+  backend: minhash_lsh
+  # ceil(32 * 0.59) = 19 retained reviews (13/32, or 40.625%, removed).
+  keep_ratio: 0.59
+  shingle_size: 1
+  num_perm: 128
+  lsh_threshold: 0.3

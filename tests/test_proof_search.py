@@ -499,6 +499,43 @@ class ProofSearchTests(unittest.TestCase):
         # worst-4 of scores (1,0.5,0,1,0.5,0) = [0, 0, 0.5, 0.5], lowest first
         self.assertEqual([item.score for item in worst], [0.0, 0.0, 0.5, 0.5])
 
+    def test_review_dedup_only_filters_random_refinement_pool(self):
+        with tempfile.TemporaryDirectory() as directory:
+            search = ProblemSearch(
+                problem_id="1",
+                problem="Prove the claim.",
+                output_dir=Path(directory),
+                client=ScriptedClient(),
+                semaphore=asyncio.Semaphore(4),
+                config=small_config(),
+            )
+            proof = Proof(
+                proof_id="r01-p0000",
+                round_index=1,
+                parent_id=None,
+                proof="Proof.",
+                self_evaluation="Audit.",
+                self_score=1.0,
+                generation_sample_id="generate",
+                verifications=[
+                    Verification("v0", 0.0, "Duplicate fatal review."),
+                    Verification("v1", 0.0, "Duplicate fatal review."),
+                    Verification("v2", 0.5, "Different minor gap."),
+                    Verification("v3", 1.0, "Ideal review."),
+                ],
+                refinement_review_ids=["v1", "v2"],
+            )
+
+            sampled = search._select_reviews(
+                proof, 10, 2, 0, "random_nonideal"
+            )
+            worst = search._select_reviews(proof, 4, 2, 0, "worst")
+
+        self.assertEqual({review.sample_id for review in sampled}, {"v1", "v2"})
+        self.assertEqual(len(proof.verifications), 4)
+        self.assertEqual(proof.mean_score, 0.375)
+        self.assertEqual({review.sample_id for review in worst}, {"v0", "v1", "v2", "v3"})
+
     def test_ranking_prefers_more_valid_votes_after_equal_mean(self):
         with tempfile.TemporaryDirectory() as directory:
             search = ProblemSearch(
