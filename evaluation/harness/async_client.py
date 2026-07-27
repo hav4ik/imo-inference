@@ -16,7 +16,12 @@ import loop_detect
 import smolmo_native as sn
 
 # Safety margin (tokens) kept free when clamping a force-close continuation to the context window.
-_CONTINUATION_CONTEXT_MARGIN = 64
+# Sized to absorb decode->re-encode drift (the reasoning is reconstructed from a decoded string,
+# which need not re-tokenize to the same length) plus SGLang's small input-side reserve.
+_CONTINUATION_CONTEXT_MARGIN = 256
+# Minimum completion budget the force-close must be able to request; the input is truncated
+# (oldest reasoning dropped) so at least this many tokens remain within the context window.
+_CONTINUATION_MIN_COMPLETION = 2048
 
 
 # smolmo native force-close: the solution answer is the markdown `## Solution` section (not XML).
@@ -138,7 +143,12 @@ class AsyncChatClient:
     async def _post_url(self, url: str, payload: dict) -> tuple[dict, float]:
         started = time.monotonic()
         response = await self._client.post(url, json=payload)
-        response.raise_for_status()
+        if response.status_code >= 400:
+            # Surface the server's error body (e.g. SGLang's exact token accounting) —
+            # httpx.HTTPStatusError alone hides it, which left an input-length 400 opaque.
+            raise RuntimeError(
+                f"HTTP {response.status_code} from {url}: {response.text[:600]}"
+            )
         return response.json(), round(time.monotonic() - started, 3)
 
     async def _post(self, path: str, payload: dict) -> tuple[dict, float]:
@@ -474,7 +484,22 @@ class AsyncChatClient:
             tokenizer.encode(suffix, add_special_tokens=False),
             "continuation-prefix token IDs",
         )
-        return prefix + continuation, visible_prefix, not has_opening_tag
+        input_ids = prefix + continuation
+        # Hard guard on the INPUT length. SGLang rejects a request whose input alone nears the
+        # context window (it reserves a few tokens), independent of max_new_tokens. The steer
+        # (steer_at_tokens) + continuation budget can sum to the full context with zero slack, so
+        # re-encode drift can push the reconstructed prompt over. If it does, drop the OLDEST
+        # reasoning tokens (right after the message prefix) — the steer text and any written
+        # content sit at the tail and are preserved, so the force-close still lands.
+        if self.context_length is not None:
+            max_input = (
+                self.context_length
+                - _CONTINUATION_MIN_COMPLETION
+                - _CONTINUATION_CONTEXT_MARGIN
+            )
+            if len(input_ids) > max_input:
+                input_ids = prefix + continuation[len(input_ids) - max_input:]
+        return input_ids, visible_prefix, not has_opening_tag
 
     async def _continue_xml_raw(
         self,
