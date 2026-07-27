@@ -136,6 +136,14 @@ class AsyncChatClient:
         )
         self._token_counts: dict[str, int] = {}
         self._tokenizer = None
+        # Per-instance salt for SGLang request IDs (rids). Rids must be unique across runs on
+        # the SAME server: re-running a problem reuses deterministic sample_ids, and a killed
+        # run can leave its rids cached server-side ("Duplicate request ID detected"). This
+        # only affects request tracking, never reproducibility (which is seed-driven).
+        self._run_salt = uuid.uuid4().hex[:12]
+
+    def _rid(self, request_id: str) -> str:
+        return f"{self._run_salt}/{request_id}"
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -194,7 +202,7 @@ class AsyncChatClient:
             "temperature": temperature,
             "top_p": top_p,
             "seed": seed,
-            "rid": request_id,
+            "rid": self._rid(request_id),
             "return_cached_tokens_details": True,
         }
         if tools is not None:
@@ -315,7 +323,7 @@ class AsyncChatClient:
             "temperature": temperature,
             "top_p": top_p,
             "seed": seed,
-            "rid": request_id,
+            "rid": self._rid(request_id),
             "return_cached_tokens_details": True,
             "stream": True,
             "stream_options": {"include_usage": True},
@@ -328,7 +336,7 @@ class AsyncChatClient:
             state = await self._consume_sse(response.aiter_lines(), detector)
         latency = round(time.monotonic() - started, 3)
         if state["aborted"]:
-            await self._abort_request(request_id)
+            await self._abort_request(self._rid(request_id))
         reasoning, content = state["reasoning"], state["content"]
         if state["usage"]:
             usage = _usage({"usage": state["usage"]})
@@ -544,7 +552,7 @@ class AsyncChatClient:
                 "max_new_tokens": max_new_tokens,
                 "sampling_seed": seed,
             },
-            "rid": continuation_id,
+            "rid": self._rid(continuation_id),
         }
         data, latency = await self._post_native("/generate", payload)
         if isinstance(data, list):
