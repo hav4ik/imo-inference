@@ -135,8 +135,19 @@ def main() -> None:
         "--cuda-graph-backend-prefill", str(server["prefill_cuda_graph_backend"]),
         "--cuda-graph-bs-prefill", "256", "1024", str(server["chunked_prefill_size"]),
         "--enable-cache-report", "--enable-metrics", "--random-seed", str(config["search"]["seed"]),
-        "--reasoning-parser", "deepseek-r1",
+        # Constrained-decoding backend. Default "xgrammar" (SGLang's own default; no-op when
+        # passed explicitly). The smolmo port sets "none": its Olmo tokenizer encodes `</think>`
+        # as multiple tokens, and SGLang's ReasonerGrammarBackend (built whenever a reasoning
+        # parser coexists with a real grammar backend) requires `</think>` to be a single token.
+        # The harness never uses constrained decoding, so disabling it is safe.
+        "--grammar-backend", str(server.get("grammar_backend", "xgrammar")),
     ]
+    # Reasoning/content splitter. Default "deepseek-r1" (splits on the `</think>` string, which
+    # works for multi-token `</think>`); "" disables it. The harness depends on the split
+    # (force-close reconstructs full text as reasoning + "</think>" + content), so smolmo keeps it.
+    reasoning_parser = server.get("reasoning_parser", "deepseek-r1")
+    if reasoning_parser:
+        command += ["--reasoning-parser", str(reasoning_parser)]
     if model.dflash:
         env["SGLANG_DFLASH_DRAFT_RING"] = "1"
         env["SGLANG_DFLASH_DRAFT_RING_QUOTA"] = "4"

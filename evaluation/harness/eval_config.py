@@ -32,6 +32,14 @@ SERVER_KEYS = {
     "prefill_cuda_graph_backend", "watchdog_timeout",
     "dflash_block_size", "dflash_num_draft_tokens", "dflash_window_size",
 }
+# Optional server knobs (absent => SGLang defaults). `grammar_backend` selects the
+# constrained-decoding backend ("none" disables it, which the smolmo port needs: its
+# Olmo tokenizer encodes `</think>` as MULTIPLE tokens, so SGLang's ReasonerGrammarBackend
+# — built whenever a reasoning parser + a real grammar backend coexist — raises
+# "think_end_token must encode to exactly one token". The harness never uses constrained
+# decoding, so "none" is safe.) `reasoning_parser` selects the reasoning/content splitter
+# ("" disables it); the harness relies on the split, so smolmo keeps deepseek-r1.
+OPTIONAL_SERVER_KEYS = {"grammar_backend", "reasoning_parser"}
 SEARCH_KEYS = {
     "proofs_per_round", "verifications_per_proof", "top_proofs",
     "refine_parents", "reviews_per_refine_parent", "refine_review_strategy",
@@ -171,12 +179,22 @@ def load_config(path: Path) -> dict[str, Any]:
     if config["schema_version"] != 12:
         raise ValueError("schema_version must be 12")
     for section, keys in (
-        ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS), ("server", SERVER_KEYS),
+        ("models", MODEL_PATH_KEYS), ("model", MODEL_KEYS),
     ):
         value = config[section]
         if not isinstance(value, dict):
             raise ValueError(f"{section} must be a mapping")
         _exact_keys(value, keys, section)
+    # server: SERVER_KEYS required + OPTIONAL_SERVER_KEYS allowed but not required.
+    if not isinstance(config["server"], dict):
+        raise ValueError("server must be a mapping")
+    actual = set(config["server"])
+    missing = SERVER_KEYS - actual
+    extra = actual - SERVER_KEYS - OPTIONAL_SERVER_KEYS
+    if missing or extra:
+        raise ValueError(
+            f"server keys differ: missing={sorted(missing)}, extra={sorted(extra)}"
+        )
     # search: SEARCH_KEYS required + OPTIONAL_SEARCH_KEYS allowed but not required.
     if not isinstance(config["search"], dict):
         raise ValueError("search must be a mapping")
@@ -238,6 +256,14 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("server.mem_fraction_static must be between 0 and 1")
     if not 0 < server["swa_full_tokens_ratio"] <= 1:
         raise ValueError("server.swa_full_tokens_ratio must be in (0, 1]")
+    if "grammar_backend" in server and server["grammar_backend"] not in {
+        "xgrammar", "outlines", "llguidance", "none",
+    }:
+        raise ValueError(
+            "server.grammar_backend must be one of xgrammar, outlines, llguidance, none"
+        )
+    if "reasoning_parser" in server and not isinstance(server["reasoning_parser"], str):
+        raise ValueError("server.reasoning_parser must be a string ('' disables it)")
 
     search = config["search"]
     for key in (
