@@ -207,6 +207,12 @@ class CallStore:
                 if steer_at_tokens is not None and not agentic:
                     prompt_tokens = await client.token_count(spec.messages)
                     max_completion_tokens = max(1024, int(steer_at_tokens) - prompt_tokens)
+                    # Never let prompt + completion exceed the context window (verify/refine
+                    # prompts embed large proofs; the steer floor of 1024 could otherwise spill
+                    # past 65536 and SGLang 400s). Clamp against the server context length.
+                    if client.context_length is not None:
+                        room = int(client.context_length) - prompt_tokens - 64
+                        max_completion_tokens = max(1, min(max_completion_tokens, room))
                 params = tool_params or {}
                 if agentic:
                     response = await client.chat_agentic(

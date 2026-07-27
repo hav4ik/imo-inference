@@ -15,6 +15,9 @@ import httpx
 import loop_detect
 import smolmo_native as sn
 
+# Safety margin (tokens) kept free when clamping a force-close continuation to the context window.
+_CONTINUATION_CONTEXT_MARGIN = 64
+
 
 # smolmo native force-close: the solution answer is the markdown `## Solution` section (not XML).
 _FORCE_SOLUTION_STEER = (
@@ -23,13 +26,13 @@ _FORCE_SOLUTION_STEER = (
     "and no restatement of the task.\n</think>\n\n## Solution\n"
 )
 
-# Verifier force-close is SOFT (decision): inject only </think> (opening_tag="" below routes here),
-# then let the model write its full analysis and emit the grade in \boxed{} itself — the verdict
-# body is load-bearing for refine critiques, so we do NOT force a bare \boxed{ lead. (This literal
-# is retained for reference; the empty verifier opening_tag means it is not injected.)
+# Verifier force-close is SOFT (decision): opening_tag="" routes to the "preserve + inject
+# force_steer" path, so we close </think> and nudge the model into writing its evaluation (and
+# emitting the grade in \boxed{} itself) rather than forcing a bare \boxed{ lead — the verdict
+# body is load-bearing for refine critiques.
 _FORCE_VERIFICATION_STEER = (
-    "\n\nI must finalize now. I will write my complete analysis and end with the grade "
-    "as a single number in \\boxed{}.\n</think>\n\n"
+    "\nWe should now write the final evaluation due time limit.\n</think>\n\n"
+    "Here is my evaluation of the solution:\n"
 )
 
 _FORCE_SELECTION_STEER = (
@@ -105,8 +108,12 @@ class AsyncChatClient:
         *,
         max_connections: int = 1000,
         timeout: float = 3600.0,
+        context_length: int | None = None,
     ):
         self.base_url = base_url.rstrip("/")
+        # Server context window; used to clamp force-close continuation budgets so
+        # prompt + max_new_tokens never exceeds it (SGLang 400s otherwise).
+        self.context_length = context_length
         self.native_base_url = (
             self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
         )
@@ -496,6 +503,14 @@ class AsyncChatClient:
             preserve_untagged_content=preserve_untagged_content,
         )
         continuation_id = f"{request_id}/{role}-continuation"
+        # Clamp so prompt + max_new_tokens stays within the server context window. The
+        # force-close prompt is the accumulated (steered) sequence + the injected steer
+        # text, so with steer_at_tokens near the context limit the static continuation
+        # budget (context_length - steer_at_tokens) can spill a few tokens over and SGLang
+        # rejects the request with a 400. This is the fix for that overflow.
+        if self.context_length is not None:
+            room = self.context_length - len(input_ids) - _CONTINUATION_CONTEXT_MARGIN
+            max_new_tokens = max(1, min(max_new_tokens, room))
         payload = {
             "input_ids": input_ids,
             "sampling_params": {
