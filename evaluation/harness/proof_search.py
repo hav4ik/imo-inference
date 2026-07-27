@@ -174,7 +174,7 @@ class CallStore:
         stream_detect: bool = False,
         filter_degenerate: bool = True,
         selection_continuation_tokens: int = 2048,
-        steer_at_tokens: int | None = None,
+        verifier_thinking_budget_tokens: int | None = None,
         tool_use: bool = False,
         sandbox=None,
         tool_params: dict | None = None,
@@ -201,24 +201,44 @@ class CallStore:
                     and (is_proof_generation or is_verification or is_selection)
                     and sandbox is not None
                 )
-                # Steer at a TOTAL-sequence position: run reasoning until prompt+completion reaches
-                # `steer_at_tokens` (e.g. 56K), then finish_reason="length" triggers the force-close
-                # (</think> + `## Solution`). Dynamic because verify/refine prompts embed proofs up to
-                # ~25K tokens, so a static completion cap would blow past the 65536 context.
-                if steer_at_tokens is not None and not agentic:
-                    prompt_tokens = await client.token_count(spec.messages)
-                    max_completion_tokens = max(1024, int(steer_at_tokens) - prompt_tokens)
-                    # Never let prompt + completion exceed the context window (verify/refine
-                    # prompts embed large proofs; the steer floor of 1024 could otherwise spill
-                    # past 65536 and SGLang 400s). Clamp against the server context length.
-                    if client.context_length is not None:
-                        room = int(client.context_length) - prompt_tokens - 64
-                        max_completion_tokens = max(1, min(max_completion_tokens, room))
+                # Reserve room for the forced finalization UP FRONT (Manh's fit_completion_budget):
+                # the reserve is this stage's continuation budget, so the initial completion is
+                # capped at context - prompt - reserve - margin and a later force-close always fits.
+                # A verifier additionally gets a smaller `verifier_thinking_budget_tokens` cap
+                # (bounds analysis rambling); force_invalid_verifier below finalizes it if it stops
+                # short of a grade. fit_completion_budget raises on an over-long prompt (e.g. a giant
+                # refine prompt) so the doomed request is dropped instead of 400ing.
+                continuation_reserve = (
+                    solution_continuation_tokens
+                    if is_proof_generation
+                    else verifier_continuation_tokens
+                    if is_verification
+                    else selection_continuation_tokens
+                    if is_selection
+                    else 0
+                )
+                requested_initial_tokens = (
+                    min(max_completion_tokens, verifier_thinking_budget_tokens)
+                    if is_verification and verifier_thinking_budget_tokens is not None
+                    else max_completion_tokens
+                )
+                effective_max_completion_tokens, _ = await client.fit_completion_budget(
+                    spec.messages,
+                    requested_tokens=requested_initial_tokens,
+                    reserve_tokens=continuation_reserve,
+                )
+                salvage_max_tokens = (
+                    solution_continuation_tokens
+                    if is_proof_generation
+                    else selection_continuation_tokens
+                    if is_selection
+                    else verifier_continuation_tokens
+                )
                 params = tool_params or {}
                 if agentic:
                     response = await client.chat_agentic(
                         spec.messages,
-                        max_completion_tokens=max_completion_tokens,
+                        max_completion_tokens=effective_max_completion_tokens,
                         temperature=temperature,
                         top_p=top_p,
                         seed=spec.seed,
@@ -228,14 +248,7 @@ class CallStore:
                             if is_proof_generation
                             else "selector" if is_selection else "verifier"
                         ),
-                        salvage_max_tokens=(
-                            solution_continuation_tokens
-                            if is_proof_generation
-                            else selection_continuation_tokens
-                            if is_selection
-                            else verifier_continuation_tokens
-                        ),
-                        steer_at_tokens=steer_at_tokens,
+                        salvage_max_tokens=salvage_max_tokens,
                         sandbox=sandbox,
                         tools=params.get("tools"),
                         max_turns=int(params.get("max_turns", 64)),
@@ -247,7 +260,7 @@ class CallStore:
                     # loop (real-time detection). Same record shape as chat_raw.
                     response = await client.chat_stream(
                         spec.messages,
-                        max_completion_tokens=max_completion_tokens,
+                        max_completion_tokens=effective_max_completion_tokens,
                         temperature=temperature,
                         top_p=top_p,
                         seed=spec.seed,
@@ -262,7 +275,7 @@ class CallStore:
                 else:
                     response = await client.chat_raw(
                         spec.messages,
-                        max_completion_tokens=max_completion_tokens,
+                        max_completion_tokens=effective_max_completion_tokens,
                         temperature=temperature,
                         top_p=top_p,
                         seed=spec.seed,
@@ -292,7 +305,21 @@ class CallStore:
                 # Generate/verify re-validate via `parser`; the selector re-checks for a
                 # <selected_id>. A parserless, non-selector stage has nothing to recover,
                 # so it is skipped (keeps a normal unparseable record, never parser(None)).
-                if was_length and not xml_valid and (parser is not None or is_selection) and not agentic:
+                # A verifier under a thinking budget is ALSO finalized when it stopped without
+                # a grade (force_invalid_verifier): the smaller budget can end a verdict before
+                # the \boxed{} appears, so we force it to emit one.
+                force_invalid_verifier = (
+                    is_verification
+                    and verifier_thinking_budget_tokens is not None
+                    and not xml_valid
+                    and not agentic
+                )
+                if (
+                    (was_length or force_invalid_verifier)
+                    and not xml_valid
+                    and (parser is not None or is_selection)
+                    and not agentic
+                ):
                     if is_proof_generation:
                         response = await client.continue_solution_raw(
                             response,
@@ -477,7 +504,11 @@ class ProblemSearch:
             selection_continuation_tokens=int(
                 self.config.get("selection_continuation_tokens", 2048)
             ),
-            steer_at_tokens=self.config.get("steer_at_tokens"),
+            verifier_thinking_budget_tokens=(
+                int(self.config["verifier_thinking_budget_tokens"])
+                if self.config.get("verifier_thinking_budget_tokens") is not None
+                else None
+            ),
             tool_use=self.tool_use,
             sandbox=self.sandbox,
             tool_params=self.tool_params,

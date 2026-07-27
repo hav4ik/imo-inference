@@ -114,11 +114,15 @@ class AsyncChatClient:
         max_connections: int = 1000,
         timeout: float = 3600.0,
         context_length: int | None = None,
+        context_margin_tokens: int = 256,
     ):
         self.base_url = base_url.rstrip("/")
-        # Server context window; used to clamp force-close continuation budgets so
-        # prompt + max_new_tokens never exceeds it (SGLang 400s otherwise).
+        # Server context window, and a safety margin always kept free. Together they let
+        # fit_completion_budget() reserve room for the forced finalization up front, so a
+        # request's prompt + completion + continuation never exceeds the window (SGLang 400s
+        # otherwise). The margin also absorbs decode->re-encode drift in the force-close prompt.
         self.context_length = context_length
+        self.context_margin_tokens = int(context_margin_tokens)
         self.native_base_url = (
             self.base_url[:-3] if self.base_url.endswith("/v1") else self.base_url
         )
@@ -144,6 +148,35 @@ class AsyncChatClient:
 
     def _rid(self, request_id: str) -> str:
         return f"{self._run_salt}/{request_id}"
+
+    async def fit_completion_budget(
+        self,
+        messages: list[dict],
+        *,
+        requested_tokens: int,
+        reserve_tokens: int = 0,
+    ) -> tuple[int, int | None]:
+        """Cap a first completion so the forced finalization always fits.
+
+        Returns (effective_max_completion_tokens, prompt_tokens). The completion is limited to
+        ``context_length - prompt - reserve_tokens - context_margin`` (never above the requested
+        value), which guarantees room for a later ``reserve_tokens`` force-close continuation
+        plus the margin, so the request never exceeds the context window. Raises when the prompt
+        itself leaves no room (e.g. an over-long refine prompt) — the caller drops that call
+        rather than sending a doomed request."""
+        if self.context_length is None:
+            return requested_tokens, None
+        prompt_tokens = await self.token_count(messages)
+        available = (
+            self.context_length - prompt_tokens - reserve_tokens - self.context_margin_tokens
+        )
+        if available <= 0:
+            raise RuntimeError(
+                "prompt leaves no completion budget: "
+                f"context={self.context_length} prompt={prompt_tokens} "
+                f"reserve={reserve_tokens} margin={self.context_margin_tokens}"
+            )
+        return min(requested_tokens, available), prompt_tokens
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -493,12 +526,12 @@ class AsyncChatClient:
             "continuation-prefix token IDs",
         )
         input_ids = prefix + continuation
-        # Hard guard on the INPUT length. SGLang rejects a request whose input alone nears the
-        # context window (it reserves a few tokens), independent of max_new_tokens. The steer
-        # (steer_at_tokens) + continuation budget can sum to the full context with zero slack, so
-        # re-encode drift can push the reconstructed prompt over. If it does, drop the OLDEST
-        # reasoning tokens (right after the message prefix) — the steer text and any written
-        # content sit at the tail and are preserved, so the force-close still lands.
+        # Backstop on the INPUT length. fit_completion_budget already reserves room for this
+        # continuation up front, but the force-close prompt is a decode->re-encode of the
+        # reasoning (not length-preserving), so extreme drift could still push the reconstructed
+        # input past the window. If it does, drop the OLDEST reasoning tokens (right after the
+        # message prefix) — the steer text and any written content sit at the tail and are
+        # preserved, so the force-close still lands. Normally this never triggers.
         if self.context_length is not None:
             max_input = (
                 self.context_length
@@ -536,11 +569,10 @@ class AsyncChatClient:
             preserve_untagged_content=preserve_untagged_content,
         )
         continuation_id = f"{request_id}/{role}-continuation"
-        # Clamp so prompt + max_new_tokens stays within the server context window. The
-        # force-close prompt is the accumulated (steered) sequence + the injected steer
-        # text, so with steer_at_tokens near the context limit the static continuation
-        # budget (context_length - steer_at_tokens) can spill a few tokens over and SGLang
-        # rejects the request with a 400. This is the fix for that overflow.
+        # Clamp so prompt + max_new_tokens stays within the server context window. Belt to the
+        # fit_completion_budget suspenders: the initial completion was capped to reserve this
+        # continuation, but re-encode drift in the reconstructed force-close prompt could still
+        # nudge the total over, so clamp max_new_tokens against the actual input length.
         if self.context_length is not None:
             room = self.context_length - len(input_ids) - _CONTINUATION_CONTEXT_MARGIN
             max_new_tokens = max(1, min(max_new_tokens, room))
@@ -734,7 +766,6 @@ class AsyncChatClient:
         request_id: str,
         role: str,
         salvage_max_tokens: int,
-        steer_at_tokens: int | None,
         sandbox,
         tools: list,
         max_turns: int = 64,
@@ -747,7 +778,8 @@ class AsyncChatClient:
         The loop ends on a tool-free turn (the final answer), stop/length, or ``max_turns``. Returns
         a chat_raw-shaped record for the final answer turn; a final turn that hit ``length`` is
         force-closed (``</think>`` + ``## Solution``, soft for the verifier) against the ACCUMULATED
-        conversation. Per-turn steer recomputes the completion cap as tool results grow the prompt."""
+        conversation. Each turn re-fits the completion cap (reserving ``salvage_max_tokens`` for the
+        force-close) as tool results grow the prompt, so no turn can overflow the context."""
         session_id = uuid.uuid4().hex
         with contextlib.suppress(Exception):  # best-effort per-session preimport
             await self._run_tool_call(
@@ -765,9 +797,11 @@ class AsyncChatClient:
         try:
             for turn in range(max_turns):
                 turns_used = turn + 1
-                eff_max = max_completion_tokens
-                if steer_at_tokens is not None:
-                    eff_max = max(1024, int(steer_at_tokens) - await self.token_count(convo))
+                eff_max, _ = await self.fit_completion_budget(
+                    convo,
+                    requested_tokens=max_completion_tokens,
+                    reserve_tokens=salvage_max_tokens,
+                )
                 rec = await self.chat_raw(
                     convo,
                     max_completion_tokens=eff_max,

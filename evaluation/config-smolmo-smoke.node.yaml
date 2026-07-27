@@ -52,7 +52,8 @@ search:
   request_timeout_seconds: 86400
   concurrency: 32
   seed: 0
-  steer_at_tokens: 56000
+  context_margin_tokens: 256           # tokens kept free of the context window (fit_completion_budget)
+  verifier_thinking_budget_tokens: 32000  # smaller verifier thinking cap; force-close to a grade
   tool_use: false
   sandbox_host: 127.0.0.1
   sandbox_port: 6000

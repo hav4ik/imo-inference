@@ -86,7 +86,8 @@ OPTIONAL_SEARCH_KEYS = {
     "selection_tournament_max_candidates",
     "selection_score_window",
     # smolmo port knobs:
-    "steer_at_tokens",  # total-sequence position at which to force-close reasoning (</think> + answer)
+    "context_margin_tokens",          # tokens kept free of the context window (fit_completion_budget)
+    "verifier_thinking_budget_tokens",  # optional smaller thinking cap for verifiers; None => off
     "tool_use",         # enable the native <function_calls> Python tool loop (sandbox)
     "sandbox_host",
     "sandbox_port",
@@ -354,8 +355,13 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError(
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"
         )
-    if "steer_at_tokens" in search:
-        _positive_int(search["steer_at_tokens"], "search.steer_at_tokens")
+    if "context_margin_tokens" in search:
+        _positive_int(search["context_margin_tokens"], "search.context_margin_tokens")
+    if "verifier_thinking_budget_tokens" in search:
+        _positive_int(
+            search["verifier_thinking_budget_tokens"],
+            "search.verifier_thinking_budget_tokens",
+        )
     if "tool_use" in search and type(search["tool_use"]) is not bool:
         raise ValueError("search.tool_use must be a boolean")
     if "sandbox_host" in search and not isinstance(search["sandbox_host"], str):

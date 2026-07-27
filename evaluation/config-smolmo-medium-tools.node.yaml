@@ -40,8 +40,8 @@ search:
   early_stop_threshold: 0.99999 # only a unanimous grade-7 (=1.0) early-stops
   temperature: 1.0
   top_p: 0.95
-  max_completion_tokens: 56000  # ignored when steer_at_tokens is set (dynamic per-request)
-  solution_continuation_tokens: 9536   # 65536 - 56000 post-force-close budget
+  max_completion_tokens: 56000  # requested cap; fit_completion_budget lowers it to fit the context
+  solution_continuation_tokens: 9536   # reserved (fit_completion_budget) for the solution force-close
   verifier_continuation_tokens: 9536
   min_valid_verifications: 1
   verifier_sees_self_evaluation: false
@@ -52,7 +52,8 @@ search:
   request_timeout_seconds: 86400
   concurrency: 96
   seed: 0
-  steer_at_tokens: 56000        # force </think> + `## Solution` at 56K total sequence
+  context_margin_tokens: 256           # tokens kept free of the context window (fit_completion_budget)
+  verifier_thinking_budget_tokens: 32000  # smaller verifier thinking cap; force-close to a grade
   tool_use: true               # set true to enable the native <function_calls> loop (needs sandbox on :6000)
   sandbox_host: 127.0.0.1
   sandbox_port: 6000

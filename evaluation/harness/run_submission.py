@@ -201,6 +201,7 @@ async def run_submission(
         max_connections=config["search"]["concurrency"] + 8,
         timeout=float(config["search"]["request_timeout_seconds"]),
         context_length=int(server["context_length"]),
+        context_margin_tokens=int(config["search"].get("context_margin_tokens", 256)),
     )
     semaphore = asyncio.Semaphore(config["search"]["concurrency"])
     proofs = load_existing_submission(output_path, rows) if is_resume else []
