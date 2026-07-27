@@ -192,12 +192,13 @@ class CallStore:
         is_selection = spec.stage.endswith("/select")
         try:
             async with semaphore:
-                # Tool-use gen/verify run the native <function_calls> agentic loop (which does its
-                # own per-turn steer + force-close over the accumulated convo). Selection never uses
-                # tools. Refine rounds are `/generate` stages, so they route here too.
+                # Tool-use stages run the native <function_calls> agentic loop (which does its own
+                # per-turn steer + force-close over the accumulated convo). All four stages may use
+                # tools: generation, verification, selection, and refinement (refine rounds are
+                # `/generate` stages, so they route through is_proof_generation here too).
                 agentic = (
                     bool(tool_use)
-                    and (is_proof_generation or is_verification)
+                    and (is_proof_generation or is_verification or is_selection)
                     and sandbox is not None
                 )
                 # Steer at a TOTAL-sequence position: run reasoning until prompt+completion reaches
@@ -222,10 +223,16 @@ class CallStore:
                         top_p=top_p,
                         seed=spec.seed,
                         request_id=spec.sample_id,
-                        role="solution" if is_proof_generation else "verifier",
+                        role=(
+                            "solution"
+                            if is_proof_generation
+                            else "selector" if is_selection else "verifier"
+                        ),
                         salvage_max_tokens=(
                             solution_continuation_tokens
                             if is_proof_generation
+                            else selection_continuation_tokens
+                            if is_selection
                             else verifier_continuation_tokens
                         ),
                         steer_at_tokens=steer_at_tokens,
