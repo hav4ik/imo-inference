@@ -5,3 +5,4 @@ nvidia-cutlass-dsl-libs-base==4.5.2
 nvidia-cutlass-dsl-libs-cu13==4.5.2
 pyyaml>=6,<7
 quack-kernels==0.5.0
+datasketch>=1.6,<2

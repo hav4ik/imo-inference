@@ -93,6 +93,9 @@ class Proof:
     self_score: float
     generation_sample_id: str
     verifications: list[Verification] = field(default_factory=list)
+    # Cached MinHash-LSH dedup of this proof's non-ideal reviews (retained sample_ids +
+    # stats), computed once when review dedup is enabled. None => dedup off / not yet run.
+    review_dedup: dict | None = None
 
     @property
     def mean_score(self) -> float:
@@ -116,6 +119,7 @@ class Proof:
             self_score=value["self_score"],
             generation_sample_id=value["generation_sample_id"],
             verifications=[Verification(**item) for item in value["verifications"]],
+            review_dedup=value.get("review_dedup"),
         )
 
 
@@ -448,6 +452,14 @@ class ProblemSearch:
                 "tool_timeout": float(config.get("tool_timeout", 60.0)),
                 "max_output_chars": int(config.get("tool_max_output_chars", 600)),
             }
+        # Optional MinHash-LSH dedup of a proof's non-ideal reviews before refine sampling
+        # (Nguyen's mechanism), to feed the refiner DIVERSE critiques. Off unless enabled.
+        review_dedup_cfg = config.get("review_dedup")
+        self.review_deduper = None
+        if review_dedup_cfg and review_dedup_cfg.get("enabled"):
+            from review_dedup import ReviewDeduper
+
+            self.review_deduper = ReviewDeduper(review_dedup_cfg, seed=int(config["seed"]))
         self.on_round_complete = on_round_complete
         self.calls = CallStore(output_dir)
         self.proofs_dir = output_dir / "proofs"
@@ -759,6 +771,15 @@ class ProblemSearch:
             )
             return ranked[:limit]
         nonideal = [v for v in proof.verifications if 0.0 < v.score < 1.0]
+        # Prune near-duplicate critiques (MinHash-LSH) so the refiner sees DIVERSE
+        # feedback. Computed once per proof over its non-ideal reviews and cached; the
+        # retained subset then feeds the seeded per-call sampling below. Scoring and
+        # final selection are untouched (they use every review).
+        if self.review_deduper is not None and len(nonideal) > 1:
+            if proof.review_dedup is None:
+                proof.review_dedup = self.review_deduper.deduplicate(nonideal)
+            retained = set(proof.review_dedup["retained_sample_ids"])
+            nonideal = [v for v in nonideal if v.sample_id in retained]
         order = sorted(
             range(len(nonideal)),
             key=lambda idx: stable_seed(

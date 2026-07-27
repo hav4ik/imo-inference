@@ -16,11 +16,14 @@ ROOT_KEYS = {"schema_version", "models", "model", "server", "search"}
 # Optional top-level sections: present only when the operator opts in. Kept out of
 # ROOT_KEYS so existing configs stay valid without them, but validated strictly
 # when supplied.
-OPTIONAL_ROOT_KEYS = {"traces"}
+OPTIONAL_ROOT_KEYS = {"traces", "review_dedup"}
 TRACES_KEYS = {
     "enabled", "dataset_repo", "secrets_file", "interval_seconds", "private",
     "run_name",
 }
+# Nguyen's MinHash-LSH verifier-review dedup (in-process). Affects ONLY refinement
+# review sampling; scoring/selection use every review.
+REVIEW_DEDUP_KEYS = {"enabled", "backend", "keep_ratio", "shingle_size", "num_perm", "lsh_threshold"}
 MODEL_PATH_KEYS = {"bf16_target", "quantized_target", "bf16_draft", "quantized_draft"}
 MODEL_KEYS = {
     "tensor_parallel_size", "data_parallel_size", "quantized", "dflash", "kv_cache_dtype",
@@ -379,8 +382,27 @@ def load_config(path: Path) -> dict[str, Any]:
 
     if "traces" in config:
         _validate_traces(config["traces"])
+    if "review_dedup" in config:
+        _validate_review_dedup(config["review_dedup"])
 
     return config
+
+
+def _validate_review_dedup(cfg: Any) -> None:
+    """Strictly validate the optional `review_dedup` section (MinHash-LSH dedup)."""
+    if not isinstance(cfg, dict):
+        raise ValueError("review_dedup must be a mapping")
+    _exact_keys(cfg, REVIEW_DEDUP_KEYS, "review_dedup")
+    if type(cfg["enabled"]) is not bool:
+        raise ValueError("review_dedup.enabled must be a boolean")
+    if cfg["backend"] != "minhash_lsh":
+        raise ValueError("review_dedup.backend must be 'minhash_lsh'")
+    if not isinstance(cfg["keep_ratio"], (int, float)) or not 0 < cfg["keep_ratio"] <= 1:
+        raise ValueError("review_dedup.keep_ratio must be in (0, 1]")
+    _positive_int(cfg["shingle_size"], "review_dedup.shingle_size")
+    _positive_int(cfg["num_perm"], "review_dedup.num_perm")
+    if not isinstance(cfg["lsh_threshold"], (int, float)) or not 0 < cfg["lsh_threshold"] <= 1:
+        raise ValueError("review_dedup.lsh_threshold must be in (0, 1]")
 
 
 def _validate_traces(traces: Any) -> None:

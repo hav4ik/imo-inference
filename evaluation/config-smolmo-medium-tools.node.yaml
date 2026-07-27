@@ -72,3 +72,13 @@ traces:
   interval_seconds: 600
   private: true
   run_name: proofbench-smolmo-tools-test
+
+# Nguyen's MinHash-LSH verifier-review dedup: prune near-duplicate critiques before refine
+# sampling so the refiner sees DIVERSE feedback. Scoring/selection use every review.
+review_dedup:
+  enabled: true
+  backend: minhash_lsh
+  keep_ratio: 0.59        # retain ceil(n*0.59) reviews; drop ~40% near-duplicates
+  shingle_size: 1
+  num_perm: 128
+  lsh_threshold: 0.3
