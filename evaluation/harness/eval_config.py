@@ -77,6 +77,14 @@ OPTIONAL_SEARCH_KEYS = {
     "selection_tournament_rounds",
     "selection_tournament_max_candidates",
     "selection_score_window",
+    # smolmo port knobs:
+    "steer_at_tokens",  # total-sequence position at which to force-close reasoning (</think> + answer)
+    "tool_use",         # enable the native <function_calls> Python tool loop (sandbox)
+    "sandbox_host",
+    "sandbox_port",
+    "tool_max_turns",
+    "tool_timeout",
+    "tool_max_output_chars",
 }
 
 @dataclass(frozen=True)
@@ -320,6 +328,22 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError(
             "search.refine_review_strategy must be 'worst' or 'random_nonideal'"
         )
+    if "steer_at_tokens" in search:
+        _positive_int(search["steer_at_tokens"], "search.steer_at_tokens")
+    if "tool_use" in search and type(search["tool_use"]) is not bool:
+        raise ValueError("search.tool_use must be a boolean")
+    if "sandbox_host" in search and not isinstance(search["sandbox_host"], str):
+        raise ValueError("search.sandbox_host must be a string")
+    if "sandbox_port" in search:
+        _positive_int(search["sandbox_port"], "search.sandbox_port")
+    if "tool_max_turns" in search:
+        _positive_int(search["tool_max_turns"], "search.tool_max_turns")
+    if "tool_max_output_chars" in search:
+        _positive_int(search["tool_max_output_chars"], "search.tool_max_output_chars")
+    if "tool_timeout" in search:
+        value = search["tool_timeout"]
+        if type(value) not in (int, float) or type(value) is bool or value <= 0:
+            raise ValueError("search.tool_timeout must be a positive number")
 
     if "traces" in config:
         _validate_traces(config["traces"])

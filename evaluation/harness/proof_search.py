@@ -16,6 +16,8 @@ from typing import Any
 
 from async_client import AsyncChatClient
 from loop_detect import is_degenerate
+import proof_prompts
+import smolmo_native
 from proof_prompts import (
     generation_messages,
     parse_generation,
@@ -172,6 +174,10 @@ class CallStore:
         stream_detect: bool = False,
         filter_degenerate: bool = True,
         selection_continuation_tokens: int = 2048,
+        steer_at_tokens: int | None = None,
+        tool_use: bool = False,
+        sandbox=None,
+        tool_params: dict | None = None,
     ) -> dict:
         existing = self.records.get(spec.sample_id)
         if existing is not None:
@@ -186,7 +192,44 @@ class CallStore:
         is_selection = spec.stage.endswith("/select")
         try:
             async with semaphore:
-                if stream_detect and (is_proof_generation or is_verification):
+                # Tool-use gen/verify run the native <function_calls> agentic loop (which does its
+                # own per-turn steer + force-close over the accumulated convo). Selection never uses
+                # tools. Refine rounds are `/generate` stages, so they route here too.
+                agentic = (
+                    bool(tool_use)
+                    and (is_proof_generation or is_verification)
+                    and sandbox is not None
+                )
+                # Steer at a TOTAL-sequence position: run reasoning until prompt+completion reaches
+                # `steer_at_tokens` (e.g. 56K), then finish_reason="length" triggers the force-close
+                # (</think> + `## Solution`). Dynamic because verify/refine prompts embed proofs up to
+                # ~25K tokens, so a static completion cap would blow past the 65536 context.
+                if steer_at_tokens is not None and not agentic:
+                    prompt_tokens = await client.token_count(spec.messages)
+                    max_completion_tokens = max(1024, int(steer_at_tokens) - prompt_tokens)
+                params = tool_params or {}
+                if agentic:
+                    response = await client.chat_agentic(
+                        spec.messages,
+                        max_completion_tokens=max_completion_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        seed=spec.seed,
+                        request_id=spec.sample_id,
+                        role="solution" if is_proof_generation else "verifier",
+                        salvage_max_tokens=(
+                            solution_continuation_tokens
+                            if is_proof_generation
+                            else verifier_continuation_tokens
+                        ),
+                        steer_at_tokens=steer_at_tokens,
+                        sandbox=sandbox,
+                        tools=params.get("tools"),
+                        max_turns=int(params.get("max_turns", 64)),
+                        tool_timeout=float(params.get("tool_timeout", 60.0)),
+                        max_output_chars=int(params.get("max_output_chars", 600)),
+                    )
+                elif stream_detect and (is_proof_generation or is_verification):
                     # Stream the completion and abort+salvage on a live degenerate
                     # loop (real-time detection). Same record shape as chat_raw.
                     response = await client.chat_stream(
@@ -236,7 +279,7 @@ class CallStore:
                 # Generate/verify re-validate via `parser`; the selector re-checks for a
                 # <selected_id>. A parserless, non-selector stage has nothing to recover,
                 # so it is skipped (keeps a normal unparseable record, never parser(None)).
-                if was_length and not xml_valid and (parser is not None or is_selection):
+                if was_length and not xml_valid and (parser is not None or is_selection) and not agentic:
                     if is_proof_generation:
                         response = await client.continue_solution_raw(
                             response,
@@ -347,6 +390,24 @@ class ProblemSearch:
         self.client = client
         self.semaphore = semaphore
         self.config = config
+        # Select tool vs no-tool native system prompt (and, downstream, the tools schema).
+        self.tool_use = bool(config.get("tool_use", False))
+        proof_prompts.configure(tool_use=self.tool_use)
+        self.sandbox = None
+        self.tool_params: dict | None = None
+        if self.tool_use:
+            from sandbox.sandbox_client import LocalSandbox
+
+            self.sandbox = LocalSandbox(
+                host=str(config.get("sandbox_host", "127.0.0.1")),
+                port=str(config.get("sandbox_port", 6000)),
+            )
+            self.tool_params = {
+                "tools": smolmo_native.FUNCTIONS_SCHEMA,
+                "max_turns": int(config.get("tool_max_turns", 64)),
+                "tool_timeout": float(config.get("tool_timeout", 60.0)),
+                "max_output_chars": int(config.get("tool_max_output_chars", 600)),
+            }
         self.on_round_complete = on_round_complete
         self.calls = CallStore(output_dir)
         self.proofs_dir = output_dir / "proofs"
@@ -403,6 +464,10 @@ class ProblemSearch:
             selection_continuation_tokens=int(
                 self.config.get("selection_continuation_tokens", 2048)
             ),
+            steer_at_tokens=self.config.get("steer_at_tokens"),
+            tool_use=self.tool_use,
+            sandbox=self.sandbox,
+            tool_params=self.tool_params,
         )
 
     def _rank_key(self, proof: Proof) -> tuple[float, int, float, int]:
@@ -628,8 +693,11 @@ class ProblemSearch:
         parent contributes the same worst reviews to every call it appears in.
 
         strategy "random_nonideal" (default): a seeded random sample of the
-        non-ideal (score < 1) reviews, varied per call; fewer than `limit` if the
-        proof has fewer non-ideal reviews, empty if every review scored 1.
+        ACTIONABLE reviews, varied per call. For the smolmo 0/1/6/7 grading
+        (normalized grade/7), "actionable" = 0 < score < 1.0 -> exactly grades 1
+        (0.143) and 6 (0.857); both extremes are excluded (0 = dismissive, 7 =
+        nothing to fix). Fewer than `limit` if the proof has fewer such reviews,
+        empty if every review is a 0 or a 7.
         """
         if strategy == "worst":
             ranked = sorted(
@@ -646,7 +714,7 @@ class ProblemSearch:
                 ),
             )
             return ranked[:limit]
-        nonideal = [v for v in proof.verifications if v.score < 1.0]
+        nonideal = [v for v in proof.verifications if 0.0 < v.score < 1.0]
         order = sorted(
             range(len(nonideal)),
             key=lambda idx: stable_seed(

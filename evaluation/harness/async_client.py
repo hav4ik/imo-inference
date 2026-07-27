@@ -2,28 +2,34 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import hashlib
 import json
 import time
+import uuid
 from typing import Any
 
 import httpx
 
 import loop_detect
+import smolmo_native as sn
 
 
+# smolmo native force-close: the solution answer is the markdown `## Solution` section (not XML).
 _FORCE_SOLUTION_STEER = (
     "\n\nI must finalize now. I will write ONLY the complete rigorous proof itself "
-    "below, followed by the required self-evaluation and score XML. No planning, "
-    "no meta-commentary, and no restatement of the task.\n</think>\n\n<solution>\n"
+    "below, under the required `## Solution` heading. No planning, no meta-commentary, "
+    "and no restatement of the task.\n</think>\n\n## Solution\n"
 )
 
+# Verifier force-close is SOFT (decision): inject only </think> (opening_tag="" below routes here),
+# then let the model write its full analysis and emit the grade in \boxed{} itself — the verdict
+# body is load-bearing for refine critiques, so we do NOT force a bare \boxed{ lead. (This literal
+# is retained for reference; the empty verifier opening_tag means it is not injected.)
 _FORCE_VERIFICATION_STEER = (
-    "\n\nI must finalize now. I will write ONLY the complete verification below, "
-    "including a rigorous evaluation, concrete suggestions, and the score XML. "
-    "No planning, no meta-commentary, and no restatement of the task."
-    "\n</think>\n\n<evaluation>\n"
+    "\n\nI must finalize now. I will write my complete analysis and end with the grade "
+    "as a single number in \\boxed{}.\n</think>\n\n"
 )
 
 _FORCE_SELECTION_STEER = (
@@ -32,11 +38,12 @@ _FORCE_SELECTION_STEER = (
     "\n</think>\n\n<selected_id>"
 )
 
-# role -> (opening XML tag, force-close steer, whether to preserve untagged content),
-# used by the streaming salvage force-close (same mapping continue_*_raw applies).
+# role -> opening tag (case-insensitive marker of the started answer / injected on force-close).
+# Solution = the `## Solution` heading; verifier = "" (soft close: always continue content after a
+# bare </think>, never inject a tag); selector = the unchanged XML <selected_id>.
 _ROLE_TAG = {
-    "solution": "<solution>",
-    "verifier": "<evaluation>",
+    "solution": "## Solution",
+    "verifier": "",
     "selector": "<selected_id>",
 }
 _ROLE_STEER = {
@@ -161,6 +168,7 @@ class AsyncChatClient:
         top_p: float,
         seed: int,
         request_id: str,
+        tools: list | None = None,
     ) -> dict:
         payload = {
             "model": self.model,
@@ -172,6 +180,13 @@ class AsyncChatClient:
             "rid": request_id,
             "return_cached_tokens_details": True,
         }
+        if tools is not None:
+            # Render the <functions> schema into the prompt but do NO server-side tool parsing
+            # (we self-parse the model's native <function_calls> text); keep special tokens so
+            # </think> / <function_calls> survive in the returned content.
+            payload["tools"] = tools
+            payload["tool_choice"] = "none"
+            payload["skip_special_tokens"] = False
         data, latency = await self._post("/chat/completions", payload)
         if len(data["choices"]) != 1:
             raise RuntimeError(f"expected one completion, received {len(data['choices'])}")
@@ -380,7 +395,7 @@ class AsyncChatClient:
             if cut is None:
                 cut = loop_detect.loop_onset(content, verdict)
             clean_content = content[:cut]
-            if opening_tag in clean_content.lower() and clean_content.strip():
+            if (not opening_tag or opening_tag.lower() in clean_content.lower()) and clean_content.strip():
                 initial = {
                     **record,
                     "message": {"content": clean_content, "reasoning_content": reasoning},
@@ -416,7 +431,7 @@ class AsyncChatClient:
             if second_cut is not None:
                 salvaged["message"]["content"] = recovered[:second_cut]
                 recovered = salvaged["message"]["content"]
-        if opening_tag in recovered.lower() and len(recovered) > 500:
+        if (not opening_tag or opening_tag.lower() in recovered.lower()) and len(recovered) > 500:
             salvaged["finish_reason"] = "stop"
         return salvaged
 
@@ -440,7 +455,7 @@ class AsyncChatClient:
             ),
             "chat-template token IDs",
         )
-        has_opening_tag = opening_tag in content.lower()
+        has_opening_tag = bool(opening_tag) and opening_tag.lower() in content.lower()
         if has_opening_tag:
             suffix = reasoning + "</think>" + content
             visible_prefix = content
@@ -578,7 +593,7 @@ class AsyncChatClient:
             seed=seed,
             request_id=request_id,
             role="solution",
-            opening_tag="<solution>",
+            opening_tag="## Solution",
             force_steer=_FORCE_SOLUTION_STEER,
             preserve_untagged_content=False,
         )
@@ -603,7 +618,7 @@ class AsyncChatClient:
             seed=seed,
             request_id=request_id,
             role="verifier",
-            opening_tag="<evaluation>",
+            opening_tag="",
             force_steer=_FORCE_VERIFICATION_STEER,
             preserve_untagged_content=True,
         )
@@ -634,3 +649,142 @@ class AsyncChatClient:
             force_steer=_FORCE_SELECTION_STEER,
             preserve_untagged_content=False,
         )
+
+    async def _run_tool_call(
+        self, sandbox, session_id: str, code: str, timeout: float, max_output_chars: int
+    ) -> str:
+        """Execute one code block as an IPython cell in the sandbox; return combined stdout/stderr
+        (notebook _execute_in_sandbox semantics). Never raises — errors become tool output."""
+        try:
+            result, _sid = await asyncio.wait_for(
+                sandbox.execute_code(
+                    code,
+                    language="ipython",
+                    timeout=timeout,
+                    max_output_characters=max_output_chars,
+                    session_id=session_id,
+                ),
+                timeout=timeout + 30,
+            )
+        except asyncio.TimeoutError:
+            return "[ERROR] Code execution timed out."
+        except Exception as error:  # sandbox unreachable, bad response, etc.
+            return f"[ERROR] {type(error).__name__}: {error}"
+        stdout = (result or {}).get("stdout") or ""
+        stderr = (result or {}).get("stderr") or ""
+        combined = stdout + (("\n" if stdout else "") + stderr if stderr else "")
+        return combined if combined.strip() else "[WARN] No output. Use print() to see results."
+
+    async def chat_agentic(
+        self,
+        messages: list[dict],
+        *,
+        max_completion_tokens: int,
+        temperature: float,
+        top_p: float,
+        seed: int,
+        request_id: str,
+        role: str,
+        salvage_max_tokens: int,
+        steer_at_tokens: int | None,
+        sandbox,
+        tools: list,
+        max_turns: int = 64,
+        tool_timeout: float = 60.0,
+        max_output_chars: int = 600,
+    ) -> dict:
+        """Native ``<function_calls>`` agentic tool loop. Each turn is a completion (tools schema in
+        the prompt, tool_choice=none, self-parsed); if the assistant emits ``<function_calls>``, the
+        code runs in the sandbox and the result is fed back as a ``tool`` message, then we resend.
+        The loop ends on a tool-free turn (the final answer), stop/length, or ``max_turns``. Returns
+        a chat_raw-shaped record for the final answer turn; a final turn that hit ``length`` is
+        force-closed (``</think>`` + ``## Solution``, soft for the verifier) against the ACCUMULATED
+        conversation. Per-turn steer recomputes the completion cap as tool results grow the prompt."""
+        session_id = uuid.uuid4().hex
+        with contextlib.suppress(Exception):  # best-effort per-session preimport
+            await self._run_tool_call(
+                sandbox, session_id, sn.SANDBOX_PREIMPORT, tool_timeout, max_output_chars
+            )
+        convo = [dict(m) for m in messages]
+        segments: list[dict] = []
+        physical = 0
+        completion_total = 0
+        prompt_tokens0: int | None = None
+        content = ""
+        reasoning = ""
+        finish_reason: str | None = None
+        turns_used = 0
+        try:
+            for turn in range(max_turns):
+                turns_used = turn + 1
+                eff_max = max_completion_tokens
+                if steer_at_tokens is not None:
+                    eff_max = max(1024, int(steer_at_tokens) - await self.token_count(convo))
+                rec = await self.chat_raw(
+                    convo,
+                    max_completion_tokens=eff_max,
+                    temperature=temperature,
+                    top_p=top_p,
+                    seed=seed,
+                    request_id=f"{request_id}/turn{turn:02d}",
+                    tools=tools,
+                )
+                msg = rec["message"]
+                content = msg.get("content") or ""
+                reasoning = msg.get("reasoning_content") or ""
+                finish_reason = rec["finish_reason"]
+                segments += rec.get("segments", [])
+                physical += rec.get("physical_request_count", 1)
+                if type(rec.get("completion_tokens")) is int:
+                    completion_total += rec["completion_tokens"]
+                if prompt_tokens0 is None:
+                    prompt_tokens0 = rec.get("physical_prompt_tokens")
+                codes = sn.extract_tool_calls(content)
+                if not any(c is not None for c in codes):
+                    break  # no (parseable) tool call -> the final answer turn
+                assistant_text = content
+                if reasoning and sn.THINK_CLOSE not in content:
+                    assistant_text = f"<think>{reasoning}{sn.THINK_CLOSE}" + content
+                convo.append({"role": "assistant", "content": assistant_text})
+                for call_index, code in enumerate(codes):
+                    result = (
+                        "[ERROR] Could not parse the tool call arguments."
+                        if code is None
+                        else await self._run_tool_call(
+                            sandbox, session_id, code, tool_timeout, max_output_chars
+                        )
+                    )
+                    convo.append({
+                        "role": "tool",
+                        "tool_call_id": f"call_{turn}_{call_index}",
+                        "name": "stateful_python_code_exec",
+                        "content": result[:max_output_chars],
+                    })
+            else:
+                finish_reason = finish_reason or "max_turns"
+        finally:
+            with contextlib.suppress(Exception):
+                await sandbox.delete_session(session_id)
+        record = {
+            "message": {"content": content, "reasoning_content": reasoning},
+            "finish_reason": finish_reason,
+            "prompt_tokens": prompt_tokens0,
+            "cached_prompt_tokens": None,
+            "completion_tokens": completion_total or None,
+            "reasoning_tokens": None,
+            "requested_max_completion_tokens": max_completion_tokens,
+            "logical_max_completion_tokens": max_completion_tokens,
+            "physical_request_count": physical,
+            "physical_prompt_tokens": prompt_tokens0,
+            "segments": segments,
+            "latency_s": round(sum((s.get("latency_s") or 0.0) for s in segments), 3),
+            "tool_turns": turns_used,
+        }
+        if finish_reason == "length":
+            record = await self._continue_xml_raw(
+                record, convo, max_new_tokens=salvage_max_tokens,
+                temperature=temperature, top_p=top_p, seed=seed, request_id=request_id,
+                role=role, opening_tag=_ROLE_TAG[role], force_steer=_ROLE_STEER[role],
+                preserve_untagged_content=_ROLE_PRESERVE[role],
+            )
+        return record
