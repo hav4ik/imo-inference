@@ -1,0 +1,73 @@
+schema_version: 12
+models:
+  bf16_target: /tmp/chankhavu/models/smolmo-32b-sft-merged-proofpilot
+  quantized_target: /tmp/chankhavu/models/smolmo-32b-sft-merged-proofpilot
+  bf16_draft: /tmp/chankhavu/models/smolmo-32b-sft-merged-proofpilot
+  quantized_draft: /tmp/chankhavu/models/smolmo-32b-sft-merged-proofpilot
+model:
+  tensor_parallel_size: 2
+  data_parallel_size: 4
+  quantized: false
+  dflash: false
+  kv_cache_dtype: auto
+server:
+  attention_backend: fa3
+  page_size: 1
+  deterministic_inference: false
+  host: 127.0.0.1
+  port: 30000
+  context_length: 65536
+  grammar_backend: none
+  reasoning_parser: deepseek-r1
+  mem_fraction_static: 0.85
+  max_running_requests: 64
+  swa_full_tokens_ratio: 0.2
+  chunked_prefill_size: 2048
+  stream_interval: 16
+  watchdog_timeout: 1200
+  prefill_cuda_graph_backend: tc_piecewise
+  dflash_block_size: 8
+  dflash_num_draft_tokens: 8
+  dflash_window_size: 512
+search:
+  proofs_per_round: 3            # smoke: small fan-out
+  verifications_per_proof: 2
+  top_proofs: 3
+  refine_parents: 2
+  reviews_per_refine_parent: 2
+  refine_review_strategy: random_nonideal
+  max_rounds: 2                  # exercise the refine round
+  early_stop_threshold: 0.99999
+  temperature: 1.0
+  top_p: 0.95
+  max_completion_tokens: 56000
+  solution_continuation_tokens: 9536
+  verifier_continuation_tokens: 9536
+  min_valid_verifications: 1
+  verifier_sees_self_evaluation: false
+  refiner_sees_self_evaluation: false
+  lenient_parsing: true
+  filter_degenerate: true
+  stream_detect: true
+  request_timeout_seconds: 86400
+  concurrency: 32
+  seed: 0
+  steer_at_tokens: 56000
+  tool_use: false
+  sandbox_host: 127.0.0.1
+  sandbox_port: 6000
+  tool_max_turns: 64
+  tool_timeout: 60
+  tool_max_output_chars: 600
+  llm_selector: true
+  selection_votes: 3
+  selection_candidates: 3
+  selection_max_tokens: 56000
+  selection_continuation_tokens: 2048
+traces:
+  enabled: false                 # smoke: don't pollute the shared traces repo
+  dataset_repo: imo2026-challenge/chankhavu-imo-reasoning-traces
+  secrets_file: ''
+  interval_seconds: 600
+  private: true
+  run_name: proofbench-smolmo-smoke
