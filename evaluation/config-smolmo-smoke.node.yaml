@@ -40,9 +40,9 @@ search:
   early_stop_threshold: 0.99999
   temperature: 1.0
   top_p: 0.95
-  max_completion_tokens: 56000
-  solution_continuation_tokens: 9536
-  verifier_continuation_tokens: 9536
+  max_completion_tokens: 60000  # reasoning budget; fit_completion_budget lowers it to fit the context
+  solution_continuation_tokens: 4096   # short force-close output reserve (Manh's value)
+  verifier_continuation_tokens: 4096
   min_valid_verifications: 1
   verifier_sees_self_evaluation: false
   refiner_sees_self_evaluation: false
@@ -53,7 +53,7 @@ search:
   concurrency: 32
   seed: 0
   context_margin_tokens: 256           # tokens kept free of the context window (fit_completion_budget)
-  verifier_thinking_budget_tokens: 32000  # smaller verifier thinking cap; force-close to a grade
+  verifier_thinking_budget_tokens: 60000  # == max_completion; enables force-a-grade, no reasoning cut
   tool_use: false
   sandbox_host: 127.0.0.1
   sandbox_port: 6000
@@ -63,7 +63,7 @@ search:
   llm_selector: true
   selection_votes: 3
   selection_candidates: 3
-  selection_max_tokens: 56000
+  selection_max_tokens: 50000
   selection_continuation_tokens: 2048
 traces:
   enabled: false                 # smoke: don't pollute the shared traces repo
