@@ -66,12 +66,12 @@ search:
   selection_max_tokens: 50000
   selection_continuation_tokens: 2048
 traces:
-  enabled: false
+  enabled: true
   dataset_repo: imo2026-challenge/chankhavu-imo-reasoning-traces
   secrets_file: ''
   interval_seconds: 600
   private: true
-  run_name: proofbench-smolmo-tools-test
+  run_name: proofbench-smolmo-tools-full6
 
 # Nguyen's MinHash-LSH verifier-review dedup: prune near-duplicate critiques before refine
 # sampling so the refiner sees DIVERSE feedback. Scoring/selection use every review.

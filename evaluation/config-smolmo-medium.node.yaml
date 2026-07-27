@@ -71,7 +71,7 @@ traces:
   secrets_file: ''
   interval_seconds: 600
   private: true
-  run_name: proofbench-smolmo-medium-test
+  run_name: proofbench-smolmo-notools-full6
 
 # Nguyen's MinHash-LSH verifier-review dedup: prune near-duplicate critiques before refine
 # sampling so the refiner sees DIVERSE feedback. Scoring/selection use every review.
