@@ -44,7 +44,7 @@ search:
   solution_continuation_tokens: 4096   # short force-close output reserve (Manh's value)
   verifier_continuation_tokens: 4096
   min_valid_verifications: 4
-  verifier_sees_self_evaluation: false
+  verifier_sees_self_evaluation: true
   refiner_sees_self_evaluation: false
   lenient_parsing: true
   filter_degenerate: true
