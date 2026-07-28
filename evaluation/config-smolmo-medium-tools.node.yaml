@@ -30,20 +30,20 @@ server:
   dflash_num_draft_tokens: 8
   dflash_window_size: 512
 search:
-  proofs_per_round: 16
-  verifications_per_proof: 3
+  proofs_per_round: 32
+  verifications_per_proof: 16
   top_proofs: 8
   refine_parents: 4
   reviews_per_refine_parent: 3
   refine_review_strategy: random_nonideal
-  max_rounds: 2                 # round 1 = generate, round 2 = refine (notebook refine_rounds=1)
+  max_rounds: 4                 # canonical medium: 1 generate + 3 refine rounds
   early_stop_threshold: 0.99999 # only a unanimous grade-7 (=1.0) early-stops
   temperature: 1.0
   top_p: 0.95
   max_completion_tokens: 60000  # reasoning budget; fit_completion_budget lowers it to fit the context
   solution_continuation_tokens: 4096   # short force-close output reserve (Manh's value)
   verifier_continuation_tokens: 4096
-  min_valid_verifications: 1
+  min_valid_verifications: 4
   verifier_sees_self_evaluation: false
   refiner_sees_self_evaluation: false
   lenient_parsing: true
