@@ -1,0 +1,85 @@
+schema_version: 12
+models:
+  bf16_target: /tmp/chankhavu/models/olmo_32b_fp8_step17000
+  quantized_target: /tmp/chankhavu/models/olmo_32b_fp8_step17000
+  bf16_draft: /tmp/chankhavu/models/olmo_32b_fp8_step17000
+  quantized_draft: /tmp/chankhavu/models/olmo_32b_fp8_step17000
+model:
+  tensor_parallel_size: 2
+  data_parallel_size: 4
+  quantized: false
+  dflash: false            # no matching draft for smolmo; serve target-only
+  kv_cache_dtype: auto
+server:
+  attention_backend: fa3
+  page_size: 1
+  deterministic_inference: false
+  host: 127.0.0.1
+  port: 30000
+  context_length: 65536    # smolmo max_position_embeddings (YARN factor 8); NOT 262144
+  grammar_backend: none    # Olmo `</think>` is multi-token; disables SGLang ReasonerGrammarBackend
+  reasoning_parser: deepseek-r1  # keep reasoning/content split (string-matches `</think>`)
+  mem_fraction_static: 0.85
+  max_running_requests: 64
+  swa_full_tokens_ratio: 0.2
+  chunked_prefill_size: 2048
+  stream_interval: 16
+  watchdog_timeout: 1200
+  prefill_cuda_graph_backend: tc_piecewise
+  dflash_block_size: 8
+  dflash_num_draft_tokens: 8
+  dflash_window_size: 512
+search:
+  proofs_per_round: 32
+  verifications_per_proof: 16
+  top_proofs: 8
+  refine_parents: 4
+  reviews_per_refine_parent: 3
+  refine_review_strategy: random_nonideal
+  max_rounds: 4                 # canonical medium: 1 generate + 3 refine rounds
+  early_stop_threshold: 0.99999 # only a unanimous grade-7 (=1.0) early-stops
+  temperature: 1.0
+  top_p: 0.95
+  max_completion_tokens: 60000  # reasoning budget; fit_completion_budget lowers it to fit the context
+  solution_continuation_tokens: 4096   # short force-close output reserve (Manh's value)
+  verifier_continuation_tokens: 4096
+  min_valid_verifications: 4
+  verifier_sees_self_evaluation: true
+  refiner_sees_self_evaluation: false
+  lenient_parsing: true
+  filter_degenerate: true
+  stream_detect: true
+  request_timeout_seconds: 86400
+  concurrency: 96
+  seed: 0
+  context_margin_tokens: 256           # tokens kept free of the context window (fit_completion_budget)
+  verifier_thinking_budget_tokens: 60000  # == max_completion; enables force-a-grade, no reasoning cut
+  tool_use: true
+  tool_use_stages: [verification]   # tools ONLY in the verifier; solutions/refine/select stay tool-free               # set true to enable the native <function_calls> loop (needs sandbox on :6000)
+  sandbox_host: 127.0.0.1
+  sandbox_port: 6000
+  tool_max_turns: 64
+  tool_timeout: 60
+  tool_max_output_chars: 600
+  llm_selector: true
+  selection_votes: 16
+  selection_candidates: 4
+  selection_max_tokens: 50000
+  selection_continuation_tokens: 2048
+traces:
+  enabled: true
+  dataset_repo: imo2026-challenge/chankhavu-imo-reasoning-traces
+  secrets_file: ''
+  interval_seconds: 600
+  private: true
+  run_name: imo2026-olmo32b-step17000-medium-vtools
+
+# Nguyen's MinHash-LSH verifier-review dedup: prune near-duplicate critiques before refine
+# sampling so the refiner sees DIVERSE feedback. Scoring/selection use every review.
+review_dedup:
+  enabled: true
+  backend: minhash_lsh
+  keep_ratio: 0.59        # retain ceil(n*0.59) reviews; drop ~40% near-duplicates
+  shingle_size: 1
+  num_perm: 128
+  lsh_threshold: 0.3

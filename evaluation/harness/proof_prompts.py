@@ -27,23 +27,35 @@ USER_DELIMITER = "===USER==="
 # contract holds; since every generation gets the same value it is a no-op ranking tiebreaker.
 GENERATION_SELF_SCORE = 1.0
 
-# Set once from config (search.tool_use) at ProblemSearch construction. Selects the tool vs no-tool
-# system prompt for the native stages; the tools schema itself is attached by the client/tool-loop.
+# Set once from config (search.tool_use / search.tool_use_stages) at ProblemSearch construction.
+# Selects the tool vs no-tool system prompt PER STAGE — so tools can be enabled for, e.g., the
+# verifier only while generation/refinement stay tool-free. The tools schema itself is attached by
+# the client/tool-loop, which must gate on the SAME stage set (see proof_search.perform).
 TOOL_USE = False
+TOOL_STAGES: frozenset = frozenset()
+_ALL_TOOL_STAGES = frozenset({"generation", "verification", "selection"})
 
 
-def configure(*, tool_use: bool) -> None:
-    global TOOL_USE
+def configure(*, tool_use: bool, tool_stages=None) -> None:
+    global TOOL_USE, TOOL_STAGES
     TOOL_USE = bool(tool_use)
+    if not TOOL_USE:
+        TOOL_STAGES = frozenset()
+    elif tool_stages is None:
+        TOOL_STAGES = _ALL_TOOL_STAGES  # legacy: tool_use=true with no stage list => all stages
+    else:
+        TOOL_STAGES = frozenset(tool_stages)
 
 
-def _system() -> str:
-    return sn.SYSTEM_WITH_TOOL if TOOL_USE else sn.SYSTEM_NO_TOOL
+def _system(stage: str = "generation") -> str:
+    """`stage` in {generation, verification}; selection uses its own XML template, not this builder.
+    Refinement is a generation-role task, so it passes stage="generation"."""
+    return sn.SYSTEM_WITH_TOOL if (TOOL_USE and stage in TOOL_STAGES) else sn.SYSTEM_NO_TOOL
 
 
 # --- native builders (generation / verification / refinement) --------------------------------------
 def generation_messages(problem: str) -> list[dict[str, str]]:
-    return sn.chat(_system(), sn.build_proof_user(problem))
+    return sn.chat(_system("generation"), sn.build_proof_user(problem))
 
 
 def verification_messages(
@@ -51,7 +63,7 @@ def verification_messages(
     proof: str,
     self_evaluation: str,  # unused by the native analysis prompt (kept for the call-site contract)
 ) -> list[dict[str, str]]:
-    return sn.chat(_system(), sn.build_analysis_user(problem, proof))
+    return sn.chat(_system("verification"), sn.build_analysis_user(problem, proof))
 
 
 def refinement_messages(
@@ -66,7 +78,7 @@ def refinement_messages(
     for _candidate_id, proof, _self_eval, reviews in candidates:
         critiques = [sn.critique_text(review_text) for _score, review_text in reviews]
         parents.append((proof, critiques))
-    return sn.chat(_system(), sn.build_refine_user_multi(problem, parents))
+    return sn.chat(_system("generation"), sn.build_refine_user_multi(problem, parents))
 
 
 # --- native parsers ------------------------------------------------------------------------------

@@ -92,6 +92,8 @@ OPTIONAL_SEARCH_KEYS = {
     "context_margin_tokens",          # tokens kept free of the context window (fit_completion_budget)
     "verifier_thinking_budget_tokens",  # optional smaller thinking cap for verifiers; None => off
     "tool_use",         # enable the native <function_calls> Python tool loop (sandbox)
+    "tool_use_stages",  # which stages run the tool loop when tool_use=true; subset of
+                        # {generation, verification, selection}. Absent => all three (legacy).
     "sandbox_host",
     "sandbox_port",
     "tool_max_turns",
@@ -367,6 +369,17 @@ def load_config(path: Path) -> dict[str, Any]:
         )
     if "tool_use" in search and type(search["tool_use"]) is not bool:
         raise ValueError("search.tool_use must be a boolean")
+    if "tool_use_stages" in search:
+        stages = search["tool_use_stages"]
+        allowed = {"generation", "verification", "selection"}
+        if not isinstance(stages, list) or not all(isinstance(s, str) for s in stages):
+            raise ValueError("search.tool_use_stages must be a list of strings")
+        bad = set(stages) - allowed
+        if bad:
+            raise ValueError(
+                f"search.tool_use_stages contains unknown stage(s) {sorted(bad)}; "
+                f"allowed: {sorted(allowed)}"
+            )
     if "sandbox_host" in search and not isinstance(search["sandbox_host"], str):
         raise ValueError("search.sandbox_host must be a string")
     if "sandbox_port" in search:

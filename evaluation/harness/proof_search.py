@@ -180,6 +180,7 @@ class CallStore:
         selection_continuation_tokens: int = 2048,
         verifier_thinking_budget_tokens: int | None = None,
         tool_use: bool = False,
+        tool_stages: frozenset | None = None,
         sandbox=None,
         tool_params: dict | None = None,
     ) -> dict:
@@ -197,14 +198,19 @@ class CallStore:
         try:
             async with semaphore:
                 # Tool-use stages run the native <function_calls> agentic loop (which does its own
-                # per-turn steer + force-close over the accumulated convo). All four stages may use
-                # tools: generation, verification, selection, and refinement (refine rounds are
-                # `/generate` stages, so they route through is_proof_generation here too).
-                agentic = (
-                    bool(tool_use)
-                    and (is_proof_generation or is_verification or is_selection)
-                    and sandbox is not None
+                # per-turn steer + force-close over the accumulated convo). Which stages get tools is
+                # gated by `tool_stages` (subset of generation/verification/selection); refine rounds
+                # are `/generate` stages, so they follow the "generation" gate via is_proof_generation.
+                # This MUST match the per-stage system-prompt choice in proof_prompts._system.
+                stages = tool_stages if tool_stages is not None else frozenset(
+                    {"generation", "verification", "selection"}
                 )
+                stage_wants_tool = (
+                    (is_proof_generation and "generation" in stages)
+                    or (is_verification and "verification" in stages)
+                    or (is_selection and "selection" in stages)
+                )
+                agentic = bool(tool_use) and stage_wants_tool and sandbox is not None
                 # Reserve room for the forced finalization UP FRONT (Manh's fit_completion_budget):
                 # the reserve is this stage's continuation budget, so the initial completion is
                 # capped at context - prompt - reserve - margin and a later force-close always fits.
@@ -436,7 +442,13 @@ class ProblemSearch:
         self.config = config
         # Select tool vs no-tool native system prompt (and, downstream, the tools schema).
         self.tool_use = bool(config.get("tool_use", False))
-        proof_prompts.configure(tool_use=self.tool_use)
+        # Which stages actually run the tool loop when tool_use=true. Absent => all stages (legacy).
+        # e.g. ["verification"] gives tools to the verifier only; solutions stay tool-free prose.
+        raw_stages = config.get("tool_use_stages")
+        self.tool_stages = (
+            frozenset(raw_stages) if raw_stages is not None else None
+        )
+        proof_prompts.configure(tool_use=self.tool_use, tool_stages=raw_stages)
         self.sandbox = None
         self.tool_params: dict | None = None
         if self.tool_use:
@@ -522,6 +534,7 @@ class ProblemSearch:
                 else None
             ),
             tool_use=self.tool_use,
+            tool_stages=self.tool_stages,
             sandbox=self.sandbox,
             tool_params=self.tool_params,
         )
